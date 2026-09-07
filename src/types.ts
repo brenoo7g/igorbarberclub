@@ -1,0 +1,65 @@
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: 'client' | 'admin';
+}
+export interface Service {
+  id: string;
+  name: string;
+  description: string;
+  duration: number;
+  price: number;
+  category: string;
+  active: number;
+}
+export interface Barber {
+  id: string;
+  name: string;
+  specialty: string;
+}
+export interface Appointment {
+  id: string;
+  user_id: string;
+  barber_id: string;
+  barber_name: string;
+  client_name: string;
+  client_email: string;
+  client_phone: string;
+  date: string;
+  time: string;
+  start_minute: number;
+  end_minute: number;
+  total: number;
+  status: 'confirmed' | 'completed' | 'cancelled' | 'no-show';
+  services: { service_id: string; name: string; price: number; duration: number }[];
+}
+export interface Block {
+  id: string;
+  barber_id: string;
+  date: string;
+  start_minute: number;
+  end_minute: number;
+  reason: string;
+}
+export interface Config {
+  demo: boolean;
+  open: number;
+  close: number;
+  timezone: string;
+  notifications: { email: boolean; whatsapp: boolean };
+}
+export interface Metrics {
+  daily: number;
+  weekly: number;
+  monthly: number;
+  yearly: number;
+  averageTicket: number;
+  clients: number;
+  visits: number;
+  bestRevenueDay: { name: string; revenue: number } | null;
+  bestVolumeDay: { name: string; count: number } | null;
+  topServices: { name: string; count: number; revenue: number }[];
+  chart: { date: string; revenue: number; count: number }[];
+}

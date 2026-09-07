@@ -1,1 +1,132 @@
-# igorbarberclub
+# Igor Barber Club
+
+Aplicação full-stack em português para a barbearia de Igor Borges, em Campo Grande, RJ. React 19 + TypeScript + Vite, API Express 5, autenticação JWT em cookie HttpOnly e SQL persistente. Interface autoral em CSS responsivo, sem dependência de Tailwind.
+
+## Executar
+
+Requisito: **Node.js 24 ou superior**.
+
+```sh
+npm install
+npm run dev
+```
+
+No PowerShell com execução de scripts desabilitada, use `npm.cmd` e `npx.cmd`.
+
+- Site: http://localhost:5173
+- API: http://localhost:3001/api/health
+- Administração: http://localhost:5173/admin
+- Banco local: `data/barber.db`, criado automaticamente com SQLite nativo do Node.
+
+### Contas locais de demonstração
+
+| Perfil        | E-mail                      | Senha            |
+| ------------- | --------------------------- | ---------------- |
+| Administrador | admin@igorbarberclub.com.br | IgorDemo2026!    |
+| Cliente       | cliente@example.com         | ClienteDemo2026! |
+
+O modo de demonstração existe somente fora de produção e pode ser desativado com `DEMO_MODE=false`. Os clientes, atendimentos, preços e horários iniciais são exemplos, identificados no painel. Não use esse banco de demonstração em produção. As imagens são ilustrações geradas, e não fotos reais de Igor ou da barbearia; os links do site levam ao Instagram informado pelo solicitante. O endereço completo e o telefone comercial não foram inventados. Substitua os valores e imagens por informações aprovadas antes de publicar.
+
+## Recursos
+
+- Landing page com serviços vindos do banco, galeria filtrável e ampliação em diálogo acessível.
+- Agendamento em três etapas, com múltiplos serviços, escolha do profissional, disponibilidade real e cadastro somente na confirmação.
+- Conta do cliente com histórico, cancelamento e remarcação de reservas futuras.
+- Painel protegido por autenticação e papel de administrador, com calendário diário, semanal e mensal.
+- Atualização de status, bloqueios de intervalo ou expediente e CRUD de serviços com exclusão lógica.
+- Receita diária, semanal, mensal e anual; ticket médio; melhores dias por receita e movimento; serviços mais vendidos; gráfico de 14 dias e exportação CSV.
+- Fila transacional persistente de confirmação, cancelamento e remarcação para Resend e Twilio WhatsApp.
+- Preços em centavos, histórico de preços/duração por reserva, validação de dados e proteção de concorrência no servidor.
+- Layout para celular, tablet e desktop; foco visível, navegação por teclado, diálogos nativos e respeito a movimento reduzido.
+
+## Estrutura
+
+```text
+src/
+  main.tsx                  Rotas, carregamento por demanda e providers
+  context.tsx               Sessão, configuração pública e avisos
+  lib.ts                    Cliente HTTP e formatação brasileira
+  types.ts                  Tipos compartilhados da interface
+  components/
+    Layout.tsx              Cabeçalho, navegação e rodapé
+    UI.tsx                  Diálogos, estados, identidade e utilitários
+    AuthForm.tsx            Login e cadastro
+  pages/
+    Home.tsx                Landing page
+    Booking.tsx             Agendamento e remarcação
+    Account.tsx             Conta e histórico do cliente
+    Admin.tsx               Agenda, serviços e financeiro
+  styles.css                Sistema visual e responsividade pública
+  admin.css                 Layout administrativo responsivo
+server/
+  index.js                  Inicialização e configuração de produção
+  app.js                    Rotas REST, validação, autenticação e autorização
+  database.js               Adaptadores SQLite e PostgreSQL, transações
+  schema.sql                Modelos, relacionamentos e índices
+  seed.js                   Catálogo, profissional, administrador e demo
+  domain.js                 Disponibilidade, calendário e cálculos financeiros
+  notifications.js          Outbox e entrega aos provedores
+public/images/              Imagens WebP locais e originais PNG
+tests/                      Testes de domínio, integração HTTP e navegador
+docs/                       Contrato HTTP, operação, modelo e imagens
+```
+
+## Configuração e PostgreSQL
+
+Copie `.env.example` para `.env` e ajuste as variáveis. Sem `DATABASE_URL`, o banco é SQLite. Com uma URL PostgreSQL, o mesmo esquema SQL é criado automaticamente:
+
+```dotenv
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/igor_barber_club
+JWT_SECRET=use-um-segredo-aleatorio-com-ao-menos-32-caracteres
+ADMIN_EMAIL=seu-email@exemplo.com
+ADMIN_PASSWORD=senha-forte-com-pelo-menos-12-caracteres
+DEMO_MODE=false
+APP_URL=https://seu-dominio.com.br
+```
+
+Para gerar um segredo localmente: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
+
+O adaptador usa consultas parametrizadas, transações e conexão dedicada no PostgreSQL. Alterações na agenda usam um advisory lock transacional comum aos processos para impedir sobreposição, inclusive durante remarcações. SQLite serializa operações na conexão e usa `BEGIN IMMEDIATE`. O adaptador PostgreSQL está implementado, mas a validação automatizada local usa SQLite; execute a suíte em um banco PostgreSQL dedicado antes de implantar com esse provedor.
+
+## Build e produção
+
+```sh
+npm run build
+npm start
+```
+
+Depois do build, Express também serve a SPA em sua porta (3001 por padrão), incluindo fallback para URLs internas. Configure `APP_URL` com a origem exata usada no navegador. Em produção, defina `NODE_ENV=production`, use HTTPS no proxy reverso e um banco novo, sem dados demo. `JWT_SECRET` forte e `APP_URL` HTTPS são obrigatórios. O cookie de sessão passa a exigir HTTPS. O administrador inicial é criado a partir de `ADMIN_EMAIL` e `ADMIN_PASSWORD`; mudar essas variáveis depois não altera uma conta já existente.
+
+`OPEN_HOUR` e `CLOSE_HOUR` configuram o expediente de segunda a sábado. O padrão **de exemplo** é 09h–19h; domingo fechado. Reservas têm início a cada 30 minutos e podem ser feitas até 90 dias à frente. Horários são exibidos em `America/Sao_Paulo`; os instantes do agendamento usam o offset atual de Brasília (`-03:00`). Se houver mudança legal de fuso, atualize a conversão de instantes.
+
+## Notificações
+
+Configure as credenciais somente no servidor:
+
+```dotenv
+RESEND_API_KEY=...
+EMAIL_FROM=Igor Barber Club <agenda@seu-dominio.com.br>
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_FROM=whatsapp:+...
+TWILIO_CONTENT_SID=HX...
+```
+
+O domínio de envio do Resend precisa estar validado. O WhatsApp usa template aprovado no Twilio com variáveis `1=nome`, `2=evento`, `3=data e hora`, `4=URL da conta`. Esse template deve mencionar a Igor Barber Club e orientar o cliente a acessar a conta para cancelar/remarcar. O destino do link requer login do proprietário da reserva.
+
+A gravação da reserva e dos dois eventos de notificação ocorre na mesma transação. O worker consulta a fila a cada 15 segundos. Canais sem credenciais permanecem pendentes, sem simulação de envio. Falhas têm até cinco tentativas com atraso exponencial; o Resend recebe chave de idempotência por evento. Timeouts de WhatsApp são marcados para revisão, para evitar reenvio cego. `sent` significa aceitação pelo provedor, não leitura ou entrega final ao destinatário. Nenhuma mensagem real foi enviada durante os testes.
+
+Consulte [operação e limitações](docs/OPERATIONS.md) para monitoramento, recuperação e preparação da implantação. Implementação baseada na documentação oficial de [Resend](https://resend.com/docs/api-reference/emails/send-email) e [Twilio](https://www.twilio.com/docs/messaging/api/message-resource).
+
+## Verificar
+
+```sh
+npm run build
+npm test
+npx playwright install chromium
+npm run test:e2e
+```
+
+A suíte de navegador serve o build em `127.0.0.1:4173` com banco em memória independente, sem afetar o banco local. Ela percorre cadastro, reserva, remarcação, cancelamento, login administrativo, calendários, CRUD, exportação e visualização móvel. Capturas são gravadas em `test-results/`.
+
+Mais detalhes: [rotas e modelos](docs/ARCHITECTURE.md), [operação](docs/OPERATIONS.md), [prompts e origem das imagens](docs/IMAGES.md).
