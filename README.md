@@ -116,6 +116,8 @@ Depois do build, Express também serve a SPA em sua porta (3001 por padrão), in
 
 ## Notificações
 
+Para ativar confirmações completas por e-mail na Vercel, siga o [passo a passo do Resend](docs/RESEND.md).
+
 Configure as credenciais somente no servidor:
 
 ```dotenv

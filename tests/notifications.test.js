@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDatabase } from '../server/database.js';
 import { seed } from '../server/seed.js';
-import { enqueueNotification, startNotifications } from '../server/notifications.js';
+import {
+  appointmentEmail,
+  enqueueNotification,
+  startNotifications,
+} from '../server/notifications.js';
 
 test('notification worker: disabled channels cannot starve email; provider contract and retries', async (t) => {
   const db = await createDatabase('', ':memory:');
@@ -36,6 +40,14 @@ test('notification worker: disabled channels cannot starve email; provider contr
   await db.run("DELETE FROM notifications WHERE channel='email'");
   await enqueueNotification(db, appointment.id, 'confirmed');
   const email = await db.get("SELECT * FROM notifications WHERE channel='email'");
+  const snapshot = JSON.parse(email.payload);
+  assert.equal(snapshot.barber, 'Igor Borges');
+  assert.ok(Number.isInteger(snapshot.total));
+  assert.ok(Number.isInteger(snapshot.duration));
+  assert.equal(snapshot.reference, appointment.id);
+  // Queued confirmations must retain their price and professional after later edits.
+  await db.run('UPDATE appointments SET total=1 WHERE id=?', [appointment.id]);
+  await db.run("UPDATE barbers SET name='Outro Nome' WHERE id='igor'");
   await db.run(
     'UPDATE users SET name=?,email=?,phone=? WHERE id=(SELECT user_id FROM appointments WHERE id=?)',
     ['Contato Atualizado', 'contato-atual@example.com', '21988887777', appointment.id],
@@ -66,6 +78,17 @@ test('notification worker: disabled channels cannot starve email; provider contr
   assert.deepEqual(payload.to, ['contato-atual@example.com']);
   assert.match(payload.text, /Olá, Contato Atualizado!/);
   assert.match(payload.text, /minha-conta/);
+  assert.match(payload.text, /realizado com sucesso/);
+  assert.match(payload.text, /Profissional: Igor Borges/);
+  assert.ok(payload.text.includes(`Serviço(s): ${snapshot.services}`));
+  assert.ok(payload.text.includes(`Data: ${snapshot.date.split('-').reverse().join('/')}`));
+  assert.ok(payload.text.includes(`Horário: ${snapshot.time}`));
+  assert.ok(
+    payload.text.includes(
+      `Valor total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(snapshot.total / 100)}`,
+    ),
+  );
+  assert.equal(payload.from, process.env.EMAIL_FROM);
   assert.match(payload.subject, /confirmado/);
   assert.equal(
     (
@@ -90,4 +113,38 @@ test('notification worker: disabled channels cannot starve email; provider contr
   assert.ok(row.next_attempt_at > new Date().toISOString());
   assert.match(row.error, /503/);
   assert.equal(calls.length, 2);
+});
+
+test('email templates distinguish events, format free services and support old queued payloads', () => {
+  const payload = {
+    name: 'Cliente Teste',
+    services: 'Corte + Barba',
+    date: '2026-10-01',
+    time: '14:30',
+    barber: 'Igor Borges',
+    total: 0,
+    duration: 70,
+    reference: 'test-booking',
+  };
+  const confirmed = appointmentEmail(
+    payload,
+    'confirmed',
+    'https://igorbarberclub.vercel.app/minha-conta',
+  );
+  assert.match(confirmed.text, /R\$\s0,00/);
+  assert.match(confirmed.text, /01\/10\/2026/);
+  assert.match(confirmed.text, /70 minutos/);
+  const cancelled = appointmentEmail(payload, 'cancelled', 'https://example.com/minha-conta');
+  assert.match(cancelled.subject, /cancelado/);
+  assert.doesNotMatch(cancelled.text, /realizado com sucesso|Pagamento na barbearia/);
+  assert.match(
+    appointmentEmail(payload, 'rescheduled', 'https://example.com/minha-conta').text,
+    /remarcado com sucesso/,
+  );
+  const legacy = appointmentEmail(
+    { name: 'Cliente', services: 'Corte', date: '2026-10-01', time: '10:00' },
+    'confirmed',
+    'https://example.com/minha-conta',
+  );
+  assert.doesNotMatch(legacy.text, /undefined|NaN|Profissional:|Valor total:/);
 });

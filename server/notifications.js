@@ -3,7 +3,7 @@ import { clock } from './domain.js';
 
 export async function enqueueNotification(db, appointmentId, event) {
   const appointment = await db.get(
-    'SELECT a.*,u.name,u.email,u.phone FROM appointments a JOIN users u ON u.id=a.user_id WHERE a.id=?',
+    'SELECT a.*,u.name,u.email,u.phone,b.name AS barber_name FROM appointments a JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id WHERE a.id=?',
     [appointmentId],
   );
   const services = await db.all('SELECT name FROM appointment_services WHERE appointment_id=?', [
@@ -16,6 +16,10 @@ export async function enqueueNotification(db, appointmentId, event) {
     date: appointment.date,
     time: clock(appointment.start_minute),
     services: services.map((s) => s.name).join(', '),
+    barber: appointment.barber_name,
+    total: appointment.total,
+    duration: appointment.end_minute - appointment.start_minute,
+    reference: appointment.id,
   });
   for (const channel of ['email', 'whatsapp']) {
     const now = new Date().toISOString();
@@ -24,6 +28,45 @@ export async function enqueueNotification(db, appointmentId, event) {
       [randomUUID(), appointmentId, channel, event, payload, now, now],
     );
   }
+}
+
+export function appointmentEmail(payload, event, url) {
+  const label =
+    { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[event] ||
+    'atualizado';
+  const introduction =
+    {
+      confirmed: 'Seu agendamento na Igor Barber Club foi realizado com sucesso!',
+      cancelled: 'Seu agendamento na Igor Barber Club foi cancelado.',
+      rescheduled: 'Seu agendamento na Igor Barber Club foi remarcado com sucesso!',
+    }[event] || 'Seu agendamento na Igor Barber Club foi atualizado.';
+  const lines = [
+    `Olá, ${payload.name}!`,
+    '',
+    introduction,
+    '',
+    `Serviço(s): ${payload.services}`,
+    `Data: ${payload.date.split('-').reverse().join('/')}`,
+    `Horário: ${payload.time} (horário de Brasília)`,
+  ];
+  // Old queued events have no price/professional snapshot. Do not invent their historical data.
+  if (payload.barber) lines.push(`Profissional: ${payload.barber}`);
+  if (Number.isInteger(payload.duration))
+    lines.push(`Duração estimada: ${payload.duration} minutos`);
+  if (Number.isInteger(payload.total))
+    lines.push(
+      `Valor total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payload.total / 100)}`,
+    );
+  if (event !== 'cancelled') lines.push('Pagamento na barbearia.');
+  if (payload.reference) lines.push(`Código do agendamento: ${payload.reference}`);
+  lines.push(
+    '',
+    'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
+    url,
+    '',
+    'Igor Barber Club · Campo Grande, RJ',
+  );
+  return { subject: `Agendamento ${label} — Igor Barber Club`, text: lines.join('\n') };
 }
 
 export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
@@ -70,7 +113,6 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
               row.event
             ] || row.event;
           const url = `${process.env.APP_URL || 'http://localhost:5173'}/minha-conta`;
-          const text = `Olá, ${p.name}! Seu agendamento na Igor Barber Club foi ${event}.\n${p.services}\n${p.date.split('-').reverse().join('/')} às ${p.time}.\nPara consultar, cancelar ou remarcar, acesse sua conta: ${url}`;
           let response;
           if (row.channel === 'email') {
             response = await fetch('https://api.resend.com/emails', {
@@ -84,8 +126,7 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
               body: JSON.stringify({
                 from: process.env.EMAIL_FROM,
                 to: [p.email],
-                subject: `Agendamento ${event} — Igor Barber Club`,
-                text,
+                ...appointmentEmail(p, row.event, url),
               }),
             });
           } else {
