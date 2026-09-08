@@ -26,7 +26,7 @@ export async function enqueueNotification(db, appointmentId, event) {
   }
 }
 
-export function startNotifications(db) {
+export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
   let busy = false;
   const tick = async () => {
     if (busy) return;
@@ -46,8 +46,8 @@ export function startNotifications(db) {
         // Advisory transaction lock also coordinates independent PostgreSQL workers.
         if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789125)');
         const jobs = await tx.all(
-          `SELECT * FROM notifications WHERE status='pending' AND attempts<5 AND next_attempt_at<=? AND channel IN (${channels.map(() => '?').join(',')}) ORDER BY created_at LIMIT 20`,
-          [new Date().toISOString(), ...channels],
+          `SELECT * FROM notifications WHERE status='pending' AND attempts<5 AND next_attempt_at<=? AND channel IN (${channels.map(() => '?').join(',')}) ORDER BY created_at LIMIT ?`,
+          [new Date().toISOString(), ...channels, batchSize],
         );
         for (const job of jobs)
           await tx.run("UPDATE notifications SET status='sending',attempts=attempts+1 WHERE id=?", [
@@ -127,6 +127,11 @@ export function startNotifications(db) {
       busy = false;
     }
   };
+  return tick;
+}
+
+export function startNotifications(db) {
+  const tick = createNotificationProcessor(db);
   const timer = setInterval(tick, 15000);
   timer.unref();
   void tick();

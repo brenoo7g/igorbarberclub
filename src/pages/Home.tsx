@@ -45,15 +45,21 @@ const gallery = [
 export default function Home() {
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
   const [allServices, setAllServices] = useState(false);
   const [filter, setFilter] = useState('Todos');
   const [photo, setPhoto] = useState<(typeof gallery)[number] | null>(null);
   const { config } = useApp();
   useEffect(() => {
-    api<Service[]>('/services')
+    setError('');
+    const controller = new AbortController();
+    api<Service[]>('/services', { signal: controller.signal })
       .then(setServices)
-      .catch((e) => setError(errorMessage(e)));
-  }, []);
+      .catch((e) => {
+        if (e.name !== 'AbortError') setError(errorMessage(e));
+      });
+    return () => controller.abort();
+  }, [retry]);
   const featured = ['corte', 'barba', 'combo', 'sobrancelha']
     .map((id) => services.find((s) => s.id === id))
     .filter((s): s is Service => !!s);
@@ -168,6 +174,11 @@ export default function Home() {
           </p>
         </div>
         <ErrorBox message={error} />
+        {error && (
+          <button className="button ghost" onClick={() => setRetry((r) => r + 1)}>
+            Tentar novamente
+          </button>
+        )}
         <div className="service-grid">
           {!services.length && !error
             ? Array.from({ length: 4 }, (_, i) => <div key={i} className="service-skeleton" />)
@@ -213,10 +224,12 @@ export default function Home() {
                 </Link>
               ))}
         </div>
-        <button className="text-link all-services" onClick={() => setAllServices(!allServices)}>
-          {allServices ? 'Mostrar principais serviços' : 'Explorar todos os serviços'}
-          <ArrowRight size={16} />
-        </button>
+        {services.length > 0 && (
+          <button className="text-link all-services" onClick={() => setAllServices(!allServices)}>
+            {allServices ? 'Mostrar principais serviços' : 'Explorar todos os serviços'}
+            <ArrowRight size={16} />
+          </button>
+        )}
       </section>
       <section className="about-section" id="sobre">
         <div className="container about-grid">

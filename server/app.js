@@ -71,9 +71,17 @@ const fail = (status, message) => {
 
 export function createApp(
   db,
-  { secret = process.env.JWT_SECRET || randomBytes(48).toString('hex'), test = false } = {},
+  {
+    secret = process.env.JWT_SECRET || randomBytes(48).toString('hex'),
+    test = false,
+    serveStatic = true,
+  } = {},
 ) {
   const app = express();
+  const allowedOrigins = new Set([new URL(process.env.APP_URL || 'http://localhost:5173').origin]);
+  if (process.env.VERCEL && process.env.VERCEL_URL)
+    allowedOrigins.add(`https://${process.env.VERCEL_URL}`);
+  const secureCookies = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
   const open = Number(process.env.OPEN_HOUR || 9),
     close = Number(process.env.CLOSE_HOUR || 19);
   if (
@@ -85,6 +93,8 @@ export function createApp(
   )
     throw new Error('Horário de funcionamento inválido.');
   app.disable('x-powered-by');
+  // Vercel overwrites forwarding headers at its trusted edge.
+  if (process.env.VERCEL) app.set('trust proxy', 1);
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -104,7 +114,7 @@ export function createApp(
     if (
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       req.headers.origin &&
-      req.headers.origin !== new URL(process.env.APP_URL || 'http://localhost:5173').origin
+      !allowedOrigins.has(req.headers.origin)
     )
       return res.status(403).json({ error: 'Origem não permitida.' });
     next();
@@ -151,7 +161,7 @@ export function createApp(
     });
     res.cookie('session', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: secureCookies,
       sameSite: 'lax',
       maxAge: 7 * 86400000,
       path: '/',
@@ -230,7 +240,7 @@ export function createApp(
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: secureCookies,
     });
     res.json({ ok: true });
   });
@@ -518,7 +528,7 @@ export function createApp(
     ),
   );
   app.use('/api', (_req, res) => res.status(404).json({ error: 'Rota não encontrada.' }));
-  if (existsSync(resolve('dist/index.html'))) {
+  if (serveStatic && existsSync(resolve('dist/index.html'))) {
     app.use(express.static(resolve('dist')));
     app.get('/{*path}', (_req, res) => res.sendFile(resolve('dist/index.html')));
   }

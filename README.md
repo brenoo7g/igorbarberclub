@@ -90,6 +90,8 @@ O adaptador usa consultas parametrizadas, transações e conexão dedicada no Po
 
 ## Build e produção
 
+**Na Vercel:** siga [o guia de configuração](docs/VERCEL.md). `vercel.json` e `api/index.js` publicam a API junto com o frontend e permitem recarregar páginas internas. Configure PostgreSQL, segredo JWT e conta administrativa nas variáveis do projeto; o SQLite local não é um banco persistente na Vercel.
+
 ```sh
 npm run build
 npm start
@@ -114,7 +116,7 @@ TWILIO_CONTENT_SID=HX...
 
 O domínio de envio do Resend precisa estar validado. O WhatsApp usa template aprovado no Twilio com variáveis `1=nome`, `2=evento`, `3=data e hora`, `4=URL da conta`. Esse template deve mencionar a Igor Barber Club e orientar o cliente a acessar a conta para cancelar/remarcar. O destino do link requer login do proprietário da reserva.
 
-A gravação da reserva e dos dois eventos de notificação ocorre na mesma transação. O worker consulta a fila a cada 15 segundos. Canais sem credenciais permanecem pendentes, sem simulação de envio. Falhas têm até cinco tentativas com atraso exponencial; o Resend recebe chave de idempotência por evento. Timeouts de WhatsApp são marcados para revisão, para evitar reenvio cego. `sent` significa aceitação pelo provedor, não leitura ou entrega final ao destinatário. Nenhuma mensagem real foi enviada durante os testes.
+A gravação da reserva e dos dois eventos de notificação ocorre na mesma transação. O worker local consulta a fila a cada 15 segundos; na Vercel, lotes são vinculados às requisições com `waitUntil`, conforme o [guia de publicação](docs/VERCEL.md). Canais sem credenciais permanecem pendentes, sem simulação de envio. Falhas têm até cinco tentativas com atraso exponencial; o Resend recebe chave de idempotência por evento. Timeouts de WhatsApp são marcados para revisão, para evitar reenvio cego. `sent` significa aceitação pelo provedor, não leitura ou entrega final ao destinatário. Nenhuma mensagem real foi enviada durante os testes.
 
 Consulte [operação e limitações](docs/OPERATIONS.md) para monitoramento, recuperação e preparação da implantação. Implementação baseada na documentação oficial de [Resend](https://resend.com/docs/api-reference/emails/send-email) e [Twilio](https://www.twilio.com/docs/messaging/api/message-resource).
 

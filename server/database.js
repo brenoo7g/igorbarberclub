@@ -9,7 +9,18 @@ export async function createDatabase(
   let db;
   if (url) {
     const { default: pg } = await import('pg');
-    const pool = new pg.Pool({ connectionString: url });
+    const pool = new pg.Pool({
+      connectionString: url,
+      max: 5,
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 5000,
+    });
+    // Idle pooled connections may be terminated by the database provider.
+    pool.on('error', (error) => console.error('PostgreSQL pool error:', error.code || error.name));
+    if (process.env.VERCEL) {
+      const { attachDatabasePool } = await import('@vercel/functions');
+      attachDatabasePool(pool);
+    }
     const wrap = (client) => ({
       dialect: 'postgres',
       async all(sql, args = []) {
@@ -95,10 +106,18 @@ export async function createDatabase(
     };
   }
   const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
-  for (const statement of schema
-    .split(';')
-    .map((s) => s.trim())
-    .filter(Boolean))
-    await db.run(statement);
+  try {
+    await db.transaction(async (tx) => {
+      if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789127)');
+      for (const statement of schema
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean))
+        await tx.run(statement);
+    });
+  } catch (error) {
+    await db.close();
+    throw error;
+  }
   return db;
 }

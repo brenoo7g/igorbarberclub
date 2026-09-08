@@ -13,10 +13,11 @@
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "check": "npm run build && npm test",
-    "format": "prettier --write src server tests docs README.md *.json *.ts *.js index.html",
-    "format:check": "prettier --check src server tests docs README.md *.json *.ts *.js index.html"
+    "format": "prettier --write api src server tests docs README.md *.json *.ts *.js index.html",
+    "format:check": "prettier --check api src server tests docs README.md *.json *.ts *.js index.html"
   },
   "dependencies": {
+    "@vercel/functions": "^3.9.5",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.2.3",

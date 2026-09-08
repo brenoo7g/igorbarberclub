@@ -40,10 +40,13 @@ export default function Booking() {
   const [error, setError] = useState('');
   const [slotError, setSlotError] = useState('');
   const [reload, setReload] = useState(0);
+  const [catalogRetry, setCatalogRetry] = useState(0);
   const [confirmed, setConfirmed] = useState<Appointment | null>(null);
   const { user, config } = useApp();
   useEffect(() => {
     let alive = true;
+    setLoading(true);
+    setError('');
     Promise.all([
       api<Service[]>('/services'),
       api<Barber[]>('/barbers'),
@@ -79,7 +82,7 @@ export default function Booking() {
     return () => {
       alive = false;
     };
-  }, [reschedule]);
+  }, [reschedule, catalogRetry]);
   const selectedKey = selected.join(',');
   useEffect(() => {
     setTime('');
@@ -225,6 +228,11 @@ export default function Booking() {
         ))}
       </ol>
       <ErrorBox message={error} />
+      {error && !services.length && (
+        <button className="button ghost" onClick={() => setCatalogRetry((r) => r + 1)}>
+          Tentar novamente
+        </button>
+      )}
       <div className="booking-layout">
         <div className="booking-content">
           {step === 0 && (

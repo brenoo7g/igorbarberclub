@@ -6,17 +6,37 @@ export class ApiError extends Error {
   }
 }
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    credentials: 'same-origin',
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-  });
-  const data = await response.json();
-  if (!response.ok)
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      credentials: 'same-origin',
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
     throw new ApiError(
-      data.error || 'Não foi possível concluir. Tente novamente.',
-      response.status,
+      'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.',
+      0,
     );
+  }
+  const unavailable =
+    'O agendamento online está temporariamente indisponível. Tente novamente em instantes.';
+  if (!response.headers.get('content-type')?.includes('application/json'))
+    throw new ApiError(unavailable, response.status);
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new ApiError(unavailable, response.status);
+  }
+  if (!response.ok) {
+    const message =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+        ? data.error
+        : unavailable;
+    throw new ApiError(message, response.status);
+  }
   return data as T;
 }
 export const money = (cents: number) =>

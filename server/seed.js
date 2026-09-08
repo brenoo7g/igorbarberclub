@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { addDays, dateInBrazil, weekday, isFuture } from './domain.js';
 
-export const demoMode = process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE !== 'false';
+export const demoMode =
+  !process.env.VERCEL && process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE !== 'false';
 export async function seed(db) {
   if (!(await db.get('SELECT id FROM barbers LIMIT 1'))) {
     await db.run('INSERT INTO barbers (id,name,specialty) VALUES (?,?,?)', [
@@ -86,8 +87,12 @@ export async function seed(db) {
           new Date().toISOString(),
         ],
       );
-    } else if (process.env.NODE_ENV === 'production')
-      throw new Error('Defina ADMIN_PASSWORD para criar o primeiro administrador.');
+    } else if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+      const error = new Error('Defina ADMIN_PASSWORD para criar o primeiro administrador.');
+      error.code = 'SERVER_NOT_CONFIGURED';
+      error.missing = ['ADMIN_PASSWORD'];
+      throw error;
+    }
   }
   if (!demoMode || (await db.get("SELECT id FROM users WHERE email='cliente@example.com'"))) return;
   const hash = await bcrypt.hash('ClienteDemo2026!', 12);
