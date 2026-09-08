@@ -73,8 +73,12 @@ export async function seed(db) {
   if (!(await db.get('SELECT id FROM users WHERE email=?', [email]))) {
     const password = process.env.ADMIN_PASSWORD || (demoMode ? 'IgorDemo2026!' : null);
     if (password) {
-      if (password.length < 12)
-        throw new Error('ADMIN_PASSWORD deve ter pelo menos 12 caracteres.');
+      if (password.length < 12) {
+        const error = new Error('ADMIN_PASSWORD deve ter pelo menos 12 caracteres.');
+        error.code = 'SERVER_NOT_CONFIGURED';
+        error.missing = ['ADMIN_PASSWORD'];
+        throw error;
+      }
       await db.run(
         'INSERT INTO users (id,name,email,phone,password_hash,role,created_at) VALUES (?,?,?,?,?,?,?)',
         [

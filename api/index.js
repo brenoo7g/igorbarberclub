@@ -1,5 +1,6 @@
 import { waitUntil } from '@vercel/functions';
 import { getServerlessRuntime } from '../server/serverless.js';
+import { initializationDiagnostic } from '../server/diagnostics.js';
 
 // A Vite build alone does not deploy the standalone Node server. This entry point
 // exposes that same API as one Vercel Function without starting a port listener.
@@ -9,7 +10,8 @@ export default async function handler(req, res) {
     runtime = await getServerlessRuntime();
   } catch (error) {
     const health = req.url?.split('?')[0] === '/api/health';
-    console.error('API initialization failed:', error.code || error.name);
+    const diagnostic = initializationDiagnostic(error);
+    console.error('API initialization failed:', JSON.stringify(diagnostic));
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Retry-After', '30');
@@ -19,7 +21,7 @@ export default async function handler(req, res) {
         error:
           'O agendamento online está temporariamente indisponível. Tente novamente em instantes.',
         code: error.code === 'SERVER_NOT_CONFIGURED' ? error.code : 'SERVER_UNAVAILABLE',
-        ...(health ? { ok: false, missing: error.missing || [] } : {}),
+        ...(health ? { ok: false, missing: error.missing || [], diagnostic } : {}),
       }),
     );
   }

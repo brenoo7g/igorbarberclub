@@ -23,6 +23,7 @@ export function serverlessConfig(env = process.env) {
   if (missing.length) {
     const error = new Error('Configure o banco e a autenticação no ambiente da Vercel.');
     error.code = 'SERVER_NOT_CONFIGURED';
+    error.initializationStage = 'configuration';
     error.missing = missing;
     throw error;
   }
@@ -45,18 +46,23 @@ export function getServerlessRuntime() {
 async function initialize() {
   const config = serverlessConfig();
   process.env.APP_URL = config.appUrl;
-  const db = await createDatabase(config.databaseUrl);
+  let db;
+  let stage = 'database';
   try {
+    db = await createDatabase(config.databaseUrl);
+    stage = 'initial-data';
     await db.transaction(async (tx) => {
       await tx.run('SELECT pg_advisory_xact_lock(789127)');
       await seed(tx);
     });
+    stage = 'application';
     return {
       app: createApp(db, { secret: process.env.JWT_SECRET, serveStatic: false }),
       processNotifications: createNotificationProcessor(db, { batchSize: 2 }),
     };
   } catch (error) {
-    await db.close();
+    error.initializationStage ||= stage;
+    if (db) await db.close();
     throw error;
   }
 }

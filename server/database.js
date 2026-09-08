@@ -105,9 +105,12 @@ export async function createDatabase(
       close: () => enqueue(() => sqlite.close()),
     };
   }
-  const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
+  let stage = 'database-schema-file';
   try {
+    const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
+    stage = 'database-connection';
     await db.transaction(async (tx) => {
+      stage = 'database-schema';
       if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789127)');
       for (const statement of schema
         .split(';')
@@ -116,6 +119,7 @@ export async function createDatabase(
         await tx.run(statement);
     });
   } catch (error) {
+    error.initializationStage = stage;
     await db.close();
     throw error;
   }
