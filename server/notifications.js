@@ -58,6 +58,13 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
       for (const row of rows) {
         try {
           const p = JSON.parse(row.payload);
+          // Keep the event snapshot, but deliver to the account's current contact details.
+          const recipient = await db.get(
+            'SELECT u.name,u.email,u.phone FROM users u JOIN appointments a ON a.user_id=u.id WHERE a.id=?',
+            [row.appointment_id],
+          );
+          if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');
+          Object.assign(p, recipient);
           const event =
             { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[
               row.event

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Config, User } from './types';
 import { api } from './lib';
@@ -13,16 +13,49 @@ interface AppContext {
 }
 const Context = createContext<AppContext | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, updateUser] = useState<User | null>(null);
+  const channel = useRef<BroadcastChannel | null>(null);
+  const revision = useRef(0);
+  const setUser = useCallback((next: User | null) => {
+    revision.current++;
+    updateUser(next);
+    channel.current?.postMessage('account-changed');
+  }, []);
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   useEffect(() => {
-    Promise.allSettled([
-      api<{ user: User | null }>('/auth/me').then((r) => setUser(r.user)),
-      api<Config>('/config').then(setConfig),
-    ]).finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    async function refreshUser() {
+      const requestRevision = ++revision.current;
+      try {
+        const result = await api<{ user: User | null }>('/auth/me');
+        if (active && requestRevision === revision.current) updateUser(result.user);
+      } catch {
+        /* Preserve the current view during a temporary network failure. */
+      }
+    }
+    Promise.allSettled([refreshUser(), api<Config>('/config').then(setConfig)]).finally(() => {
+      if (active) setLoading(false);
+    });
+    if (typeof BroadcastChannel !== 'undefined') {
+      channel.current = new BroadcastChannel('igor-account');
+      channel.current.onmessage = () => void refreshUser();
+    }
+    const expired = () => {
+      setUser(null);
+      setToast('Sua sessão expirou. Entre novamente para continuar.');
+    };
+    window.addEventListener('focus', refreshUser);
+    window.addEventListener('session-expired', expired);
+    return () => {
+      active = false;
+      channel.current?.close();
+      channel.current = null;
+      window.removeEventListener('focus', refreshUser);
+      window.removeEventListener('session-expired', expired);
+    };
+  }, [setUser]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(''), 5000);

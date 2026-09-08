@@ -70,7 +70,8 @@ export async function seed(db) {
       );
   }
   const email = (process.env.ADMIN_EMAIL || 'admin@igorbarberclub.com.br').toLowerCase();
-  if (!(await db.get('SELECT id FROM users WHERE email=?', [email]))) {
+  // Environment credentials bootstrap the first admin only; profile edits must survive redeploys.
+  if (!(await db.get("SELECT id FROM users WHERE role='admin' LIMIT 1"))) {
     const password = process.env.ADMIN_PASSWORD || (demoMode ? 'IgorDemo2026!' : null);
     if (password) {
       if (password.length < 12) {

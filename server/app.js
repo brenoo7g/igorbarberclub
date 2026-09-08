@@ -20,9 +20,7 @@ import {
 } from './domain.js';
 import { enqueueNotification } from './notifications.js';
 import { demoMode } from './seed.js';
-
-const publicUser = (u) =>
-  u ? { id: u.id, name: u.name, email: u.email, phone: u.phone, role: u.role } : null;
+import { installProfileRoutes, passwordSchema, publicUser } from './profile.js';
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -107,6 +105,7 @@ export function createApp(
       },
     }),
   );
+  app.use('/api/auth/profile', express.json({ limit: '768kb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(cookieParser());
   app.use('/api', (req, res, next) => {
@@ -131,17 +130,23 @@ export function createApp(
       }),
     );
   app.use('/api', async (req, _res, next) => {
+    let payload;
     try {
       if (req.cookies.session) {
-        const payload = jwt.verify(req.cookies.session, secret, {
+        payload = jwt.verify(req.cookies.session, secret, {
           algorithms: ['HS256'],
           issuer: 'igor-barber-club',
           audience: 'barber-web',
         });
-        req.user = await db.get('SELECT * FROM users WHERE id=?', [payload.sub]);
       }
     } catch {
       /* Expired and invalid cookies are treated as unauthenticated. */
+    }
+    if (payload) {
+      // Database outages are server failures, not expired sessions.
+      const user = await db.get('SELECT * FROM users WHERE id=?', [payload.sub]);
+      req.sessionVersion = payload.version ?? 0;
+      if (user && user.session_version === req.sessionVersion) req.user = user;
     }
     next();
   });
@@ -152,7 +157,7 @@ export function createApp(
       ? next()
       : next(new HttpError(403, 'Acesso exclusivo da administração.'));
   const login = (res, user) => {
-    const token = jwt.sign({}, secret, {
+    const token = jwt.sign({ version: user.session_version || 0 }, secret, {
       subject: user.id,
       expiresIn: '7d',
       algorithm: 'HS256',
@@ -206,7 +211,7 @@ export function createApp(
           .string()
           .transform((p) => p.replace(/\D/g, ''))
           .refine((p) => /^\d{10,13}$/.test(p), 'Telefone inválido.'),
-        password: z.string().min(8).max(72),
+        password: passwordSchema(),
       })
       .parse(req.body);
     const user = { id: randomUUID(), ...data, role: 'client' };
@@ -244,6 +249,7 @@ export function createApp(
     });
     res.json({ ok: true });
   });
+  installProfileRoutes(app, db, { authenticated, login, authLimiter });
   app.get('/api/services', async (_req, res) =>
     res.json(await db.all('SELECT * FROM services WHERE active=1 ORDER BY price')),
   );
@@ -532,14 +538,18 @@ export function createApp(
     app.use(express.static(resolve('dist')));
     app.get('/{*path}', (_req, res) => res.sendFile(resolve('dist/index.html')));
   }
-  app.use((error, _req, res, _next) => {
+  app.use((error, req, res, _next) => {
     if (error instanceof z.ZodError)
       return res.status(400).json({
-        error: 'Confira os dados informados.',
+        error: ['/api/auth/profile', '/api/auth/password'].includes(req.path)
+          ? error.issues[0]?.message || 'Confira os dados informados.'
+          : 'Confira os dados informados.',
         details: error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
       });
     if (error.type === 'entity.parse.failed')
       return res.status(400).json({ error: 'JSON inválido.' });
+    if (error.type === 'entity.too.large')
+      return res.status(413).json({ error: 'O arquivo ou os dados enviados são muito grandes.' });
     if (!error.status) console.error(error);
     res.status(error.status || 500).json({
       error: error.status

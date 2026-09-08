@@ -117,6 +117,21 @@ export async function createDatabase(
         .map((s) => s.trim())
         .filter(Boolean))
         await tx.run(statement);
+      // Additive, repeatable migration for existing installations. Runs under the schema lock.
+      const columns =
+        tx.dialect === 'postgres'
+          ? await tx.all(
+              "SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='users'",
+            )
+          : await tx.all('PRAGMA table_info(users)');
+      for (const [name, definition] of [
+        ['avatar', 'TEXT'],
+        ['profile_version', 'INTEGER NOT NULL DEFAULT 0'],
+        ['session_version', 'INTEGER NOT NULL DEFAULT 0'],
+      ]) {
+        if (!columns.some((column) => column.name === name))
+          await tx.run(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
+      }
     });
   } catch (error) {
     error.initializationStage = stage;

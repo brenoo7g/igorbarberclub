@@ -26,9 +26,15 @@ Não há disparo para outras pessoas no setup local: sem credenciais os eventos 
 - SQLite é adequado à execução local ou a uma única instância com volume persistente. Não compartilhe o arquivo entre hosts.
 - PostgreSQL suporta várias instâncias da API; a agenda usa um advisory lock transacional global. É uma escolha conservadora para uma barbearia pequena. Uma operação de alta escala poderá particionar os locks por profissional e ordenar locks durante remarcação.
 - O rate limiter atual usa memória por processo. Em várias instâncias, use um store compartilhado e configure `trust proxy` apenas para proxies conhecidos da implantação.
-- Esquema inicial usa `CREATE TABLE IF NOT EXISTS`. Mudanças futuras de banco devem ser feitas por migrações versionadas; o inicializador não altera colunas de bancos antigos.
+- Esquema inicial usa `CREATE TABLE IF NOT EXISTS`. A atualização de perfil adiciona automaticamente `avatar`, `profile_version` e `session_version` quando ausentes, sob transação e lock no PostgreSQL. Migrações são aditivas e preservam dados existentes.
 - Sem `JWT_SECRET` no desenvolvimento, um segredo efêmero é criado e as sessões expiram ao reiniciar o servidor. Defina o segredo em `.env` para manter sessões entre reinícios.
 - Não há checkout financeiro: os valores informam pagamento presencial. Não há cobrança online, lembretes programados, despesas, gerenciamento de profissionais pela interface ou recuperação de senha.
+
+## Contas após atualização
+
+Alterações do perfil são feitas no painel em **Meu perfil** ou na área do cliente em **Editar perfil**. Não é necessário configurar serviço de upload nem novas variáveis de ambiente. A senha administrativa das variáveis de ambiente serve apenas para criar o primeiro administrador; atualizar essas variáveis não redefine uma conta existente. Use o formulário de troca de senha enquanto estiver autenticado.
+
+Se duas abas editarem o perfil, a segunda gravação desatualizada recebe 409. Use **Recarregar dados do perfil** para descartar o rascunho e carregar a última versão. Mudanças de e-mail ou senha encerram sessões em outros dispositivos na próxima consulta autenticada; a interface sincroniza abas e revalida a conta ao receber foco. Mensagens ainda não enviadas usam o contato atual no momento do processamento. Mensagens já enviadas não são reenviadas por uma edição de perfil.
 
 ## Referências de implementação
 

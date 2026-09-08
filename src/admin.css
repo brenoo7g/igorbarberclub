@@ -79,6 +79,13 @@
 .sidebar-profile strong {
   font-size: 11px;
   font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.sidebar-profile > div {
+  min-width: 0;
+}
+.admin-sidebar {
+  overflow-y: auto;
 }
 .sidebar-profile small {
   display: block;

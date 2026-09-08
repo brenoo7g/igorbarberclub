@@ -32,6 +32,7 @@ O modo de demonstração existe somente fora de produção e pode ser desativado
 - Landing page com serviços vindos do banco, galeria filtrável e ampliação em diálogo acessível.
 - Agendamento em três etapas, com múltiplos serviços, escolha do profissional, disponibilidade real e cadastro somente na confirmação.
 - Conta do cliente com histórico, cancelamento e remarcação de reservas futuras.
+- Meu perfil para clientes e administradores: nome de exibição, e-mail, WhatsApp, foto e troca de senha com confirmação da senha atual.
 - Painel protegido por autenticação e papel de administrador, com calendário diário, semanal e mensal.
 - Atualização de status, bloqueios de intervalo ou expediente e CRUD de serviços com exclusão lógica.
 - Receita diária, semanal, mensal e anual; ticket médio; melhores dias por receita e movimento; serviços mais vendidos; gráfico de 14 dias e exportação CSV.
@@ -55,12 +56,14 @@ src/
     Home.tsx                Landing page
     Booking.tsx             Agendamento e remarcação
     Account.tsx             Conta e histórico do cliente
+    Profile.tsx             Edição de perfil e segurança para cliente e administrador
     Admin.tsx               Agenda, serviços e financeiro
   styles.css                Sistema visual e responsividade pública
   admin.css                 Layout administrativo responsivo
 server/
   index.js                  Inicialização e configuração de produção
   app.js                    Rotas REST, validação, autenticação e autorização
+  profile.js                Edição da própria conta, processamento da foto e revogação de sessões
   database.js               Adaptadores SQLite e PostgreSQL, transações
   schema.sql                Modelos, relacionamentos e índices
   seed.js                   Catálogo, profissional, administrador e demo
@@ -72,6 +75,16 @@ docs/                       Contrato HTTP, operação, modelo e imagens
 ```
 
 ## Configuração e PostgreSQL
+
+### Perfil da conta
+
+No painel, abra **Meu perfil** (`/admin/perfil`). Clientes usam **Minha conta → Editar perfil** (`/minha-conta/perfil`). A foto aceita JPG, PNG ou WebP de até 5 MB, tem prévia e remoção, e só é aplicada ao salvar. O navegador prepara o recorte; o servidor valida e converte a imagem para WebP 256×256, armazenada no próprio banco, sem depender do disco temporário da Vercel.
+
+Trocar e-mail exige a senha atual. Trocar senha exige a senha atual e confirmação da nova senha (mínimo de 12 caracteres para administrador, 8 para cliente e máximo de 72 bytes). A sessão que fez a alteração é renovada; outras sessões são invalidadas ao trocar e-mail ou senha. Conflitos entre abas retornam um aviso e permitem recarregar os dados sem sobrescrever silenciosamente outra edição. Falhas ao salvar mantêm o formulário preenchido para nova tentativa.
+
+As colunas de perfil são adicionadas automaticamente a bancos existentes, preservando contas e reservas. `ADMIN_EMAIL` e `ADMIN_PASSWORD` criam somente o primeiro administrador; um redeploy não redefine nome, foto, e-mail ou senha. As informações do profissional no catálogo e os textos da barbearia são cadastros separados do perfil pessoal.
+
+### Variáveis de ambiente
 
 Copie `.env.example` para `.env` e ajuste as variáveis. Sem `DATABASE_URL`, o banco é SQLite. Com uma URL PostgreSQL, o mesmo esquema SQL é criado automaticamente:
 

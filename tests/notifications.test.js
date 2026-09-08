@@ -36,6 +36,10 @@ test('notification worker: disabled channels cannot starve email; provider contr
   await db.run("DELETE FROM notifications WHERE channel='email'");
   await enqueueNotification(db, appointment.id, 'confirmed');
   const email = await db.get("SELECT * FROM notifications WHERE channel='email'");
+  await db.run(
+    'UPDATE users SET name=?,email=?,phone=? WHERE id=(SELECT user_id FROM appointments WHERE id=?)',
+    ['Contato Atualizado', 'contato-atual@example.com', '21988887777', appointment.id],
+  );
   const calls = [];
   let fail = false;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
@@ -59,6 +63,8 @@ test('notification worker: disabled channels cannot starve email; provider contr
   assert.equal(calls[0].url, 'https://api.resend.com/emails');
   assert.equal(calls[0].options.headers['Idempotency-Key'], email.id);
   const payload = JSON.parse(calls[0].options.body);
+  assert.deepEqual(payload.to, ['contato-atual@example.com']);
+  assert.match(payload.text, /Olá, Contato Atualizado!/);
   assert.match(payload.text, /minha-conta/);
   assert.match(payload.subject, /confirmado/);
   assert.equal(

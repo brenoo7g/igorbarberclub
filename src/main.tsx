@@ -9,6 +9,7 @@ import './styles.css';
 const Booking = lazy(() => import('./pages/Booking'));
 const Account = lazy(() => import('./pages/Account'));
 const Admin = lazy(() => import('./pages/Admin'));
+const Profile = lazy(() => import('./pages/Profile'));
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
@@ -20,6 +21,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route index element={<Home />} />
               <Route path="agendar" element={<Booking />} />
               <Route path="minha-conta" element={<Account />} />
+              <Route path="minha-conta/perfil" element={<Profile />} />
               <Route
                 path="*"
                 element={

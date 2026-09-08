@@ -31,6 +31,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new ApiError(unavailable, response.status);
   }
   if (!response.ok) {
+    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/register')
+      window.dispatchEvent(new Event('session-expired'));
     const message =
       data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error

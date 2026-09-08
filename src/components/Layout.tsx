@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ArrowUpRight, CalendarDays, Instagram, MapPin, Menu, UserRound, X } from 'lucide-react';
 import { Brand } from './UI';
+import { Avatar } from './Avatar';
 import { useApp } from '../context';
 
 export function Layout() {
@@ -47,7 +48,7 @@ export function Layout() {
               className="account-link"
               aria-label={user ? 'Minha conta' : 'Entrar na minha conta'}
             >
-              <UserRound size={18} />
+              {user ? <Avatar name={user.name} avatar={user.avatar} /> : <UserRound size={18} />}
               <span>{user ? user.name.split(' ')[0] : 'Minha conta'}</span>
             </Link>
             <Link to="/agendar" className="button primary header-book" onClick={close}>

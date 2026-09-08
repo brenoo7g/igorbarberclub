@@ -19,6 +19,7 @@ import { addDays, api, ApiError, errorMessage, formatDate, money, today } from '
 import type { Appointment, Barber, Service } from '../types';
 import { EmptyState, ErrorBox, Eyebrow, Spinner } from '../components/UI';
 import { AuthForm } from '../components/AuthForm';
+import { Avatar } from '../components/Avatar';
 
 export default function Booking() {
   const [params] = useSearchParams();
@@ -418,7 +419,7 @@ export default function Booking() {
               </div>
               {user ? (
                 <div className="client-confirmation">
-                  <div className="client-avatar">{user.name.charAt(0)}</div>
+                  <Avatar name={user.name} avatar={user.avatar} />
                   <div>
                     <strong>{user.name}</strong>
                     <span>{user.email}</span>

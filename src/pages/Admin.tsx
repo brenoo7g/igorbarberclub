@@ -23,12 +23,15 @@ import {
   TrendingUp,
   Trophy,
   Users,
+  UserRound,
   X,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { addDays, api, clock, errorMessage, formatDate, money, statusLabels, today } from '../lib';
 import type { Appointment, Barber, Block, Metrics, Service } from '../types';
 import { AuthForm } from '../components/AuthForm';
+import { Avatar } from '../components/Avatar';
+import { ProfileSettings } from './Profile';
 import { Brand, EmptyState, ErrorBox, Modal, PageHeading, Spinner, Status } from '../components/UI';
 
 function RevenueChart({ metrics }: { metrics: Metrics }) {
@@ -1024,6 +1027,7 @@ export default function Admin() {
     { to: '/admin/agenda', name: 'Agenda', icon: CalendarDays },
     { to: '/admin/servicos', name: 'Serviços', icon: Scissors },
     { to: '/admin/financeiro', name: 'Financeiro', icon: TrendingUp },
+    { to: '/admin/perfil', name: 'Meu perfil', icon: UserRound },
   ];
   return (
     <div className="admin-shell">
@@ -1054,7 +1058,7 @@ export default function Admin() {
             Sair da conta
           </button>
           <div className="sidebar-profile">
-            <span className="client-avatar">IB</span>
+            <Avatar name={user.name} avatar={user.avatar} />
             <div>
               <strong>{user.name}</strong>
               <small>Administrador</small>
@@ -1102,6 +1106,8 @@ export default function Admin() {
             <Agenda />
           ) : pathname === '/admin/servicos' ? (
             <Services />
+          ) : pathname === '/admin/perfil' ? (
+            <ProfileSettings key={user.id} user={user} />
           ) : (
             <Overview financial={pathname === '/admin/financeiro'} />
           )}

@@ -4,6 +4,8 @@ export interface User {
   email: string;
   phone: string;
   role: 'client' | 'admin';
+  avatar: string | null;
+  profileVersion: number;
 }
 export interface Service {
   id: string;

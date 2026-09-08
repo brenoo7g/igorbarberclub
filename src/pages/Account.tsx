@@ -5,6 +5,7 @@ import { useApp } from '../context';
 import { api, errorMessage, formatDate, money } from '../lib';
 import type { Appointment } from '../types';
 import { AuthForm } from '../components/AuthForm';
+import { Avatar } from '../components/Avatar';
 import {
   EmptyState,
   ErrorBox,
@@ -89,13 +90,16 @@ export default function Account() {
         </button>
       </PageHeading>
       <div className="account-profile">
-        <span className="client-avatar">{user.name.charAt(0)}</span>
+        <Avatar name={user.name} avatar={user.avatar} />
         <div>
           <strong>{user.name}</strong>
           <p>
             {user.email} · {user.phone}
           </p>
         </div>
+        <Link className="text-link" to="/minha-conta/perfil">
+          Editar perfil
+        </Link>
         {user.role === 'admin' && (
           <Link className="text-link" to="/admin">
             Painel administrativo
