@@ -41,6 +41,15 @@ Cole o resultado somente na variável privada da Vercel. Nunca use prefixo `VITE
 
 Se `/api/health` responder **503** e `code: "SERVER_NOT_CONFIGURED"`, o campo `missing` lista os nomes das variáveis ausentes ou inválidas, sem revelar valores. `SERVER_UNAVAILABLE` indica erro de inicialização/conexão; consulte os logs da função. A interface mostra uma mensagem simples e permite tentar novamente.
 
+O campo `diagnostic` identifica a etapa e a categoria da falha sem expor senhas, nomes de usuário, host ou mensagens originais do banco. Se `reason` for `DATABASE_AUTHENTICATION_FAILED`, o servidor PostgreSQL recusou a autenticação da conexão:
+
+1. No provedor do banco, abra **Connect** e confira a conexão do projeto, banco e usuário corretos. Copie a URI completa, incluindo os parâmetros SSL indicados pelo provedor.
+2. Se a URI contiver um marcador como `[YOUR-PASSWORD]`, substitua-o pela senha real do **banco de dados**, sem os colchetes. Ela não é a senha do painel da barbearia. Caracteres reservados em senhas precisam de codificação para URL; prefira a conexão já gerada pelo provedor.
+3. Substitua o valor de `DATABASE_URL` em **Production** na Vercel e faça **Redeploy**. Cole somente a URI, sem `psql`, sem `DATABASE_URL=` e sem aspas externas. Se `DATABASE_URL` e `POSTGRES_URL` existirem juntas, esta aplicação usa `DATABASE_URL` primeiro.
+4. Confira `/api/health` novamente. Não publique a conexão completa em comentários, logs ou capturas.
+
+Ajuda dos provedores: [conexão Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres) e [erros de conexão Neon](https://neon.com/docs/connect/connection-errors).
+
 Tabelas e catálogo inicial são criados na primeira chamada válida. Transações e locks PostgreSQL protegem a inicialização concorrente. O administrador é criado somente se ainda não existir; alterar `ADMIN_PASSWORD` depois não redefine senhas existentes.
 
 ## Persistência e notificações
