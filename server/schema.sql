@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS services (
   category TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS appointments (
-  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+  id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id),
+  guest_name TEXT, guest_email TEXT, guest_phone TEXT,
   barber_id TEXT NOT NULL REFERENCES barbers(id), date TEXT NOT NULL,
   start_minute INTEGER NOT NULL, end_minute INTEGER NOT NULL,
   total INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'confirmed'

@@ -49,6 +49,8 @@ Toda rota usa prefixo `/api`. Erros retornam `{ "error": "mensagem" }`; validaç
 
 ## Modelo de dados
 
+Agendamento sem conta: `POST /api/appointments/guest` recebe `{services,barberId,date,time,expectedTotal?,expectedDuration?,guest:{name,email,phone}}`. Valida nome e sobrenome, telefone e e-mail; usa as mesmas regras transacionais de disponibilidade e possui limite por IP. O retorno não cria sessão. Consulte [o contrato completo e a migração](GUEST_BOOKING.md).
+
 ```mermaid
 erDiagram
     users ||--o{ appointments : agenda
@@ -62,7 +64,7 @@ erDiagram
 - `users`: UUID, nome, e-mail único normalizado, telefone, hash bcrypt, papel, criação, `avatar` (data URI WebP), `profile_version` e `session_version`.
 - `barbers`: identificador, nome, especialidade, ativo. O seed cria Igor Borges; podem ser incluídos profissionais no banco.
 - `services`: descrição, categoria, duração em minutos inteiros, preço em centavos, ativo.
-- `appointments`: proprietário, profissional, data local ISO, minuto inicial/final, total em centavos, estado, criação.
+- `appointments`: proprietário opcional (`user_id`), contatos de visitante (`guest_name`, `guest_email`, `guest_phone`), profissional, data local ISO, minuto inicial/final, total em centavos, estado, criação.
 - `appointment_services`: snapshot de nome, preço e duração no momento da reserva. Chave composta impede repetição do mesmo serviço.
 - `blocks`: profissional, data, início/fim em minutos, motivo.
 - `notifications`: canal, evento, payload congelado, status, tentativas, erro resumido, próxima tentativa. Nenhuma credencial é armazenada no payload. Ao enviar, nome/e-mail/telefone são consultados na conta atual; data, horário e serviços continuam sendo o snapshot do evento.

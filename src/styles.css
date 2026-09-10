@@ -1324,6 +1324,27 @@ input[type='checkbox'] {
 .auth-tabs > button {
   flex: 1;
 }
+.auth-tabs.with-guest {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.auth-tabs.with-guest > button {
+  padding: 10px 6px;
+  overflow-wrap: anywhere;
+}
+.guest-intro {
+  color: #aaaabb;
+  font-size: 13px;
+  line-height: 1.6;
+}
+@media (max-width: 480px) {
+  .auth-tabs.with-guest {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .auth-tabs.with-guest > button:last-child {
+    grid-column: 1 / -1;
+  }
+}
 .demo-login {
   border-top: 1px solid var(--border);
   padding-top: 18px;

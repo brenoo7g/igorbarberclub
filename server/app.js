@@ -57,6 +57,23 @@ const bookingSchema = z.object({
   expectedTotal: z.number().int().nonnegative().optional(),
   expectedDuration: z.number().int().positive().optional(),
 });
+const guestSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(3)
+      .max(100)
+      .transform((name) => name.replace(/\s+/g, ' '))
+      .refine((name) => name.split(' ').length >= 2, 'Informe nome e sobrenome.'),
+    email: emailSchema,
+    phone: z
+      .string()
+      .max(30)
+      .transform((phone) => phone.replace(/\D/g, ''))
+      .refine((phone) => /^\d{10,13}$/.test(phone), 'Informe um telefone válido com DDD.'),
+  })
+  .strict();
 class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -318,7 +335,7 @@ export function createApp(
   });
   const appointmentList = async (where, args) => {
     const rows = await db.all(
-      `SELECT a.*,u.name AS client_name,u.email AS client_email,u.phone AS client_phone,b.name AS barber_name FROM appointments a JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id ${where} ORDER BY a.date,a.start_minute`,
+      `SELECT a.*,COALESCE(u.name,a.guest_name) AS client_name,COALESCE(u.email,a.guest_email) AS client_email,COALESCE(u.phone,a.guest_phone) AS client_phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id ${where} ORDER BY a.date,a.start_minute`,
       args,
     );
     if (!rows.length) return [];
@@ -335,8 +352,10 @@ export function createApp(
   app.get('/api/appointments', authenticated, async (req, res) =>
     res.json(await appointmentList('WHERE a.user_id=?', [req.user.id])),
   );
-  async function book(req, res, reschedule = false) {
-    const data = bookingSchema.parse(req.body);
+  async function book(req, res, reschedule = false, asGuest = false) {
+    const data = (
+      asGuest ? bookingSchema.extend({ guest: guestSchema }).strict() : bookingSchema
+    ).parse(req.body);
     verifyDate(data.date);
     const id = reschedule ? String(req.params.id) : randomUUID();
     await db.transaction(async (tx) => {
@@ -379,10 +398,10 @@ export function createApp(
         await tx.run('DELETE FROM appointment_services WHERE appointment_id=?', [id]);
       } else
         await tx.run(
-          'INSERT INTO appointments (id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO appointments (id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
           [
             id,
-            req.user.id,
+            asGuest ? null : req.user.id,
             data.barberId,
             data.date,
             start,
@@ -390,6 +409,9 @@ export function createApp(
             total,
             'confirmed',
             new Date().toISOString(),
+            asGuest ? data.guest.name : null,
+            asGuest ? data.guest.email : null,
+            asGuest ? data.guest.phone : null,
           ],
         );
       for (const s of services)
@@ -402,6 +424,15 @@ export function createApp(
     res.status(reschedule ? 200 : 201).json((await appointmentList('WHERE a.id=?', [id]))[0]);
   }
   app.post('/api/appointments', authenticated, (req, res) => book(req, res));
+  app.post(
+    '/api/appointments/guest',
+    rateLimit({
+      windowMs: 15 * 60000,
+      limit: test ? 1000 : 10,
+      message: { error: 'Muitas tentativas de agendamento. Aguarde 15 minutos e tente novamente.' },
+    }),
+    (req, res) => book(req, res, false, true),
+  );
   app.patch('/api/appointments/:id/reschedule', authenticated, (req, res) => book(req, res, true));
   app.patch('/api/appointments/:id/cancel', authenticated, async (req, res) => {
     await db.transaction(async (tx) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -43,7 +43,11 @@ export default function Booking() {
   const [reload, setReload] = useState(0);
   const [catalogRetry, setCatalogRetry] = useState(0);
   const [confirmed, setConfirmed] = useState<Appointment | null>(null);
+  const [guestMode, setGuestMode] = useState(false);
+  const [guest, setGuest] = useState({ name: '', phone: '', email: '' });
+  const submitting = useRef(false);
   const { user, config } = useApp();
+  const asGuest = !user && guestMode && !reschedule;
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -117,11 +121,17 @@ export default function Booking() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   async function confirm() {
+    if (submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError('');
     try {
       const a = await api<Appointment>(
-        reschedule ? `/appointments/${reschedule}/reschedule` : '/appointments',
+        reschedule
+          ? `/appointments/${reschedule}/reschedule`
+          : asGuest
+            ? '/appointments/guest'
+            : '/appointments',
         {
           method: reschedule ? 'PATCH' : 'POST',
           body: JSON.stringify({
@@ -131,6 +141,7 @@ export default function Booking() {
             time,
             expectedTotal: total,
             expectedDuration: duration,
+            ...(asGuest ? { guest } : {}),
           }),
         },
       );
@@ -143,6 +154,7 @@ export default function Booking() {
         setReload((r) => r + 1);
       }
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
@@ -155,7 +167,10 @@ export default function Booking() {
         </div>
         <Eyebrow>TUDO CERTO POR AQUI</Eyebrow>
         <h1>{reschedule ? 'Novo horário. Mesmo estilo.' : 'Seu horário está na régua.'}</h1>
-        <p>Te esperamos, {user?.name.split(' ')[0]}. Agora é só chegar e deixar com a gente.</p>
+        <p>
+          Te esperamos, {confirmed.client_name.split(' ')[0]}. Agora é só chegar e deixar com a
+          gente.
+        </p>
         <div className="confirmation-card">
           <div className="confirmation-top">
             <span>AGENDAMENTO {confirmed.id.slice(0, 8).toUpperCase()}</span>
@@ -189,12 +204,17 @@ export default function Booking() {
           </div>
         </div>
         <p className="confirmation-note">
-          {config?.notifications.email || config?.notifications.whatsapp
-            ? 'A confirmação será enviada pelos canais disponíveis. Você também pode consultar tudo na sua conta.'
-            : 'Seu agendamento está salvo. Consulte os detalhes, cancele ou remarque pela sua conta.'}
+          {confirmed.user_id === null
+            ? `Seu agendamento está salvo. ${config?.notifications.email ? 'A confirmação será enviada para o e-mail informado. ' : 'Guarde o código e os detalhes acima. '}Para cancelar ou remarcar, entre em contato com a barbearia e informe o código do agendamento.`
+            : config?.notifications.email || config?.notifications.whatsapp
+              ? 'A confirmação será enviada pelos canais disponíveis. Você também pode consultar tudo na sua conta.'
+              : 'Seu agendamento está salvo. Consulte os detalhes, cancele ou remarque pela sua conta.'}
         </p>
-        <Link className="button primary large" to="/minha-conta">
-          Ver meus agendamentos
+        <Link
+          className="button primary large"
+          to={confirmed.user_id === null ? '/#contato' : '/minha-conta'}
+        >
+          {confirmed.user_id === null ? 'Falar com a barbearia' : 'Ver meus agendamentos'}
           <ArrowRight size={18} />
         </Link>
         <Link className="text-link" to="/">
@@ -413,7 +433,7 @@ export default function Booking() {
                   <p>
                     {user
                       ? 'Confira seu resumo e confirme o agendamento.'
-                      : 'Crie sua conta ou entre para guardar seu horário.'}
+                      : 'Escolha como prefere confirmar seu horário.'}
                   </p>
                 </div>
               </div>
@@ -428,15 +448,96 @@ export default function Booking() {
                   <ShieldCheck size={22} />
                 </div>
               ) : (
-                <AuthForm />
+                <AuthForm
+                  guest={
+                    reschedule
+                      ? undefined
+                      : {
+                          selected: guestMode,
+                          onSelect: (selected) => {
+                            setGuestMode(selected);
+                            setError('');
+                          },
+                          busy,
+                          content: (
+                            <form
+                              id="guest-booking-form"
+                              className="form-stack"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                void confirm();
+                              }}
+                            >
+                              <p className="guest-intro">
+                                Preencha seus contatos para reservar sem criar uma conta.
+                              </p>
+                              <label>
+                                Nome + Sobrenome
+                                <input
+                                  name="name"
+                                  autoComplete="name"
+                                  value={guest.name}
+                                  onChange={(event) =>
+                                    setGuest({ ...guest, name: event.target.value })
+                                  }
+                                  minLength={3}
+                                  maxLength={100}
+                                  pattern="\s*\S+\s+\S+.*"
+                                  title="Informe nome e sobrenome"
+                                  disabled={busy}
+                                  required
+                                />
+                              </label>
+                              <label>
+                                Telefone
+                                <input
+                                  name="phone"
+                                  type="tel"
+                                  autoComplete="tel"
+                                  value={guest.phone}
+                                  onChange={(event) =>
+                                    setGuest({ ...guest, phone: event.target.value })
+                                  }
+                                  maxLength={30}
+                                  placeholder="(21) 99999-9999"
+                                  disabled={busy}
+                                  required
+                                />
+                              </label>
+                              <label>
+                                E-mail
+                                <input
+                                  name="email"
+                                  type="email"
+                                  autoComplete="email"
+                                  value={guest.email}
+                                  onChange={(event) =>
+                                    setGuest({ ...guest, email: event.target.value })
+                                  }
+                                  maxLength={200}
+                                  disabled={busy}
+                                  required
+                                />
+                              </label>
+                              <p className="form-note">
+                                <ShieldCheck size={16} /> Usaremos esses dados para identificar sua
+                                reserva e enviar informações sobre o agendamento.
+                              </p>
+                            </form>
+                          ),
+                        }
+                  }
+                />
               )}
               <div className="booking-policy">
                 <ShieldCheck size={22} />
                 <div>
                   <strong>Seu horário, sem complicação.</strong>
                   <p>
-                    O pagamento é feito na barbearia. Precisa mudar os planos? Cancele ou remarque
-                    pela sua conta antes do horário reservado.
+                    O pagamento é feito na barbearia.{' '}
+                    {asGuest
+                      ? 'Para cancelar ou remarcar, entre em contato com a barbearia e informe o código da reserva.'
+                      : 'Precisa mudar os planos? Cancele ou remarque pela sua conta antes do horário reservado.'}
                   </p>
                 </div>
               </div>
@@ -459,11 +560,13 @@ export default function Booking() {
                 <ArrowRight size={17} />
               </button>
             ) : (
-              user && (
+              (user || asGuest) && (
                 <button
                   className="button primary"
                   disabled={busy || !time || !chosen.length}
-                  onClick={confirm}
+                  type={asGuest ? 'submit' : 'button'}
+                  form={asGuest ? 'guest-booking-form' : undefined}
+                  onClick={asGuest ? undefined : confirm}
                 >
                   {busy
                     ? 'Confirmando...'

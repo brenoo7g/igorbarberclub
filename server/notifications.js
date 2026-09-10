@@ -3,7 +3,7 @@ import { clock } from './domain.js';
 
 export async function enqueueNotification(db, appointmentId, event) {
   const appointment = await db.get(
-    'SELECT a.*,u.name,u.email,u.phone,b.name AS barber_name FROM appointments a JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id WHERE a.id=?',
+    'SELECT a.*,COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id WHERE a.id=?',
     [appointmentId],
   );
   const services = await db.all('SELECT name FROM appointment_services WHERE appointment_id=?', [
@@ -20,6 +20,7 @@ export async function enqueueNotification(db, appointmentId, event) {
     total: appointment.total,
     duration: appointment.end_minute - appointment.start_minute,
     reference: appointment.id,
+    guest: appointment.user_id === null,
   });
   for (const channel of ['email', 'whatsapp']) {
     const now = new Date().toISOString();
@@ -61,7 +62,9 @@ export function appointmentEmail(payload, event, url) {
   if (payload.reference) lines.push(`Código do agendamento: ${payload.reference}`);
   lines.push(
     '',
-    'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
+    payload.guest
+      ? 'Para cancelar ou remarcar, entre em contato com a barbearia e informe o código do agendamento:'
+      : 'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
     url,
     '',
     'Igor Barber Club · Campo Grande, RJ',
@@ -103,7 +106,7 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
           const p = JSON.parse(row.payload);
           // Keep the event snapshot, but deliver to the account's current contact details.
           const recipient = await db.get(
-            'SELECT u.name,u.email,u.phone FROM users u JOIN appointments a ON a.user_id=u.id WHERE a.id=?',
+            'SELECT COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.id=?',
             [row.appointment_id],
           );
           if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');
@@ -112,7 +115,7 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
             { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[
               row.event
             ] || row.event;
-          const url = `${process.env.APP_URL || 'http://localhost:5173'}/minha-conta`;
+          const url = `${process.env.APP_URL || 'http://localhost:5173'}/${p.guest ? '#contato' : 'minha-conta'}`;
           let response;
           if (row.channel === 'email') {
             response = await fetch('https://api.resend.com/emails', {

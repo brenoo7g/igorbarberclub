@@ -31,6 +31,7 @@ O modo de demonstração existe somente fora de produção e pode ser desativado
 
 - Landing page com serviços vindos do banco, galeria filtrável e ampliação em diálogo acessível.
 - Agendamento em três etapas, com múltiplos serviços, escolha do profissional, disponibilidade real e cadastro somente na confirmação.
+- Na confirmação, **Continuar Sem Login** permite reservar com nome e sobrenome, telefone e e-mail, sem criar conta. A reserva aparece na agenda do administrador e recebe as notificações configuradas.
 - Conta do cliente com histórico, cancelamento e remarcação de reservas futuras.
 - Meu perfil para clientes e administradores: nome de exibição, e-mail, WhatsApp, foto e troca de senha com confirmação da senha atual.
 - Painel protegido por autenticação e papel de administrador, com calendário diário, semanal e mensal.
@@ -65,6 +66,7 @@ server/
   app.js                    Rotas REST, validação, autenticação e autorização
   profile.js                Edição da própria conta, processamento da foto e revogação de sessões
   database.js               Adaptadores SQLite e PostgreSQL, transações
+  guest-migration.js        Migração de reservas existentes para aceitar visitantes
   schema.sql                Modelos, relacionamentos e índices
   seed.js                   Catálogo, profissional, administrador e demo
   domain.js                 Disponibilidade, calendário e cálculos financeiros
@@ -117,6 +119,8 @@ Depois do build, Express também serve a SPA em sua porta (3001 por padrão), in
 ## Notificações
 
 Para ativar confirmações completas por e-mail na Vercel, siga o [passo a passo do Resend](docs/RESEND.md).
+
+Reservas sem login usam os contatos informados na confirmação e orientam o cliente a falar com a barbearia para cancelar ou remarcar. Reservas autenticadas continuam disponíveis na conta. Veja [o fluxo sem login e suas regras](docs/GUEST_BOOKING.md).
 
 Configure as credenciais somente no servidor:
 

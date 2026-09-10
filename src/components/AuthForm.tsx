@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useApp } from '../context';
 import { api, errorMessage } from '../lib';
@@ -9,9 +9,16 @@ import { ErrorBox } from './UI';
 export function AuthForm({
   admin = false,
   onSuccess,
+  guest,
 }: {
   admin?: boolean;
   onSuccess?: () => void;
+  guest?: {
+    selected: boolean;
+    onSelect: (selected: boolean) => void;
+    content: ReactNode;
+    busy: boolean;
+  };
 }) {
   const [register, setRegister] = useState(!admin);
   const [showPassword, setShowPassword] = useState(false);
@@ -45,11 +52,14 @@ export function AuthForm({
   return (
     <div className="auth-form-wrap">
       {!admin && (
-        <div className="segmented auth-tabs">
+        <div className={`segmented auth-tabs ${guest ? 'with-guest' : ''}`}>
           <button
             type="button"
-            className={register ? 'selected' : ''}
+            className={register && !guest?.selected ? 'selected' : ''}
+            disabled={busy || guest?.busy}
+            aria-pressed={register && !guest?.selected}
             onClick={() => {
+              guest?.onSelect(false);
               setRegister(true);
               setError('');
             }}
@@ -58,110 +68,131 @@ export function AuthForm({
           </button>
           <button
             type="button"
-            className={!register ? 'selected' : ''}
+            className={!register && !guest?.selected ? 'selected' : ''}
+            disabled={busy || guest?.busy}
+            aria-pressed={!register && !guest?.selected}
             onClick={() => {
+              guest?.onSelect(false);
               setRegister(false);
               setError('');
             }}
           >
             Já tenho conta
           </button>
-        </div>
-      )}
-      <form className="form-stack" onSubmit={submit}>
-        <ErrorBox message={error} />
-        {register && (
-          <label>
-            Nome completo
-            <input
-              name="name"
-              autoComplete="name"
-              placeholder="Como podemos chamar você?"
-              minLength={3}
-              maxLength={100}
-              required
-            />
-          </label>
-        )}
-        <label>
-          E-mail
-          <input
-            type="email"
-            name="email"
-            autoComplete="email"
-            placeholder="voce@exemplo.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            maxLength={200}
-          />
-        </label>
-        {register && (
-          <label>
-            WhatsApp
-            <input
-              type="tel"
-              name="phone"
-              autoComplete="tel"
-              placeholder="(21) 99999-9999"
-              pattern="[+()\s0-9-]{10,20}"
-              title="Informe seu telefone com DDD"
-              required
-            />
-          </label>
-        )}
-        <label>
-          Senha
-          <div className="password-field">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              name="password"
-              autoComplete={register ? 'new-password' : 'current-password'}
-              placeholder={register ? 'Pelo menos 8 caracteres' : 'Sua senha'}
-              minLength={register ? 8 : 1}
-              maxLength={72}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+          {guest && (
             <button
               type="button"
-              className="icon-button"
-              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-        </label>
-        {register && (
-          <p className="form-note">
-            <LockKeyhole size={14} />
-            Seus dados serão usados para gerenciar sua conta e enviar informações sobre seu
-            agendamento.
-          </p>
-        )}
-        <button type="submit" className="button primary full" disabled={busy}>
-          {busy ? 'Aguarde...' : register ? 'Criar conta e continuar' : 'Entrar na minha conta'}
-          <ArrowRight size={17} />
-        </button>
-        {admin && config?.demo && (
-          <div className="demo-login">
-            <p>Ambiente de demonstração com dados fictícios.</p>
-            <button
-              type="button"
-              className="text-link"
+              className={guest.selected ? 'selected' : ''}
+              aria-pressed={guest.selected}
+              disabled={busy || guest.busy}
               onClick={() => {
-                setEmail('admin@igorbarberclub.com.br');
-                setPassword('IgorDemo2026!');
+                setError('');
+                guest.onSelect(true);
               }}
             >
-              Preencher acesso de demonstração
-              <ArrowRight size={14} />
+              Continuar Sem Login
             </button>
-          </div>
-        )}
-      </form>
+          )}
+        </div>
+      )}
+      {guest?.selected ? (
+        guest.content
+      ) : (
+        <form className="form-stack" onSubmit={submit}>
+          <ErrorBox message={error} />
+          {register && (
+            <label>
+              Nome completo
+              <input
+                name="name"
+                autoComplete="name"
+                placeholder="Como podemos chamar você?"
+                minLength={3}
+                maxLength={100}
+                required
+              />
+            </label>
+          )}
+          <label>
+            E-mail
+            <input
+              type="email"
+              name="email"
+              autoComplete="email"
+              placeholder="voce@exemplo.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              maxLength={200}
+            />
+          </label>
+          {register && (
+            <label>
+              WhatsApp
+              <input
+                type="tel"
+                name="phone"
+                autoComplete="tel"
+                placeholder="(21) 99999-9999"
+                pattern="[+()\s0-9-]{10,20}"
+                title="Informe seu telefone com DDD"
+                required
+              />
+            </label>
+          )}
+          <label>
+            Senha
+            <div className="password-field">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                autoComplete={register ? 'new-password' : 'current-password'}
+                placeholder={register ? 'Pelo menos 8 caracteres' : 'Sua senha'}
+                minLength={register ? 8 : 1}
+                maxLength={72}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </label>
+          {register && (
+            <p className="form-note">
+              <LockKeyhole size={14} />
+              Seus dados serão usados para gerenciar sua conta e enviar informações sobre seu
+              agendamento.
+            </p>
+          )}
+          <button type="submit" className="button primary full" disabled={busy}>
+            {busy ? 'Aguarde...' : register ? 'Criar conta e continuar' : 'Entrar na minha conta'}
+            <ArrowRight size={17} />
+          </button>
+          {admin && config?.demo && (
+            <div className="demo-login">
+              <p>Ambiente de demonstração com dados fictícios.</p>
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => {
+                  setEmail('admin@igorbarberclub.com.br');
+                  setPassword('IgorDemo2026!');
+                }}
+              >
+                Preencher acesso de demonstração
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
+        </form>
+      )}
     </div>
   );
 }

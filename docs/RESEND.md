@@ -32,6 +32,8 @@ Substitua `SEU-DOMINIO-VERIFICADO` pelo domínio real. Cole somente os valores, 
 
 ## Domínio e remetente
 
+Para agendamentos feitos em **Continuar Sem Login**, o destinatário é o e-mail informado pelo visitante. A confirmação mantém todos os detalhes, mas orienta o cliente a entrar em contato com a barbearia para cancelamento/remarcação, com link para `/#contato`. Nenhuma conta é criada automaticamente.
+
 O envio para clientes exige domínio próprio verificado; não é possível verificar `gmail.com`, `outlook.com` ou `vercel.app` como seu domínio. O site pode continuar hospedado em `igorbarberclub.vercel.app` enquanto o remetente usa um domínio próprio. O Resend permite enviar de endereços do domínio verificado sem cadastrar cada remetente individualmente. [Remetentes no Resend](https://resend.com/docs/knowledge-base/how-do-I-create-an-email-address-or-sender-in-resend).
 
 `Igor Barber Club <onboarding@resend.dev>` serve apenas para testes enviados ao e-mail da sua conta Resend, não para qualquer cliente. Não habilite esse remetente em produção com uma fila de outros destinatários. [Limitação do domínio de testes](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).

@@ -87,7 +87,9 @@ export function calculateMetrics(appointments, items, today = dateInBrazil()) {
     monthly: sum(month),
     yearly: sum(done.filter((a) => a.date.slice(0, 4) === today.slice(0, 4) && a.date <= today)),
     averageTicket: period.length ? Math.round(sum(period) / period.length) : 0,
-    clients: new Set(period.map((a) => a.user_id)).size,
+    clients: new Set(
+      period.map((a) => (a.user_id ? `user:${a.user_id}` : `guest:${a.guest_email || a.id}`)),
+    ).size,
     visits: period.length,
     bestRevenueDay: period.length ? [...byDay].sort((a, b) => b.revenue - a.revenue)[0] : null,
     bestVolumeDay: period.length ? [...byDay].sort((a, b) => b.count - a.count)[0] : null,

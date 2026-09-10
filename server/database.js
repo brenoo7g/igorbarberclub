@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { migrateGuestBookings } from './guest-migration.js';
 
 export async function createDatabase(
   url = process.env.DATABASE_URL,
@@ -109,6 +110,9 @@ export async function createDatabase(
   try {
     const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');
     stage = 'database-connection';
+    // SQLite requires this outside the transaction when rebuilding a NOT NULL column.
+    // The database is not yet available to application requests.
+    if (db.dialect === 'sqlite') await db.run('PRAGMA foreign_keys=OFF');
     await db.transaction(async (tx) => {
       stage = 'database-schema';
       if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789127)');
@@ -132,7 +136,9 @@ export async function createDatabase(
         if (!columns.some((column) => column.name === name))
           await tx.run(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
       }
+      await migrateGuestBookings(tx);
     });
+    if (db.dialect === 'sqlite') await db.run('PRAGMA foreign_keys=ON');
   } catch (error) {
     error.initializationStage = stage;
     await db.close();

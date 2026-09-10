@@ -23,7 +23,7 @@ export interface Barber {
 }
 export interface Appointment {
   id: string;
-  user_id: string;
+  user_id: string | null;
   barber_id: string;
   barber_name: string;
   client_name: string;
