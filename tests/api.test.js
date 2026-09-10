@@ -142,11 +142,11 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
   const rescheduled = await request(
     `/appointments/${created.id}/reschedule`,
     'PATCH',
-    { ...payload, time: '14:00' },
+    { ...payload, time: '14:10' },
     owner,
   );
   assert.equal(rescheduled.status, 200);
-  assert.equal(rescheduled.data.time, '14:00');
+  assert.equal(rescheduled.data.time, '14:10');
   const freed = await request(`/availability?date=${date}&barberId=igor&services=corte,barba`);
   assert.equal(freed.data.slots.includes('09:00'), true);
   assert.equal(
@@ -179,7 +179,7 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
   const newBooking = await request(
     '/appointments',
     'POST',
-    { services: [newService.data.id], barberId: 'igor', date, time: '16:00' },
+    { services: [newService.data.id], barberId: 'igor', date, time: '15:50' },
     owner,
   );
   assert.equal(newBooking.status, 201);
@@ -226,4 +226,97 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
     (await request(`/admin/blocks/${block.data.id}`, 'DELETE', undefined, admin)).status,
     200,
   );
+
+  // Updating duration through the admin API changes availability immediately, while
+  // existing reservations keep their original duration and price snapshots.
+  const adaptiveDate = addDays(date, 28);
+  const catalog = (await request('/services')).data;
+  const cut = catalog.find((service) => service.id === 'corte');
+  const beard = catalog.find((service) => service.id === 'barba');
+  assert.equal(
+    (await request('/admin/services/corte', 'PUT', { ...cut, duration: 30 }, admin)).status,
+    200,
+  );
+  const oldReservation = await request(
+    '/appointments',
+    'POST',
+    { services: ['corte'], barberId: 'igor', date: adaptiveDate, time: '09:00' },
+    client,
+  );
+  assert.equal(oldReservation.status, 201);
+  assert.equal(oldReservation.data.end_minute, 570);
+  assert.equal(
+    (await request('/admin/services/corte', 'PUT', { ...cut, duration: 40 }, admin)).status,
+    200,
+  );
+  let adaptive = await request(`/availability?date=${adaptiveDate}&barberId=igor&services=corte`);
+  assert.equal(adaptive.data.duration, 40);
+  assert.deepEqual(adaptive.data.slots.slice(0, 3), ['09:30', '10:10', '10:50']);
+  assert.equal(
+    (
+      await request(
+        '/appointments',
+        'POST',
+        {
+          services: ['corte'],
+          barberId: 'igor',
+          date: adaptiveDate,
+          time: '09:30',
+          expectedDuration: 30,
+        },
+        client,
+      )
+    ).status,
+    412,
+  );
+  assert.equal(
+    (await request(`/appointments/${oldReservation.data.id}/cancel`, 'PATCH', {}, client)).status,
+    200,
+  );
+  adaptive = await request(`/availability?date=${adaptiveDate}&barberId=igor&services=corte`);
+  assert.deepEqual(adaptive.data.slots.slice(0, 3), ['09:00', '09:40', '10:20']);
+  assert.equal(
+    (
+      await request(
+        '/appointments',
+        'POST',
+        { services: ['corte'], barberId: 'igor', date: adaptiveDate, time: '09:30' },
+        client,
+      )
+    ).status,
+    409,
+  );
+  const forty = await request(
+    '/appointments',
+    'POST',
+    {
+      services: ['corte'],
+      barberId: 'igor',
+      date: adaptiveDate,
+      time: '09:40',
+      expectedDuration: 40,
+    },
+    client,
+  );
+  assert.equal(forty.status, 201);
+  assert.equal(forty.data.end_minute, 620);
+  adaptive = await request(`/availability?date=${adaptiveDate}&barberId=igor&services=corte`);
+  assert.deepEqual(adaptive.data.slots.slice(0, 3), ['09:00', '10:20', '11:00']);
+  assert.equal(
+    (await request('/admin/services/barba', 'PUT', { ...beard, duration: 40 }, admin)).status,
+    200,
+  );
+  assert.equal(
+    (await request(`/appointments/${forty.data.id}/cancel`, 'PATCH', {}, client)).status,
+    200,
+  );
+  const combined = await request(
+    `/availability?date=${adaptiveDate}&barberId=igor&services=corte,barba`,
+  );
+  assert.equal(combined.data.duration, 80);
+  assert.deepEqual(combined.data.slots.slice(0, 3), ['09:00', '10:20', '11:40']);
+  const preserved = (await request('/appointments', 'GET', undefined, client)).data.find(
+    (a) => a.id === oldReservation.data.id,
+  );
+  assert.equal(preserved.end_minute - preserved.start_minute, 30);
 });

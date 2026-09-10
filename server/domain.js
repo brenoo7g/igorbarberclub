@@ -22,17 +22,35 @@ export function isFuture(date, minute, now = new Date()) {
 export function availableSlots({
   date,
   duration,
-  occupied,
+  occupied = [],
   open = 9,
   close = 19,
   now = new Date(),
 }) {
-  if (weekday(date) === 0) return [];
+  if (weekday(date) === 0 || !Number.isInteger(duration) || duration <= 0) return [];
   const slots = [];
-  for (let start = open * 60; start + duration <= close * 60; start += 30) {
-    if (isFuture(date, start, now) && !overlaps(start, start + duration, occupied))
-      slots.push(clock(start));
+  const opening = open * 60,
+    closing = close * 60;
+  const busy = occupied
+    .filter((interval) => interval.end_minute > opening && interval.start_minute < closing)
+    .map((interval) => ({
+      start: Math.max(opening, interval.start_minute),
+      end: Math.min(closing, interval.end_minute),
+    }))
+    .sort((a, b) => a.start - b.start);
+  const addFreeInterval = (from, until) => {
+    for (let start = from; start + duration <= until; start += duration) {
+      if (isFuture(date, start, now)) slots.push(clock(start));
+    }
+  };
+  // Pack each free interval using the selected services' combined duration.
+  // Resume immediately after reservations/blocks, including older off-grid bookings.
+  let cursor = opening;
+  for (const interval of busy) {
+    addFreeInterval(cursor, interval.start);
+    cursor = Math.max(cursor, interval.end);
   }
+  addFreeInterval(cursor, closing);
   return slots;
 }
 export function calculateMetrics(appointments, items, today = dateInBrazil()) {

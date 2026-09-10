@@ -1,5 +1,59 @@
 import { test, expect } from '@playwright/test';
 
+test('admin duration changes drive customer time options and actual calendar intervals', async ({
+  page,
+}) => {
+  await page.goto('/admin/servicos');
+  await page.getByRole('button', { name: 'Preencher acesso de demonstração' }).click();
+  await page.getByRole('button', { name: 'Entrar na minha conta' }).click();
+  await page.getByRole('button', { name: 'Novo serviço', exact: true }).click();
+  await page.getByLabel('Nome do serviço').fill('Duração adaptativa E2E');
+  await page.getByLabel('Descrição').fill('Verificação de intervalos pela duração');
+  await page.getByLabel('Duração (min)').fill('30');
+  await page.getByLabel('Preço (R$)').fill('40');
+  await page.getByLabel('Categoria', { exact: true }).fill('Teste');
+  await page.getByRole('button', { name: 'Salvar serviço' }).click();
+  await page.getByRole('button', { name: 'Editar Duração adaptativa E2E' }).click();
+  await page.getByLabel('Duração (min)').fill('40');
+  await page.getByRole('button', { name: 'Salvar serviço' }).click();
+  await expect(
+    page.locator('.admin-service-row').filter({ hasText: 'Duração adaptativa E2E' }),
+  ).toContainText('40 min');
+  const service = (await (await page.request.get('/api/services')).json()).find(
+    (s) => s.name === 'Duração adaptativa E2E',
+  );
+  const date = new Date();
+  date.setDate(date.getDate() + 50);
+  if (date.getDay() === 0) date.setDate(date.getDate() + 1);
+  const day = date.toISOString().slice(0, 10);
+  let reservation;
+  try {
+    await page.goto(`/agendar?servico=${service.id}`);
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    await page.getByLabel('Escolher outra data').fill(day);
+    await expect(page.locator('.time-options button').nth(1)).toHaveText('09:40');
+    await expect(page.locator('.time-options button').nth(2)).toHaveText('10:20');
+    await page.getByRole('button', { name: '10:20', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+    const saved = page.waitForResponse(
+      (r) => r.url().endsWith('/api/appointments') && r.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Confirmar agendamento', exact: true }).click();
+    reservation = await (await saved).json();
+    expect(reservation.end_minute - reservation.start_minute).toBe(40);
+    await page.goto('/admin/agenda');
+    await page.getByLabel('Data da agenda').fill(day);
+    const row = page
+      .locator('.appointments-table tbody tr')
+      .filter({ hasText: 'Duração adaptativa E2E' });
+    await expect(row).toContainText('10:20');
+    await expect(row).toContainText('11:00');
+  } finally {
+    if (reservation?.id) await page.request.patch(`/api/appointments/${reservation.id}/cancel`);
+    await page.request.delete(`/api/admin/services/${service.id}`);
+  }
+});
+
 test('landing page, gallery, mobile navigation and responsive layouts', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

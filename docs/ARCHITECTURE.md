@@ -73,7 +73,7 @@ Veja o esquema executável em [`server/schema.sql`](../server/schema.sql). Datas
 
 O intervalo de uma reserva é semiaberto `[início, fim)`. Existe conflito quando `novoInicio < fimExistente && novoFim > inicioExistente`. Logo, terminar às 10h permite que outro atendimento comece às 10h.
 
-O servidor soma as durações e os preços do catálogo; nunca confia em um total enviado pelo cliente. `expectedTotal` e `expectedDuration` permitem interromper a confirmação se o catálogo tiver mudado após a seleção. Também valida profissional, serviços ativos, domingo, expediente, horários já passados, grade de 30 minutos e horizonte de 90 dias.
+O servidor soma as durações e os preços do catálogo; nunca confia em um total enviado pelo cliente. `expectedTotal` e `expectedDuration` permitem interromper a confirmação se o catálogo tiver mudado após a seleção. Também valida profissional, serviços ativos, domingo, expediente, horários já passados, intervalos de início baseados na duração total selecionada e horizonte de 90 dias.
 
 Na transação, a agenda é bloqueada, a disponibilidade é recalculada e a reserva, seus snapshots e a outbox são gravados juntos. Agendamentos `confirmed` e `completed` ocupam o intervalo. Cancelamentos liberam o horário. Um bloqueio sobre reserva existente é rejeitado.
 

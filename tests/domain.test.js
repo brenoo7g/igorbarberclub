@@ -15,9 +15,52 @@ test('availability considers full combined duration, touching boundaries, closin
   assert.equal(slots.includes('09:00'), false);
   assert.equal(slots.includes('11:00'), true);
   assert.equal(slots.includes('18:00'), false);
-  assert.equal(slots.includes('17:30'), true);
+  assert.equal(slots.includes('16:50'), true);
+  assert.equal(slots.includes('17:30'), false);
   assert.deepEqual(availableSlots({ ...args, date: '2030-01-06' }), []);
   assert.deepEqual(availableSlots({ ...args, now: new Date('2030-01-08T12:00:00Z') }), []);
+});
+
+test('availability uses the selected duration and combined services instead of fixed half-hours', () => {
+  const args = { date: '2030-01-07', open: 9, close: 12, now: new Date('2030-01-07T10:00:00Z') };
+  assert.deepEqual(availableSlots({ ...args, duration: 40 }), ['09:00', '09:40', '10:20', '11:00']);
+  assert.deepEqual(availableSlots({ ...args, duration: 80 }), ['09:00', '10:20']);
+  assert.deepEqual(availableSlots({ ...args, duration: 45 }), ['09:00', '09:45', '10:30', '11:15']);
+  assert.deepEqual(
+    availableSlots({ ...args, duration: 40, now: new Date('2030-01-07T12:15:00Z') }),
+    ['09:40', '10:20', '11:00'],
+  );
+  for (const duration of [0, -10, NaN, 1.5, 240])
+    assert.deepEqual(availableSlots({ ...args, duration }), []);
+});
+
+test('availability resumes at the end of blocks and mixed-duration reservations without overlap', () => {
+  const occupied = [
+    { start_minute: 620, end_minute: 655 },
+    { start_minute: 525, end_minute: 555 },
+    { start_minute: 625, end_minute: 635 },
+    { start_minute: 650, end_minute: 660 },
+    { start_minute: 720, end_minute: 750 },
+  ];
+  const original = structuredClone(occupied);
+  const args = {
+    date: '2030-01-07',
+    duration: 40,
+    occupied,
+    open: 9,
+    close: 12,
+    now: new Date('2030-01-07T10:00:00Z'),
+  };
+  assert.deepEqual(availableSlots(args), ['09:15', '11:00']);
+  assert.deepEqual(occupied, original);
+  assert.deepEqual(
+    availableSlots({ ...args, occupied: [{ start_minute: 540, end_minute: 570 }] }),
+    ['09:30', '10:10', '10:50'],
+  );
+  assert.deepEqual(
+    availableSlots({ ...args, occupied: [{ start_minute: 500, end_minute: 800 }] }),
+    [],
+  );
 });
 
 test('finance uses completed visits, cents, distinct clients and calendar boundaries', () => {
