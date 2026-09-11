@@ -22,6 +22,8 @@ import { enqueueNotification } from './notifications.js';
 import { demoMode } from './seed.js';
 import { installProfileRoutes, passwordSchema, publicUser } from './profile.js';
 import { installPortfolioRoutes } from './portfolio.js';
+import { installScheduleRoutes, readSchedule, lockSchedule } from './schedule.js';
+import { dateAccess, minutes } from './schedule-domain.js';
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -270,6 +272,7 @@ export function createApp(
   });
   installProfileRoutes(app, db, { authenticated, login, authLimiter });
   installPortfolioRoutes(app, db, { authenticated, admin, authLimiter });
+  installScheduleRoutes(app, db, { authenticated, admin });
   app.get('/api/services', async (_req, res) =>
     res.json(await db.all('SELECT * FROM services WHERE active=1 ORDER BY price')),
   );
@@ -297,44 +300,51 @@ export function createApp(
     ])),
   ];
   const verifyDate = (date) => {
-    if (date < dateInBrazil() || date > addDays(dateInBrazil(), 90))
-      fail(400, 'Escolha uma data entre hoje e os próximos 90 dias.');
+    if (date < dateInBrazil() || date > addDays(dateInBrazil(), 730))
+      fail(400, 'Escolha uma data entre hoje e os próximos dois anos.');
   };
   // Serialize schedule mutations across workers, including moves between barbers.
-  const lockBarber = async (tx) => {
-    if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789126)');
-  };
+  const lockBarber = lockSchedule;
   app.get('/api/availability', async (req, res) => {
     const date = dateSchema.parse(req.query.date);
     verifyDate(date);
-    const barberId = z.string().parse(req.query.barberId);
-    if (!(await db.get('SELECT id FROM barbers WHERE id=? AND active=1', [barberId])))
-      fail(404, 'Profissional não encontrado.');
-    const ids = z
-      .array(z.string().min(1))
-      .min(1)
-      .max(10)
-      .parse(String(req.query.services || '').split(','));
-    const services = await getServices(db, [...new Set(ids)]);
-    let except = '';
-    if (req.query.except) {
-      const existing = await db.get('SELECT * FROM appointments WHERE id=?', [
-        String(req.query.except),
-      ]);
-      if (existing && (existing.user_id === req.user?.id || req.user?.role === 'admin'))
-        except = existing.id;
-    }
-    const duration = services.reduce((sum, s) => sum + s.duration, 0);
-    res.json({
-      slots: availableSlots({
-        date,
+    const result = await db.transaction(async (tx) => {
+      await lockSchedule(tx);
+      const barberId = z.string().parse(req.query.barberId);
+      if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [barberId])))
+        fail(404, 'Profissional não encontrado.');
+      const ids = z
+        .array(z.string().min(1))
+        .min(1)
+        .max(10)
+        .parse(String(req.query.services || '').split(','));
+      const services = await getServices(tx, [...new Set(ids)]);
+      let except = '';
+      if (req.query.except) {
+        const existing = await tx.get('SELECT * FROM appointments WHERE id=?', [
+          String(req.query.except),
+        ]);
+        if (existing && (existing.user_id === req.user?.id || req.user?.role === 'admin'))
+          except = existing.id;
+      }
+      const duration = services.reduce((sum, s) => sum + s.duration, 0);
+      const schedule = await readSchedule(tx, barberId);
+      const access = dateAccess(schedule, date, dateInBrazil());
+      return {
+        slots: access.allowed
+          ? availableSlots({
+              date,
+              duration,
+              occupied: await occupied(tx, barberId, date, except),
+              workingDay: schedule.days.find((d) => d.weekday === weekday(date)),
+            })
+          : [],
+        reason: access.reason,
+        message: access.message,
         duration,
-        occupied: await occupied(db, barberId, date, except),
-        open,
-        close,
-      }),
-      duration,
+      };
     });
+    res.json(result);
   });
   const appointmentList = async (where, args) => {
     const rows = await db.all(
@@ -383,12 +393,14 @@ export function createApp(
           412,
           'O preço ou a duração mudou. Atualize a página para revisar os serviços antes de confirmar.',
         );
+      const schedule = await readSchedule(tx, data.barberId);
+      const access = dateAccess(schedule, data.date, dateInBrazil());
+      if (!access.allowed) fail(409, access.message);
       const slots = availableSlots({
         date: data.date,
         duration,
         occupied: await occupied(tx, data.barberId, data.date, reschedule ? id : ''),
-        open,
-        close,
+        workingDay: schedule.days.find((d) => d.weekday === weekday(data.date)),
       });
       if (!slots.includes(data.time))
         fail(409, 'Esse horário acabou de ficar indisponível. Escolha outro horário.');
@@ -487,18 +499,26 @@ export function createApp(
   app.put('/api/admin/services/:id', async (req, res) => {
     const data = serviceSchema.parse(req.body),
       id = String(req.params.id);
-    if (!(await db.get('SELECT id FROM services WHERE id=? AND active=1', [id])))
-      fail(404, 'Serviço não encontrado.');
-    await db.run(
-      'UPDATE services SET name=?,description=?,duration=?,price=?,category=? WHERE id=?',
-      [data.name, data.description, data.duration, data.price, data.category, id],
-    );
+    await db.transaction(async (tx) => {
+      await lockSchedule(tx);
+      if (!(await tx.get('SELECT id FROM services WHERE id=? AND active=1', [id])))
+        fail(404, 'Serviço não encontrado.');
+      await tx.run(
+        'UPDATE services SET name=?,description=?,duration=?,price=?,category=? WHERE id=?',
+        [data.name, data.description, data.duration, data.price, data.category, id],
+      );
+    });
     res.json({ id, ...data, active: 1 });
   });
   app.delete('/api/admin/services/:id', async (req, res) => {
-    if (!(await db.get('SELECT id FROM services WHERE id=? AND active=1', [String(req.params.id)])))
-      fail(404, 'Serviço não encontrado.');
-    await db.run('UPDATE services SET active=0 WHERE id=?', [String(req.params.id)]);
+    await db.transaction(async (tx) => {
+      await lockSchedule(tx);
+      if (
+        !(await tx.get('SELECT id FROM services WHERE id=? AND active=1', [String(req.params.id)]))
+      )
+        fail(404, 'Serviço não encontrado.');
+      await tx.run('UPDATE services SET active=0 WHERE id=?', [String(req.params.id)]);
+    });
     res.json({ ok: true });
   });
   app.get('/api/admin/blocks', async (req, res) => {
@@ -525,12 +545,20 @@ export function createApp(
     const start = minuteOf(data.start),
       end = minuteOf(data.end),
       id = randomUUID();
-    if (start >= end || start < open * 60 || end > close * 60 || weekday(data.date) === 0)
-      fail(400, 'Escolha um intervalo válido dentro do expediente.');
     await db.transaction(async (tx) => {
       if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [data.barberId])))
         fail(404, 'Profissional não encontrado.');
       await lockBarber(tx, data.barberId);
+      const day = (await readSchedule(tx, data.barberId)).days.find(
+        (d) => d.weekday === weekday(data.date),
+      );
+      if (
+        !day?.active ||
+        start >= end ||
+        start < minutes(day.start_time) ||
+        end > minutes(day.end_time)
+      )
+        fail(400, 'Escolha um intervalo válido dentro do expediente.');
       if (overlaps(start, end, await occupied(tx, data.barberId, data.date)))
         fail(409, 'Há um agendamento ou bloqueio nesse intervalo.');
       await tx.run(
@@ -541,7 +569,10 @@ export function createApp(
     res.status(201).json({ id });
   });
   app.delete('/api/admin/blocks/:id', async (req, res) => {
-    await db.run('DELETE FROM blocks WHERE id=?', [String(req.params.id)]);
+    await db.transaction(async (tx) => {
+      await lockSchedule(tx);
+      await tx.run('DELETE FROM blocks WHERE id=?', [String(req.params.id)]);
+    });
     res.json({ ok: true });
   });
   app.get('/api/admin/metrics', async (_req, res) => {

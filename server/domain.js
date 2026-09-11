@@ -26,12 +26,25 @@ export function availableSlots({
   open = 9,
   close = 19,
   now = new Date(),
+  workingDay,
 }) {
-  if (weekday(date) === 0 || !Number.isInteger(duration) || duration <= 0) return [];
+  if (
+    (workingDay === undefined ? weekday(date) === 0 : !workingDay?.active) ||
+    !Number.isInteger(duration) ||
+    duration <= 0
+  )
+    return [];
   const slots = [];
-  const opening = open * 60,
-    closing = close * 60;
-  const busy = occupied
+  const minute = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+  const opening = workingDay ? minute(workingDay.start_time) : open * 60,
+    closing = workingDay ? minute(workingDay.end_time) : close * 60;
+  const breaks = workingDay
+    ? workingDay.breaks.map((b) => ({
+        start_minute: minute(b.start_time),
+        end_minute: minute(b.end_time),
+      }))
+    : [];
+  const busy = [...occupied, ...breaks]
     .filter((interval) => interval.end_minute > opening && interval.start_minute < closing)
     .map((interval) => ({
       start: Math.max(opening, interval.start_minute),

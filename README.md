@@ -78,6 +78,10 @@ docs/                       Contrato HTTP, operação, modelo e imagens
 
 ## Configuração e PostgreSQL
 
+### Agenda, almoço e abertura de semanas
+
+Abra **Agenda → Configurar agenda** para definir dias ativos, expediente e intervalos por profissional. O modo automático libera uma janela de dias de funcionamento; o modo manual abre semanas pelo botão **Liberar próxima semana** e oferece um link para divulgação no WhatsApp. Todas as reservas revalidam essas regras. Veja [configuração, rotas e QA da agenda](docs/SCHEDULE.md).
+
 ### Nossos Trabalhos
 
 O carrossel “Alguns dos nossos cortes” apresenta fotos reais, sem legendas ou filtros, com navegação por toque, arraste, setas, indicadores de posição e botão para o Instagram. A aba administrativa Nossos Trabalhos foi removida; o endereço antigo `/admin/trabalhos` redireciona para Serviços. As fotos continuam no banco e na página inicial. Veja [rotas do portfólio](docs/PORTFOLIO.md).
@@ -118,7 +122,7 @@ npm start
 
 Depois do build, Express também serve a SPA em sua porta (3001 por padrão), incluindo fallback para URLs internas. Configure `APP_URL` com a origem exata usada no navegador. Em produção, defina `NODE_ENV=production`, use HTTPS no proxy reverso e um banco novo, sem dados demo. `JWT_SECRET` forte e `APP_URL` HTTPS são obrigatórios. O cookie de sessão passa a exigir HTTPS. O administrador inicial é criado a partir de `ADMIN_EMAIL` e `ADMIN_PASSWORD`; mudar essas variáveis depois não altera uma conta já existente.
 
-`OPEN_HOUR` e `CLOSE_HOUR` configuram o expediente de segunda a sábado. O padrão **de exemplo** é 09h–19h; domingo fechado. Os intervalos de início acompanham a soma das durações dos serviços selecionados: 40 minutos geram 09:00, 09:40, 10:20 etc. A sequência recomeça após cada reserva ou bloqueio, respeitando o fechamento. Reservas existentes preservam a duração original; novos agendamentos usam a duração atual do catálogo e podem ser feitos até 90 dias à frente. Horários são exibidos em `America/Sao_Paulo`; os instantes do agendamento usam o offset atual de Brasília (`-03:00`). Se houver mudança legal de fuso, atualize a conversão de instantes.
+`OPEN_HOUR` e `CLOSE_HOUR` definem o expediente inicial de segunda a sábado enquanto não houver configuração salva para o profissional (padrão de exemplo: 09h–19h). A configuração pelo painel passa a definir dias ativos, expediente e intervalos. Os slots seguem a soma das durações selecionadas e recomeçam após almoço, reservas e bloqueios, respeitando o fechamento. Reservas existentes preservam a duração original. Novas reservas seguem a janela automática de dias de funcionamento ou as semanas liberadas manualmente, conforme [as regras de agenda](docs/SCHEDULE.md). Horários são exibidos em `America/Sao_Paulo`; os instantes usam o offset de Brasília (`-03:00`). Se houver mudança legal de fuso, atualize a conversão de instantes.
 
 ## Notificações
 

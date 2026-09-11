@@ -20,7 +20,6 @@ import {
 import { api, errorMessage, money } from '../lib';
 import type { Service } from '../types';
 import { CheckItem, ErrorBox, Eyebrow } from '../components/UI';
-import { useApp } from '../context';
 import { Portfolio } from '../components/Portfolio';
 
 export default function Home() {
@@ -28,7 +27,6 @@ export default function Home() {
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const [allServices, setAllServices] = useState(false);
-  const { config } = useApp();
   useEffect(() => {
     setError('');
     const controller = new AbortController();
@@ -297,11 +295,11 @@ export default function Home() {
               <Clock3 size={23} />
               <span>
                 <small>HORÁRIO DE ATENDIMENTO</small>
-                <strong>Segunda a sábado</strong>
-                <span>
-                  {String(config?.open || 9).padStart(2, '0')}h às{' '}
-                  {String(config?.close || 19).padStart(2, '0')}h · Com hora marcada
-                </span>
+                <strong>Atendimento com hora marcada</strong>
+                <Link to="/agendar">
+                  Consulte os dias e horários disponíveis
+                  <ArrowUpRight size={14} />
+                </Link>
               </span>
             </div>
             <a

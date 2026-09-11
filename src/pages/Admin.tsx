@@ -32,6 +32,7 @@ import type { Appointment, Barber, Block, Metrics, Service } from '../types';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
 import { ProfileSettings } from './Profile';
+import { ScheduleConfiguration } from './ScheduleConfiguration';
 import { Brand, EmptyState, ErrorBox, Modal, PageHeading, Spinner, Status } from '../components/UI';
 
 function RevenueChart({ metrics }: { metrics: Metrics }) {
@@ -516,16 +517,21 @@ function Agenda() {
   return (
     <>
       <PageHeading eyebrow="GESTÃO DE AGENDAMENTOS" title="Agenda organizada. Dia na régua.">
-        <button
-          className="button primary"
-          onClick={() => {
-            setBlockError('');
-            setBlocking(true);
-          }}
-        >
-          <Ban size={17} />
-          Bloquear horário
-        </button>
+        <div className="schedule-actions">
+          <Link className="button ghost" to="/admin/agenda/configuracoes">
+            Configurar agenda
+          </Link>
+          <button
+            className="button primary"
+            onClick={() => {
+              setBlockError('');
+              setBlocking(true);
+            }}
+          >
+            <Ban size={17} />
+            Bloquear horário
+          </button>
+        </div>
       </PageHeading>
       <div className="panel agenda-panel">
         <div className="agenda-toolbar">
@@ -1038,7 +1044,7 @@ export default function Admin() {
         <nav aria-label="Navegação administrativa">
           {nav.map((n) => (
             <NavLink
-              end
+              end={n.to !== '/admin/agenda'}
               key={n.to}
               to={n.to}
               onClick={() => setMenu(false)}
@@ -1087,7 +1093,12 @@ export default function Admin() {
             </button>
             <span>
               Painel de controle<span className="breadcrumb-slash">/</span>
-              <strong>{nav.find((n) => n.to === pathname)?.name || 'Visão geral'}</strong>
+              <strong>
+                {nav.find((n) => n.to === pathname)?.name ||
+                  (pathname === '/admin/agenda/configuracoes'
+                    ? 'Configuração da agenda'
+                    : 'Visão geral')}
+              </strong>
             </span>
           </div>
           <span className="admin-location">
@@ -1103,7 +1114,9 @@ export default function Admin() {
             </div>
           )}
           <ErrorBox message={error} />
-          {pathname === '/admin/agenda' ? (
+          {pathname === '/admin/agenda/configuracoes' ? (
+            <ScheduleConfiguration />
+          ) : pathname === '/admin/agenda' ? (
             <Agenda />
           ) : pathname === '/admin/servicos' ? (
             <Services />

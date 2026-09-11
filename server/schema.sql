@@ -18,6 +18,28 @@ CREATE TABLE IF NOT EXISTS services (
   duration INTEGER NOT NULL CHECK(duration > 0), price INTEGER NOT NULL CHECK(price >= 0),
   category TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS barber_settings (
+  barber_id TEXT PRIMARY KEY REFERENCES barbers(id),
+  agenda_mode TEXT NOT NULL DEFAULT 'auto' CHECK(agenda_mode IN ('auto','manual')),
+  max_days_ahead INTEGER NOT NULL DEFAULT 90 CHECK(max_days_ahead BETWEEN 1 AND 90),
+  version INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS barber_working_hours (
+  barber_id TEXT NOT NULL REFERENCES barbers(id), weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+  active INTEGER NOT NULL CHECK(active IN (0,1)), start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+  break_start TEXT, break_end TEXT, PRIMARY KEY(barber_id,weekday)
+);
+CREATE TABLE IF NOT EXISTS barber_working_breaks (
+  barber_id TEXT NOT NULL, weekday INTEGER NOT NULL, position INTEGER NOT NULL,
+  start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+  PRIMARY KEY(barber_id,weekday,position),
+  FOREIGN KEY(barber_id,weekday) REFERENCES barber_working_hours(barber_id,weekday)
+);
+CREATE TABLE IF NOT EXISTS released_weeks (
+  barber_id TEXT NOT NULL REFERENCES barbers(id), week_start TEXT NOT NULL,
+  start_date TEXT NOT NULL, end_date TEXT NOT NULL, created_at TEXT NOT NULL,
+  PRIMARY KEY(barber_id,week_start), CHECK(start_date <= end_date)
+);
 CREATE TABLE IF NOT EXISTS appointments (
   id TEXT PRIMARY KEY, user_id TEXT REFERENCES users(id),
   guest_name TEXT, guest_email TEXT, guest_phone TEXT,

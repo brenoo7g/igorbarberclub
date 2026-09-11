@@ -55,6 +55,18 @@ export const addDays = (date: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
+export function bookingWeek(value: string | null, current = today()) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return current;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value ||
+    value < addDays(current, -6) ||
+    value > addDays(current, 730)
+  )
+    return current;
+  return value;
+}
 export const formatDate = (
   date: string,
   options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'long' },

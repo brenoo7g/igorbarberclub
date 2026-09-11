@@ -21,6 +21,35 @@ export interface Barber {
   name: string;
   specialty: string;
 }
+export interface WorkingDay {
+  weekday: number;
+  active: boolean;
+  start_time: string;
+  end_time: string;
+  breaks: { start_time: string; end_time: string }[];
+}
+export interface ReleasedWeek {
+  week_start: string;
+  start_date: string;
+  end_date: string;
+}
+export interface ScheduleSettings {
+  settings: { agenda_mode: 'auto' | 'manual'; max_days_ahead: number; version: number };
+  days: WorkingDay[];
+  released_weeks: ReleasedWeek[];
+  next_week: ReleasedWeek | null;
+}
+export interface PublicSchedule {
+  mode: 'auto' | 'manual';
+  active_days: number[];
+  dates: string[];
+  max_date: string;
+}
+export interface WeekShare extends ReleasedWeek {
+  url: string;
+  text: string;
+  whatsapp_url: string;
+}
 export interface Appointment {
   id: string;
   user_id: string | null;

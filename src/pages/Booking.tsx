@@ -15,8 +15,17 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useApp } from '../context';
-import { addDays, api, ApiError, errorMessage, formatDate, money, today } from '../lib';
-import type { Appointment, Barber, Service } from '../types';
+import {
+  addDays,
+  api,
+  ApiError,
+  bookingWeek,
+  errorMessage,
+  formatDate,
+  money,
+  today,
+} from '../lib';
+import type { Appointment, Barber, Service, PublicSchedule } from '../types';
 import { EmptyState, ErrorBox, Eyebrow, Spinner } from '../components/UI';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
@@ -31,8 +40,15 @@ export default function Booking() {
     params.get('servico') ? [params.get('servico')!] : [],
   );
   const [barber, setBarber] = useState('');
-  const [date, setDate] = useState(today());
-  const [week, setWeek] = useState(today());
+  const weekParam = params.get('semana');
+  const professionalParam = params.get('profissional');
+  const [date, setDate] = useState(() =>
+    bookingWeek(weekParam) < today() ? today() : bookingWeek(weekParam),
+  );
+  const [week, setWeek] = useState(() => bookingWeek(weekParam));
+  const [schedule, setSchedule] = useState<PublicSchedule | null>(null);
+  const [scheduleError, setScheduleError] = useState('');
+  const [availabilityMessage, setAvailabilityMessage] = useState('');
   const [time, setTime] = useState('');
   const [slots, setSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +77,7 @@ export default function Booking() {
         if (!alive) return;
         setServices(s);
         setBarbers(b);
-        setBarber(b[0]?.id || '');
+        setBarber(b.find((person) => person.id === professionalParam)?.id || b[0]?.id || '');
         if (reschedule) {
           const a = appointments.find((x) => x.id === reschedule);
           if (!a || a.status !== 'confirmed')
@@ -87,12 +103,33 @@ export default function Booking() {
     return () => {
       alive = false;
     };
-  }, [reschedule, catalogRetry]);
+  }, [reschedule, catalogRetry, professionalParam]);
+  useEffect(() => {
+    const initial = bookingWeek(weekParam);
+    setDate(initial < today() ? today() : initial);
+    setWeek(initial);
+    setTime('');
+  }, [weekParam]);
+  useEffect(() => {
+    setSchedule(null);
+    setScheduleError('');
+    if (!barber) return;
+    const controller = new AbortController();
+    api<PublicSchedule>(`/barbers/${encodeURIComponent(barber)}/schedule`, {
+      signal: controller.signal,
+    })
+      .then(setSchedule)
+      .catch((e) => {
+        if (!controller.signal.aborted) setScheduleError(errorMessage(e));
+      });
+    return () => controller.abort();
+  }, [barber, reload]);
   const selectedKey = selected.join(',');
   useEffect(() => {
     setTime('');
     setSlots([]);
     setSlotError('');
+    setAvailabilityMessage('');
     if (!barber || !selectedKey) return;
     const controller = new AbortController();
     setSlotsLoading(true);
@@ -102,8 +139,13 @@ export default function Booking() {
       services: selectedKey,
       ...(reschedule ? { except: reschedule } : {}),
     });
-    api<{ slots: string[] }>(`/availability?${query}`, { signal: controller.signal })
-      .then((r) => setSlots(r.slots))
+    api<{ slots: string[]; message?: string | null }>(`/availability?${query}`, {
+      signal: controller.signal,
+    })
+      .then((r) => {
+        setSlots(r.slots);
+        setAvailabilityMessage(r.message || '');
+      })
       .catch((e) => {
         if (e.name !== 'AbortError') setSlotError(errorMessage(e));
       })
@@ -337,7 +379,7 @@ export default function Booking() {
                     type="date"
                     aria-label="Escolher outra data"
                     min={today()}
-                    max={addDays(today(), 90)}
+                    max={schedule?.max_date || addDays(today(), 730)}
                     value={date}
                     onChange={(e) => {
                       if (e.target.value) {
@@ -364,19 +406,24 @@ export default function Booking() {
                   <button
                     aria-label="Próxima semana"
                     className="icon-button"
-                    disabled={addDays(week, 7) > addDays(today(), 90)}
+                    disabled={addDays(week, 7) > (schedule?.max_date || addDays(today(), 730))}
                     onClick={() => setWeek(addDays(week, 7))}
                   >
                     <ChevronRight size={18} />
                   </button>
                 </div>
               </div>
+              <ErrorBox message={scheduleError} />
               <div className="date-options">
                 {Array.from({ length: 7 }, (_, i) => addDays(week, i)).map((d) => (
                   <button
                     key={d}
                     disabled={
-                      new Date(`${d}T12:00:00Z`).getUTCDay() === 0 || d > addDays(today(), 90)
+                      d < today() ||
+                      d > addDays(today(), 730) ||
+                      (schedule?.mode === 'auto' && !schedule.dates.includes(d)) ||
+                      (!!schedule &&
+                        !schedule.active_days.includes(new Date(`${d}T12:00:00Z`).getUTCDay()))
                     }
                     className={date === d ? 'selected' : ''}
                     onClick={() => setDate(d)}
@@ -417,8 +464,16 @@ export default function Booking() {
                 </div>
               ) : (
                 !slotError && (
-                  <EmptyState icon={<CalendarDays size={28} />} title="Agenda cheia por aqui">
-                    Não há horários disponíveis para esses serviços neste dia. Escolha outra data.
+                  <EmptyState
+                    icon={<CalendarDays size={28} />}
+                    title={
+                      availabilityMessage
+                        ? 'Agenda indisponível para este dia'
+                        : 'Agenda cheia por aqui'
+                    }
+                  >
+                    {availabilityMessage ||
+                      'Não há horários disponíveis para esses serviços neste dia. Escolha outra data.'}
                   </EmptyState>
                 )
               )}
