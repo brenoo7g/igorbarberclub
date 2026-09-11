@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, Navigate, NavLink, useLocation } from 'react-router-dom';
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -12,7 +12,6 @@ import {
   CircleDollarSign,
   Clock3,
   LayoutDashboard,
-  Images,
   LogOut,
   Mail,
   Menu,
@@ -33,7 +32,6 @@ import type { Appointment, Barber, Block, Metrics, Service } from '../types';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
 import { ProfileSettings } from './Profile';
-import { PortfolioAdmin } from './PortfolioAdmin';
 import { Brand, EmptyState, ErrorBox, Modal, PageHeading, Spinner, Status } from '../components/UI';
 
 function RevenueChart({ metrics }: { metrics: Metrics }) {
@@ -984,6 +982,7 @@ export default function Admin() {
   const { pathname } = useLocation();
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState('');
+  if (pathname === '/admin/trabalhos') return <Navigate to="/admin/servicos" replace />;
   if (loading) return <Spinner />;
   if (!user)
     return (
@@ -1028,7 +1027,6 @@ export default function Admin() {
     { to: '/admin', name: 'Visão geral', icon: LayoutDashboard },
     { to: '/admin/agenda', name: 'Agenda', icon: CalendarDays },
     { to: '/admin/servicos', name: 'Serviços', icon: Scissors },
-    { to: '/admin/trabalhos', name: 'Nossos Trabalhos', icon: Images },
     { to: '/admin/financeiro', name: 'Financeiro', icon: TrendingUp },
     { to: '/admin/perfil', name: 'Meu perfil', icon: UserRound },
   ];
@@ -1111,8 +1109,6 @@ export default function Admin() {
             <Services />
           ) : pathname === '/admin/perfil' ? (
             <ProfileSettings key={user.id} user={user} />
-          ) : pathname === '/admin/trabalhos' ? (
-            <PortfolioAdmin key={user.id} />
           ) : (
             <Overview financial={pathname === '/admin/financeiro'} />
           )}

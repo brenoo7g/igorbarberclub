@@ -1,6 +1,6 @@
 # Imagens do projeto
 
-A seção **Nossos Trabalhos** usa cinco fotos reais fornecidas pelo proprietário e pode ser atualizada pelo painel. A origem, importação e gestão estão descritas em [PORTFOLIO.md](./PORTFOLIO.md).
+A seção **Alguns dos nossos cortes** usa cinco fotos reais fornecidas pelo proprietário. A origem e importação estão descritas em [PORTFOLIO.md](./PORTFOLIO.md). A aba de gestão dessas fotos foi removida do painel a pedido do proprietário.
 
 Os assets abaixo foram gerados com o **tool integrado image_gen**, seguindo a skill imagegen. Hero e ambiente continuam ilustrativos. PNGs originais também estão disponíveis em `public/images/`.
 
