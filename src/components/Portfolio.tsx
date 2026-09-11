@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ImageOff, Instagram } from 'lucide-react';
 import { api, errorMessage } from '../lib';
 import { ErrorBox, Modal, Spinner } from './UI';
 
@@ -85,6 +85,17 @@ export function Portfolio() {
           onSelect={setPhoto}
         />
       )}
+      <div className="portfolio-instagram">
+        <a
+          className="button primary"
+          href="https://www.instagram.com/igor_barber_club/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Instagram size={18} />
+          Veja mais no nosso instagram
+        </a>
+      </div>
       {photo && (
         <div className="portfolio-lightbox">
           <Modal title={photo.title} onClose={() => setPhoto(null)}>

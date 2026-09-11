@@ -3412,13 +3412,23 @@ input[type='checkbox'] {
 
 /* Photo-only portfolio with native swipe and mouse dragging. */
 .portfolio-section > h2 {
-  font-family: 'DM Sans', sans-serif;
-  font-size: clamp(28px, 3.4vw, 44px);
+  font-family: var(--heading);
+  font-size: clamp(32px, 3.4vw, 43px);
   font-weight: 600;
-  line-height: 1.18;
-  letter-spacing: -1.5px;
+  line-height: 1.07;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
   text-align: center;
   margin: 0 0 38px;
+}
+.portfolio-instagram {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+.portfolio-instagram .button {
+  max-width: 100%;
+  text-align: center;
 }
 .portfolio-stage {
   position: relative;
@@ -3667,7 +3677,6 @@ input[type='checkbox'] {
 @media (max-width: 600px) {
   .portfolio-section > h2 {
     margin-bottom: 26px;
-    letter-spacing: -1px;
   }
   .portfolio-track {
     gap: 12px;
