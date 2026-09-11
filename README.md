@@ -80,7 +80,7 @@ docs/                       Contrato HTTP, operação, modelo e imagens
 
 ### Nossos Trabalhos
 
-O carrossel da página inicial apresenta cinco fotos reais fornecidas pelo proprietário. No painel, abra **Nossos Trabalhos** (`/admin/trabalhos`) para adicionar, editar ou remover fotos. Aceita JPG, PNG e WebP, com otimização automática, filtros por categoria e navegação por toque no celular. As fotos ficam no banco e as alterações sobrevivem aos deploys. Veja [gestão e rotas do portfólio](docs/PORTFOLIO.md).
+O carrossel “Alguns dos nossos cortes” apresenta fotos reais, sem legendas ou filtros, com navegação por toque, arraste, setas e indicadores de posição. No painel, abra **Nossos Trabalhos** (`/admin/trabalhos`) para adicionar, editar ou remover fotos. Aceita JPG, PNG e WebP com otimização automática. As fotos ficam no banco e as alterações sobrevivem aos deploys. Veja [gestão e rotas do portfólio](docs/PORTFOLIO.md).
 
 ### Perfil da conta
 

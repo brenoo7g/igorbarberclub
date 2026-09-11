@@ -1,6 +1,6 @@
 # Nossos Trabalhos
 
-A seção `/#galeria` usa fotos reais fornecidas pelo proprietário, com carrossel horizontal: três fotos por vez no desktop, duas no tablet e uma com indicação da próxima no celular. Oferece swipe nativo, setas, teclado, filtros por categoria, contador e ampliação em diálogo. Respeita a preferência por movimento reduzido e não troca fotos automaticamente.
+A seção `/#galeria` apresenta apenas o título “Alguns dos nossos cortes” e fotos reais, sem filtros, legendas ou descrições. O carrossel mostra três fotos por vez no desktop, duas no tablet e uma com indicação da próxima no celular. Oferece swipe nativo, arraste com o mouse, setas sobre as fotos, indicadores clicáveis, teclado e ampliação sem textos visíveis. Respeita a preferência por movimento reduzido e não troca fotos automaticamente.
 
 ## Atualizar pelo painel
 
@@ -8,7 +8,7 @@ Entre em `/admin/trabalhos` e escolha **Adicionar foto**. Preencha título e cat
 
 O navegador reduz a resolução para até 1200 pixels. O servidor verifica o conteúdo, rejeita formatos inválidos, arquivos animados e imagens excessivas, remove metadados e converte em WebP. As fotos ficam na tabela `portfolio` do banco PostgreSQL/SQLite, com limite de upload HTTP e sem depender do disco temporário da Vercel. A listagem devolve apenas metadados; imagens são carregadas separadamente, sob demanda.
 
-Erros preservam o formulário. Edições concorrentes usam `version` e retornam 409 quando alguém já alterou a foto. A galeria vazia direciona ao Instagram; erros de carregamento permitem nova tentativa, e fotos indisponíveis exibem um estado alternativo.
+Erros preservam o formulário. Edições concorrentes usam `version` e retornam 409 quando alguém já alterou a foto. A seção é ocultada quando a galeria está vazia; erros de carregamento permitem nova tentativa, e fotos indisponíveis exibem um estado alternativo. Títulos continuam como textos alternativos acessíveis e categorias permanecem no cadastro administrativo.
 
 ## Rotas
 

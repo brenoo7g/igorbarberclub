@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ChevronLeft, ChevronRight, Instagram, ImageOff } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { api, errorMessage } from '../lib';
-import { EmptyState, ErrorBox, Eyebrow, Modal, Spinner } from './UI';
+import { ErrorBox, Modal, Spinner } from './UI';
 
 export type PortfolioPhoto = {
   id: string;
@@ -47,7 +46,6 @@ export function Portfolio() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
-  const [filter, setFilter] = useState('');
   const [photo, setPhoto] = useState<PortfolioPhoto | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -63,33 +61,14 @@ export function Portfolio() {
       });
     return () => controller.abort();
   }, [retry]);
-  const categories = [...new Set(photos.map((item) => item.category))];
-  const activeFilter = categories.includes(filter) ? filter : '';
-  const visible = photos.filter((item) => !activeFilter || item.category === activeFilter);
+  if (!loading && !error && !photos.length) return null;
   return (
     <section
       className="section container portfolio-section"
       id="galeria"
       aria-labelledby="portfolio-title"
     >
-      <div className="section-heading">
-        <div>
-          <Eyebrow>NOSSOS TRABALHOS</Eyebrow>
-          <h2 id="portfolio-title">
-            O ESTILO FALA <span>POR SI.</span>
-          </h2>
-        </div>
-        <a
-          className="text-link"
-          href="https://www.instagram.com/igor_barber_club/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <Instagram size={16} />
-          Acompanhe nosso trabalho
-          <ArrowUpRight size={16} />
-        </a>
-      </div>
+      <h2 id="portfolio-title">Alguns dos nossos cortes</h2>
       {loading ? (
         <Spinner />
       ) : error ? (
@@ -99,43 +78,19 @@ export function Portfolio() {
             Tentar carregar fotos novamente
           </button>
         </>
-      ) : !photos.length ? (
-        <EmptyState icon={<Instagram size={28} />} title="Veja nossos cortes no Instagram">
-          Enquanto preparamos a galeria, acompanhe os trabalhos em @igor_barber_club.
-        </EmptyState>
       ) : (
-        <>
-          <div className="gallery-toolbar">
-            <div className="filter-tabs" aria-label="Filtrar estilos">
-              {['', ...categories].map((category) => (
-                <button
-                  key={category}
-                  className={activeFilter === category ? 'selected' : ''}
-                  aria-pressed={activeFilter === category}
-                  onClick={() => setFilter(category)}
-                >
-                  {category || 'Todos'}
-                </button>
-              ))}
-            </div>
-            <span>Cortes realizados no Igor Barber Club.</span>
-          </div>
-          <PhotoCarousel
-            key={activeFilter + photos.map((p) => p.id).join(',')}
-            photos={visible}
-            onSelect={setPhoto}
-          />
-        </>
+        <PhotoCarousel
+          key={photos.map((p) => p.id).join(',')}
+          photos={photos}
+          onSelect={setPhoto}
+        />
       )}
       {photo && (
-        <Modal title={photo.title} onClose={() => setPhoto(null)}>
-          <PortfolioImage photo={photo} className="lightbox-photo" />
-          <p className="muted">{photo.category} · Igor Barber Club</p>
-          <Link to="/agendar" className="button primary full">
-            Agendar meu horário
-            <ArrowUpRight size={17} />
-          </Link>
-        </Modal>
+        <div className="portfolio-lightbox">
+          <Modal title={photo.title} onClose={() => setPhoto(null)}>
+            <PortfolioImage photo={photo} className="lightbox-photo" />
+          </Modal>
+        </div>
       )}
     </section>
   );
@@ -149,21 +104,29 @@ function PhotoCarousel({
   onSelect(photo: PortfolioPhoto): void;
 }) {
   const track = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ start: true, end: true, index: 0 });
+  const targets = useRef<number[]>([0]);
+  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  const [dragging, setDragging] = useState(false);
+  const [position, setPosition] = useState({ index: 0, count: 1 });
   useEffect(() => {
     const element = track.current!;
     const update = () => {
-      const children = Array.from(element.children) as HTMLElement[];
-      const left = element.getBoundingClientRect().left;
-      let index = 0;
-      children.forEach((child, i) => {
-        if (child.getBoundingClientRect().left <= left + 10) index = i;
-      });
-      setPosition({
-        start: element.scrollLeft <= 2,
-        end: element.scrollLeft + element.clientWidth >= element.scrollWidth - 2,
-        index,
-      });
+      const max = Math.max(0, element.scrollWidth - element.clientWidth);
+      const first = element.firstElementChild as HTMLElement;
+      const step = first.getBoundingClientRect().width + parseFloat(getComputedStyle(element).gap);
+      const stops = Array.from({ length: photos.length }, (_, i) => Math.min(i * step, max));
+      targets.current = stops.filter((stop, i) => i === 0 || stop - stops[i - 1] > 2);
+      const index = targets.current.reduce(
+        (best, stop, i, all) =>
+          Math.abs(stop - element.scrollLeft) < Math.abs(all[best] - element.scrollLeft) ? i : best,
+        0,
+      );
+      setPosition((old) =>
+        old.index === index && old.count === targets.current.length
+          ? old
+          : { index, count: targets.current.length },
+      );
     };
     const observer = new ResizeObserver(update);
     observer.observe(element);
@@ -174,14 +137,9 @@ function PhotoCarousel({
       element.removeEventListener('scroll', update);
     };
   }, [photos.length]);
-  function move(direction: number) {
-    const element = track.current!;
-    const first = element.firstElementChild as HTMLElement | null;
-    const step = first
-      ? first.getBoundingClientRect().width + parseFloat(getComputedStyle(element).gap)
-      : element.clientWidth;
-    element.scrollBy({
-      left: direction * step,
+  function go(index: number) {
+    track.current?.scrollTo({
+      left: targets.current[Math.max(0, Math.min(index, targets.current.length - 1))],
       behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
     });
   }
@@ -192,71 +150,129 @@ function PhotoCarousel({
       aria-roledescription="carrossel"
       aria-label="Fotos dos nossos trabalhos"
     >
-      <div
-        className="portfolio-track"
-        id="portfolio-track"
-        ref={track}
-        tabIndex={0}
-        aria-label="Deslize para ver os cortes ou use as setas do teclado"
-        onKeyDown={(e) => {
-          if (e.target !== e.currentTarget) return;
-          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-            e.preventDefault();
-            move(e.key === 'ArrowRight' ? 1 : -1);
-          }
-        }}
-      >
-        {photos.map((item, i) => (
-          <div
-            className="portfolio-slide"
-            role="group"
-            aria-roledescription="slide"
-            aria-label={`${i + 1} de ${photos.length}`}
-            key={item.id}
-          >
-            <button
-              className="portfolio-card"
-              onClick={() => onSelect(item)}
-              aria-label={`Ampliar ${item.title}`}
+      <div className="portfolio-stage">
+        <div
+          className={`portfolio-track${dragging ? ' is-dragging' : ''}`}
+          id="portfolio-track"
+          ref={track}
+          tabIndex={0}
+          aria-label="Fotos dos cortes; use as setas do teclado para navegar"
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget) return;
+            if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+              event.preventDefault();
+              go(
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? position.count - 1
+                    : position.index + (event.key === 'ArrowRight' ? 1 : -1),
+              );
+            }
+          }}
+          onPointerDown={(event) => {
+            if (event.pointerType !== 'mouse' || event.button !== 0) return;
+            suppressClick.current = false;
+            drag.current = { x: event.clientX, left: event.currentTarget.scrollLeft, moved: false };
+          }}
+          onPointerMove={(event) => {
+            if (!drag.current) return;
+            const delta = event.clientX - drag.current.x;
+            if (Math.abs(delta) > 6) {
+              drag.current.moved = true;
+              suppressClick.current = true;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setDragging(true);
+              event.currentTarget.scrollLeft = drag.current.left - delta;
+            }
+          }}
+          onPointerUp={(event) => {
+            const moved = drag.current?.moved;
+            drag.current = null;
+            setDragging(false);
+            if (event.currentTarget.hasPointerCapture(event.pointerId))
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            if (moved) {
+              const left = event.currentTarget.scrollLeft;
+              const nearest = targets.current.reduce(
+                (best, stop, i, all) =>
+                  Math.abs(stop - left) < Math.abs(all[best] - left) ? i : best,
+                0,
+              );
+              requestAnimationFrame(() => go(nearest));
+            }
+          }}
+          onPointerCancel={() => {
+            drag.current = null;
+            setDragging(false);
+          }}
+          onPointerLeave={() => {
+            if (!drag.current?.moved) drag.current = null;
+          }}
+          onClickCapture={(event) => {
+            if (suppressClick.current) {
+              event.preventDefault();
+              event.stopPropagation();
+              suppressClick.current = false;
+            }
+          }}
+          onDragStart={(event) => event.preventDefault()}
+        >
+          {photos.map((photo, i) => (
+            <div
+              className="portfolio-slide"
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${i + 1} de ${photos.length}`}
+              key={photo.id}
             >
-              <PortfolioImage photo={item} />
-              <span className="portfolio-caption">
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>{item.category}</small>
-                </span>
-                <ArrowUpRight size={22} />
-              </span>
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="portfolio-controls">
-        <span className="muted">Deslize e encontre seu próximo estilo.</span>
-        <div>
-          <span className="portfolio-counter" aria-live="polite" aria-atomic="true">
-            {String(position.index + 1).padStart(2, '0')} / {String(photos.length).padStart(2, '0')}
-          </span>
-          <button
-            className="button ghost"
-            aria-label="Fotos anteriores"
-            aria-controls="portfolio-track"
-            disabled={position.start}
-            onClick={() => move(-1)}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <button
-            className="button ghost"
-            aria-label="Próximas fotos"
-            aria-controls="portfolio-track"
-            disabled={position.end}
-            onClick={() => move(1)}
-          >
-            <ChevronRight size={20} />
-          </button>
+              <button
+                className="portfolio-card"
+                aria-label={`Ampliar ${photo.title}`}
+                onClick={() => onSelect(photo)}
+              >
+                <PortfolioImage photo={photo} />
+              </button>
+            </div>
+          ))}
         </div>
+        {position.count > 1 && (
+          <>
+            <button
+              className="portfolio-arrow previous"
+              aria-label="Fotos anteriores"
+              aria-controls="portfolio-track"
+              disabled={position.index === 0}
+              onClick={() => go(position.index - 1)}
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <button
+              className="portfolio-arrow next"
+              aria-label="Próximas fotos"
+              aria-controls="portfolio-track"
+              disabled={position.index === position.count - 1}
+              onClick={() => go(position.index + 1)}
+            >
+              <ChevronRight size={22} />
+            </button>
+          </>
+        )}
       </div>
+      {position.count > 1 && (
+        <div className="portfolio-pagination" aria-label="Posições do carrossel">
+          {Array.from({ length: position.count }, (_, i) => (
+            <button
+              key={i}
+              aria-label={`Ir para posição ${i + 1}`}
+              aria-current={position.index === i ? 'true' : undefined}
+              onClick={() => go(i)}
+            >
+              <span />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

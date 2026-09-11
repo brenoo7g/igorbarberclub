@@ -8,6 +8,21 @@ test('real portfolio carousel: responsive scrolling, keyboard, modal, loading fa
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/#galeria');
   await expect(page.locator('.portfolio-card')).toHaveCount(5);
+  await expect(page.locator('#galeria h2')).toHaveText('Alguns dos nossos cortes');
+  await expect(
+    page.locator('#galeria .filter-tabs, #galeria .portfolio-caption, #galeria p'),
+  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Fotos anteriores', exact: true })).toBeDisabled();
+  const desktopTrack = await page.locator('.portfolio-track').boundingBox();
+  await page.mouse.move(desktopTrack.x + 750, desktopTrack.y + 180);
+  await page.mouse.down();
+  await page.mouse.move(desktopTrack.x + 120, desktopTrack.y + 180, { steps: 15 });
+  await page.mouse.up();
+  await expect
+    .poll(() => page.locator('.portfolio-track').evaluate((el) => el.scrollLeft))
+    .toBeGreaterThan(100);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Ir para posição 1', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Fotos anteriores', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Próximas fotos', exact: true }).click();
   await expect
@@ -45,9 +60,7 @@ test('real portfolio carousel: responsive scrolling, keyboard, modal, loading fa
     route.fulfill({ contentType: 'application/json', body: '[]' }),
   );
   await page.reload();
-  await expect(
-    page.getByRole('heading', { name: 'Veja nossos cortes no Instagram' }),
-  ).toBeVisible();
+  await expect(page.locator('#galeria')).toHaveCount(0);
   await expect(page.locator('.portfolio-card')).toHaveCount(0);
   expect(errors).toEqual([]);
 
@@ -63,7 +76,8 @@ test('real portfolio carousel: responsive scrolling, keyboard, modal, loading fa
   await mobile.locator('.portfolio-track').scrollIntoViewIfNeeded();
   const box = await mobile.locator('.portfolio-track').boundingBox();
   const cdp = await context.newCDPSession(mobile);
-  const y = Math.round(box.y + box.height / 2);
+  // Swipe on the photo, above the overlaid navigation buttons.
+  const y = Math.round(box.y + box.height * 0.3);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 325, y }] });
   for (const x of [280, 230, 180, 130, 70])
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
@@ -119,9 +133,7 @@ test('administrator uploads, edits and removes a photo visible in the public car
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Corte atualizado E2E' })).toBeVisible();
     await page.goto('/#galeria');
-    await page.getByRole('button', { name: 'Estilo E2E', exact: true }).click();
-    await expect(page.locator('.portfolio-card')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: 'Próximas fotos', exact: true })).toBeDisabled();
+    await expect(page.locator('.portfolio-card')).toHaveCount(6);
     await page.getByRole('button', { name: 'Ampliar Corte atualizado E2E', exact: true }).click();
     await expect(page.getByRole('dialog').locator('img')).toBeVisible();
     await page.keyboard.press('Escape');
