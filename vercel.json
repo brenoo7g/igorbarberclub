@@ -5,7 +5,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": {
-      "includeFiles": "server/schema.sql",
+      "includeFiles": "server/**",
       "maxDuration": 60
     }
   },

@@ -78,6 +78,10 @@ docs/                       Contrato HTTP, operação, modelo e imagens
 
 ## Configuração e PostgreSQL
 
+### Nossos Trabalhos
+
+O carrossel da página inicial apresenta cinco fotos reais fornecidas pelo proprietário. No painel, abra **Nossos Trabalhos** (`/admin/trabalhos`) para adicionar, editar ou remover fotos. Aceita JPG, PNG e WebP, com otimização automática, filtros por categoria e navegação por toque no celular. As fotos ficam no banco e as alterações sobrevivem aos deploys. Veja [gestão e rotas do portfólio](docs/PORTFOLIO.md).
+
 ### Perfil da conta
 
 No painel, abra **Meu perfil** (`/admin/perfil`). Clientes usam **Minha conta → Editar perfil** (`/minha-conta/perfil`). A foto aceita JPG, PNG ou WebP de até 5 MB, tem prévia e remoção, e só é aplicada ao salvar. O navegador prepara o recorte; o servidor valida e converte a imagem para WebP 256×256, armazenada no próprio banco, sem depender do disco temporário da Vercel.

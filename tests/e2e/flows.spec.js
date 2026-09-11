@@ -63,9 +63,9 @@ test('landing page, gallery, mobile navigation and responsive layouts', async ({
   await page.screenshot({ path: 'test-results/home-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Explorar todos os serviços' }).click();
   await expect(page.locator('.service-card')).toHaveCount(6);
-  await page.getByRole('button', { name: 'Barba', exact: true }).click();
-  await expect(page.locator('.gallery-card')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Ampliar Barba alinhada' }).click();
+  await page.getByRole('button', { name: 'Degradês', exact: true }).click();
+  await expect(page.locator('.portfolio-card')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Ampliar Degradê no Club' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);

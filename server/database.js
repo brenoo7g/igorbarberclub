@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { migrateGuestBookings } from './guest-migration.js';
+import { seedPortfolio } from './portfolio-seed.js';
 
 export async function createDatabase(
   url = process.env.DATABASE_URL,
@@ -137,6 +138,7 @@ export async function createDatabase(
           await tx.run(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
       }
       await migrateGuestBookings(tx);
+      await seedPortfolio(tx);
     });
     if (db.dialect === 'sqlite') await db.run('PRAGMA foreign_keys=ON');
   } catch (error) {

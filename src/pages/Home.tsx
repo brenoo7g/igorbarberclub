@@ -19,36 +19,15 @@ import {
 } from 'lucide-react';
 import { api, errorMessage, money } from '../lib';
 import type { Service } from '../types';
-import { CheckItem, ErrorBox, Eyebrow, Modal } from '../components/UI';
+import { CheckItem, ErrorBox, Eyebrow } from '../components/UI';
 import { useApp } from '../context';
+import { Portfolio } from '../components/Portfolio';
 
-const gallery = [
-  {
-    title: 'Corte do Jaca',
-    subtitle: 'Personalidade em cada detalhe',
-    category: 'Degradês',
-    image: '/images/jaca.webp',
-  },
-  {
-    title: 'Disfarçado clássico',
-    subtitle: 'O clássico no seu melhor',
-    category: 'Degradês',
-    image: '/images/classic.webp',
-  },
-  {
-    title: 'Barba alinhada',
-    subtitle: 'Precisão que faz a diferença',
-    category: 'Barba',
-    image: '/images/hero.webp',
-  },
-];
 export default function Home() {
   const [services, setServices] = useState<Service[]>([]);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   const [allServices, setAllServices] = useState(false);
-  const [filter, setFilter] = useState('Todos');
-  const [photo, setPhoto] = useState<(typeof gallery)[number] | null>(null);
   const { config } = useApp();
   useEffect(() => {
     setError('');
@@ -282,71 +261,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className="section container" id="galeria">
-        <div className="section-heading">
-          <div>
-            <Eyebrow>INSPIRAÇÃO PARA O PRÓXIMO CORTE</Eyebrow>
-            <h2>
-              O ESTILO FALA <span>POR SI.</span>
-            </h2>
-          </div>
-          <a
-            className="text-link"
-            href="https://www.instagram.com/igor_barber_club/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Instagram size={16} />
-            Acompanhe nosso trabalho
-            <ArrowUpRight size={16} />
-          </a>
-        </div>
-        <div className="gallery-toolbar">
-          <div className="filter-tabs" aria-label="Filtrar estilos">
-            {['Todos', 'Degradês', 'Barba'].map((tab) => (
-              <button
-                key={tab}
-                className={filter === tab ? 'selected' : ''}
-                onClick={() => setFilter(tab)}
-                aria-pressed={filter === tab}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-          <span>Detalhes que fazem a diferença.</span>
-        </div>
-        <div className="gallery-grid">
-          {gallery
-            .filter((item) => filter === 'Todos' || item.category === filter)
-            .map((item) => (
-              <button
-                className="gallery-card"
-                key={item.title}
-                onClick={() => setPhoto(item)}
-                aria-label={`Ampliar ${item.title}`}
-              >
-                <img
-                  src={item.image}
-                  alt={`Referência visual de ${item.title.toLowerCase()}`}
-                  loading="lazy"
-                />
-                <span className="gallery-overlay">
-                  <span>
-                    <strong>{item.title}</strong>
-                    <small>{item.subtitle}</small>
-                  </span>
-                  <span className="round-arrow">
-                    <ArrowUpRight size={19} />
-                  </span>
-                </span>
-              </button>
-            ))}
-        </div>
-        <p className="image-note">
-          Imagens ilustrativas. Veja os trabalhos reais em @igor_barber_club.
-        </p>
-      </section>
+      <Portfolio />
       <section className="contact-section container" id="contato">
         <div className="contact-banner">
           <div>
@@ -403,19 +318,6 @@ export default function Home() {
           <Scissors className="banner-scissors" />
         </div>
       </section>
-      {photo && (
-        <Modal title={photo.title} onClose={() => setPhoto(null)}>
-          <img className="lightbox-photo" src={photo.image} alt={photo.title} />
-          <p className="muted">Imagem ilustrativa de inspiração para o seu corte.</p>
-          <Link
-            to={`/agendar?servico=${photo.category === 'Barba' ? 'barba' : 'corte'}`}
-            className="button primary full"
-          >
-            Quero esse estilo
-            <ArrowUpRight size={17} />
-          </Link>
-        </Modal>
-      )}
     </>
   );
 }

@@ -3409,3 +3409,214 @@ input[type='checkbox'] {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Real work portfolio: native touch scrolling, keyboard controls and consistent photo frames. */
+.portfolio-section .gallery-toolbar {
+  gap: 20px;
+}
+.portfolio-section .filter-tabs {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.portfolio-section .filter-tabs > button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-height: 44px;
+}
+.portfolio-track {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: #3d435d #171719;
+  padding: 4px 2px 16px;
+}
+.portfolio-slide {
+  flex: 0 0 calc((100% - 40px) / 3);
+  min-width: 0;
+  scroll-snap-align: start;
+}
+.portfolio-card {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #303036;
+  border-radius: 12px;
+  background: #19191c;
+  text-align: left;
+}
+.portfolio-card > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.35s ease;
+}
+.portfolio-card:hover > img {
+  transform: scale(1.035);
+}
+.portfolio-caption {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 68px 24px 24px;
+  background: linear-gradient(transparent, #000d);
+  color: white;
+}
+.portfolio-caption strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.portfolio-caption small {
+  display: block;
+  margin-top: 6px;
+  color: #d1d1d8;
+  font-size: 12px;
+}
+.portfolio-caption svg {
+  flex-shrink: 0;
+}
+.portfolio-controls,
+.portfolio-controls > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.portfolio-controls {
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.portfolio-controls .muted {
+  font-size: 12px;
+}
+.portfolio-controls .button {
+  padding: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+}
+.portfolio-counter {
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin-right: 12px;
+  color: #c3c3ce;
+}
+.portfolio-missing {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: #1a1a20;
+  color: #aaaabb;
+}
+.portfolio-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+.portfolio-admin-card {
+  padding: 0;
+  overflow: hidden;
+}
+.portfolio-admin-card > img,
+.portfolio-admin-card > .portfolio-missing {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+.portfolio-admin-card > div {
+  padding: 18px;
+}
+.portfolio-admin-card h3 {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.portfolio-admin-card p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  margin: 8px 0 16px;
+}
+.portfolio-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.portfolio-admin-actions .button {
+  padding: 10px 12px;
+}
+.portfolio-preview {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  background: #0d0d0d;
+  border-radius: 8px;
+}
+.portfolio-notice {
+  padding: 14px 18px;
+  color: #bdd6ff;
+  border: 1px solid #364a79;
+  border-radius: 8px;
+  background: #182237;
+}
+.portfolio-refresh {
+  margin-top: 14px;
+}
+@media (max-width: 1100px) {
+  .portfolio-admin-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .portfolio-slide {
+    flex-basis: calc((100% - 20px) / 2);
+  }
+}
+@media (max-width: 600px) {
+  .portfolio-track {
+    gap: 14px;
+  }
+  .portfolio-slide {
+    flex-basis: 86%;
+  }
+  .portfolio-caption {
+    padding: 56px 18px 20px;
+  }
+  .portfolio-caption strong {
+    font-size: 17px;
+  }
+  .portfolio-controls {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .portfolio-controls > div {
+    margin-left: auto;
+  }
+  .portfolio-admin-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .portfolio-card > img {
+    transition: none;
+  }
+  .portfolio-card:hover > img {
+    transform: none;
+  }
+}

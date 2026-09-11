@@ -1,15 +1,17 @@
 # Imagens do projeto
 
-Assets gerados com o **tool integrado image_gen**, seguindo a skill imagegen. Os arquivos selecionados foram copiados para o projeto; WebP é somente uma conversão de formato para entrega eficiente, sem mudar o conteúdo. PNGs originais também estão disponíveis em `public/images/`.
+A seção **Nossos Trabalhos** usa cinco fotos reais fornecidas pelo proprietário e pode ser atualizada pelo painel. A origem, importação e gestão estão descritas em [PORTFOLIO.md](./PORTFOLIO.md).
 
-| Arquivo usado                | Uso                                      |
-| ---------------------------- | ---------------------------------------- |
-| `public/images/hero.webp`    | Hero, inspiração de barba e preview      |
-| `public/images/jaca.webp`    | Referência visual do Corte do Jaca       |
-| `public/images/classic.webp` | Referência visual de disfarçado clássico |
-| `public/images/shop.webp`    | Imagem conceitual do ambiente            |
+Os assets abaixo foram gerados com o **tool integrado image_gen**, seguindo a skill imagegen. Hero e ambiente continuam ilustrativos. PNGs originais também estão disponíveis em `public/images/`.
 
-As imagens são ilustrativas, não representam trabalhos comprovados da barbearia nem fotografias de Igor Borges. A interface explicita esse caráter na galeria e nos textos alternativos do ambiente. O logotipo é uma composição tipográfica original com ícone Lucide e faixas azul/branco/vermelho, não uma reprodução do logo do Instagram.
+| Arquivo usado                | Uso                                    |
+| ---------------------------- | -------------------------------------- |
+| `public/images/hero.webp`    | Hero ilustrativo                       |
+| `public/images/jaca.webp`    | Referência antiga, retirada da galeria |
+| `public/images/classic.webp` | Referência antiga, retirada da galeria |
+| `public/images/shop.webp`    | Imagem conceitual do ambiente          |
+
+Os assets gerados são ilustrativos e não representam trabalhos comprovados da barbearia nem fotografias de Igor Borges. Eles não são usados no novo carrossel. O logotipo é uma composição tipográfica original com ícone Lucide e faixas azul/branco/vermelho, não uma reprodução do logo do Instagram.
 
 ## Prompts finais
 

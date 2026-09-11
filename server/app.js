@@ -21,6 +21,7 @@ import {
 import { enqueueNotification } from './notifications.js';
 import { demoMode } from './seed.js';
 import { installProfileRoutes, passwordSchema, publicUser } from './profile.js';
+import { installPortfolioRoutes } from './portfolio.js';
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -123,6 +124,7 @@ export function createApp(
     }),
   );
   app.use('/api/auth/profile', express.json({ limit: '768kb' }));
+  app.use('/api/admin/portfolio', express.json({ limit: '1500kb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(cookieParser());
   app.use('/api', (req, res, next) => {
@@ -267,6 +269,7 @@ export function createApp(
     res.json({ ok: true });
   });
   installProfileRoutes(app, db, { authenticated, login, authLimiter });
+  installPortfolioRoutes(app, db, { authenticated, admin, authLimiter });
   app.get('/api/services', async (_req, res) =>
     res.json(await db.all('SELECT * FROM services WHERE active=1 ORDER BY price')),
   );
