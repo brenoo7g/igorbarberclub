@@ -56,9 +56,12 @@ async function initialize() {
       await seed(tx);
     });
     stage = 'application';
+    const app = createApp(db, { secret: process.env.JWT_SECRET, serveStatic: false });
+    const notifications = createNotificationProcessor(db, { batchSize: 2 });
     return {
-      app: createApp(db, { secret: process.env.JWT_SECRET, serveStatic: false }),
-      processNotifications: createNotificationProcessor(db, { batchSize: 2 }),
+      app,
+      processNotifications: () =>
+        Promise.all([app.locals.processPasswordEmails(), notifications()]),
     };
   } catch (error) {
     error.initializationStage ||= stage;

@@ -24,6 +24,7 @@ import { installProfileRoutes, passwordSchema, publicUser } from './profile.js';
 import { installPortfolioRoutes } from './portfolio.js';
 import { installScheduleRoutes, readSchedule, lockSchedule } from './schedule.js';
 import { dateAccess, minutes } from './schedule-domain.js';
+import { installPasswordRecovery } from './password-recovery.js';
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -271,6 +272,7 @@ export function createApp(
     res.json({ ok: true });
   });
   installProfileRoutes(app, db, { authenticated, login, authLimiter });
+  installPasswordRecovery(app, db, { secret, secureCookies });
   installPortfolioRoutes(app, db, { authenticated, admin, authLimiter });
   installScheduleRoutes(app, db, { authenticated, admin });
   app.get('/api/services', async (_req, res) =>
@@ -606,7 +608,12 @@ export function createApp(
   app.use((error, req, res, _next) => {
     if (error instanceof z.ZodError)
       return res.status(400).json({
-        error: ['/api/auth/profile', '/api/auth/password'].includes(req.path)
+        error: [
+          '/api/auth/profile',
+          '/api/auth/password',
+          '/api/auth/forgot-password',
+          '/api/auth/reset-password',
+        ].includes(req.path)
           ? error.issues[0]?.message || 'Confira os dados informados.'
           : 'Confira os dados informados.',
         details: error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),

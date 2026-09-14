@@ -4,7 +4,8 @@ import { ArrowRight, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useApp } from '../context';
 import { api, errorMessage } from '../lib';
 import type { User } from '../types';
-import { ErrorBox } from './UI';
+import { ErrorBox, Modal } from './UI';
+import { PasswordRecoveryForm } from './PasswordRecoveryForm';
 
 export function AuthForm({
   admin = false,
@@ -26,6 +27,7 @@ export function AuthForm({
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [recover, setRecover] = useState(false);
   const { setUser, config } = useApp();
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,6 +166,16 @@ export function AuthForm({
               </button>
             </div>
           </label>
+          {!register && (
+            <button
+              type="button"
+              className="text-link forgot-password-link"
+              disabled={busy}
+              onClick={() => setRecover(true)}
+            >
+              Esqueci minha senha
+            </button>
+          )}
           {register && (
             <p className="form-note">
               <LockKeyhole size={14} />
@@ -192,6 +204,11 @@ export function AuthForm({
             </div>
           )}
         </form>
+      )}
+      {recover && (
+        <Modal title="Esqueceu sua senha?" onClose={() => setRecover(false)}>
+          <PasswordRecoveryForm initialEmail={email} />
+        </Modal>
       )}
     </div>
   );

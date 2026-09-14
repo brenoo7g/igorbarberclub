@@ -62,6 +62,18 @@ CREATE TABLE IF NOT EXISTS blocks (
   date TEXT NOT NULL, start_minute INTEGER NOT NULL, end_minute INTEGER NOT NULL,
   reason TEXT NOT NULL, CHECK(end_minute > start_minute)
 );
+CREATE TABLE IF NOT EXISTS password_recovery (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), email TEXT NOT NULL,
+  session_version INTEGER NOT NULL, token_hash TEXT UNIQUE,
+  event TEXT NOT NULL CHECK(event IN ('reset','changed')),
+  created_at TEXT NOT NULL, expires_at TEXT NOT NULL, next_attempt_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS password_recovery_queue ON password_recovery(status,next_attempt_at);
+CREATE TABLE IF NOT EXISTS password_recovery_limits (
+  bucket_key TEXT PRIMARY KEY, window_start TEXT NOT NULL, last_attempt_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY, appointment_id TEXT NOT NULL REFERENCES appointments(id),
   channel TEXT NOT NULL CHECK(channel IN ('email','whatsapp')), event TEXT NOT NULL,

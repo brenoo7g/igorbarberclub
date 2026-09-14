@@ -12,7 +12,16 @@ export function Layout() {
   const close = () => setMenu(false);
   return (
     <>
-      <a href="#main-content" className="skip-link">
+      <a
+        href="#main-content"
+        className="skip-link"
+        onClick={(event) => {
+          if (location.pathname === '/redefinir-senha') {
+            event.preventDefault();
+            document.getElementById('main-content')?.focus();
+          }
+        }}
+      >
         Pular para o conteúdo
       </a>
       <header className="site-header">
@@ -66,7 +75,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main id="main-content">
+      <main id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
       <footer className="site-footer">
@@ -108,11 +117,13 @@ export function Layout() {
           </div>
         </div>
       </footer>
-      <Link to="/agendar" className="mobile-book">
-        <CalendarDays size={18} />
-        Agendar meu horário
-        <ArrowUpRight size={18} />
-      </Link>
+      {!['/esqueci-senha', '/redefinir-senha'].includes(location.pathname) && (
+        <Link to="/agendar" className="mobile-book">
+          <CalendarDays size={18} />
+          Agendar meu horário
+          <ArrowUpRight size={18} />
+        </Link>
+      )}
     </>
   );
 }

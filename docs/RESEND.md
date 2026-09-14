@@ -40,6 +40,8 @@ O envio para clientes exige domínio próprio verificado; não é possível veri
 
 ## Diagnóstico e entrega
 
+A opção **Esqueci minha senha** reutiliza as mesmas variáveis e o mesmo remetente. Não precisa de template ou chave adicional. Consulte [Recuperação de senha](PASSWORD-RECOVERY.md) para links, limites e a fila de envio independente.
+
 - **Configuração indica false:** confirme as duas variáveis em Production e o redeploy.
 - **401/403 no provedor:** confira a chave, suas permissões, o domínio Verified e o domínio exato em `EMAIL_FROM`.
 - **429:** limite do provedor; a fila mantém tentativas com atraso.

@@ -14,12 +14,16 @@ const db = await createDatabase();
 await seed(db);
 const stopNotifications = startNotifications(db);
 const port = Number(process.env.PORT || 3001);
-const server = createApp(db).listen(port, () =>
+const app = createApp(db);
+const recoveryTimer = setInterval(() => void app.locals.processPasswordEmails(), 15000);
+recoveryTimer.unref();
+const server = app.listen(port, () =>
   console.log(`Igor Barber Club API: http://localhost:${port} (${db.dialect})`),
 );
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.on(signal, () => {
     stopNotifications();
+    clearInterval(recoveryTimer);
     server.close(async () => {
       await db.close();
       process.exit(0);
