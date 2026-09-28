@@ -89,13 +89,15 @@ test('landing page, gallery, mobile navigation and responsive layouts', async ({
   expect(errors).toEqual([]);
 });
 
-test('customer books multiple services, registers at final step, reschedules and cancels', async ({
+test('customer selects only one service, registers at final step, reschedules and cancels', async ({
   page,
 }) => {
   await page.goto('/agendar?servico=corte');
-  await expect(page.getByRole('checkbox', { name: /Corte masculino/ })).toBeChecked();
-  await page.getByRole('checkbox', { name: /Barba completa/ }).check();
-  await expect(page.locator('.summary-total')).toContainText('60,00');
+  await expect(page.getByRole('radio', { name: /Corte masculino/ })).toBeChecked();
+  await page.getByRole('radio', { name: /Barba completa/ }).check();
+  await expect(page.getByRole('radio', { name: /Corte masculino/ })).not.toBeChecked();
+  await expect(page.locator('.booking-service input:checked')).toHaveCount(1);
+  await expect(page.locator('.summary-total')).toContainText('25,00');
   await expect(page.getByLabel('E-mail', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   const date = new Date();
@@ -114,7 +116,11 @@ test('customer books multiple services, registers at final step, reschedules and
   await page.getByLabel('WhatsApp', { exact: true }).fill('21988887777');
   await page.getByLabel('Senha', { exact: true }).fill('ClienteTeste123!');
   await page.getByRole('button', { name: 'Criar conta e continuar' }).click();
+  const bookingRequest = page.waitForRequest(
+    (request) => request.url().endsWith('/api/appointments') && request.method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Confirmar agendamento', exact: true }).click();
+  expect((await bookingRequest).postDataJSON().services).toEqual(['barba']);
   await expect(page.getByRole('heading', { name: 'Seu horário está na régua.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/booking-confirmed.png', fullPage: true });
@@ -134,6 +140,34 @@ test('customer books multiple services, registers at final step, reschedules and
   ).toBeVisible();
   await page.getByRole('button', { name: 'Histórico', exact: true }).click();
   await expect(page.locator('.appointment-card .status')).toHaveText('Cancelado');
+});
+
+test('legacy multi-service reservations require an explicit single service when rescheduling', async ({
+  page,
+}) => {
+  await page.route('**/api/appointments', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: 'legacy-reservation',
+          status: 'confirmed',
+          barber_id: 'igor',
+          services: [{ service_id: 'corte' }, { service_id: 'barba' }],
+        },
+      ],
+    }),
+  );
+  await page.goto('/agendar?remarcar=legacy-reservation');
+  await expect(
+    page.getByRole('heading', { name: 'Como vamos cuidar do seu estilo?' }),
+  ).toBeVisible();
+  await expect(page.locator('.booking-service input:checked')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
+  await page.getByRole('radio', { name: /Corte masculino/ }).check();
+  await page.getByRole('radio', { name: /Corte masculino/ }).check();
+  await expect(page.locator('.booking-service input:checked')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click();
+  await expect(page.getByLabel('Escolher outra data')).toBeVisible();
 });
 
 test('admin login, metrics, calendar views, service CRUD and restricted client access', async ({

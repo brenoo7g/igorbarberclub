@@ -101,11 +101,11 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   let date = addDays(dateInBrazil(), 60);
   if (weekday(date) === 0) date = addDays(date, 1);
   const payload = {
-    services: ['corte', 'barba'],
+    services: ['combo'],
     barberId: 'igor',
     date,
     time: '09:00',
-    expectedTotal: 6000,
+    expectedTotal: 5500,
     expectedDuration: 70,
     guest: { name: 'Visitante Sem Conta', email: 'CLIENTE@example.com', phone: '(21) 98888-7777' },
   };
@@ -116,6 +116,11 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
     { ...payload.guest, role: 'admin' },
   ])
     assert.equal((await request('/appointments/guest', 'POST', { ...payload, guest })).status, 400);
+  for (const services of [[], ['corte', 'barba'], ['corte', 'corte']])
+    assert.equal(
+      (await request('/appointments/guest', 'POST', { ...payload, services })).status,
+      400,
+    );
   assert.equal(
     (await request('/appointments/guest', 'POST', { ...payload, user_id: accountBefore.id }))
       .status,
@@ -148,9 +153,9 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   assert.equal(reservation.user_id, null);
   assert.equal(reservation.client_name, 'Visitante Sem Conta');
   assert.equal(reservation.client_phone, '21988887777');
-  assert.equal(reservation.total, 6000);
+  assert.equal(reservation.total, 5500);
   assert.equal(reservation.end_minute, 610);
-  assert.equal(reservation.services.length, 2);
+  assert.equal(reservation.services.length, 1);
   assert.equal((await request('/auth/me')).data.user, null);
   assert.equal((await db.get('SELECT COUNT(*) AS count FROM users')).count, before);
   assert.deepEqual(
@@ -179,7 +184,7 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
     404,
   );
   const available = await request(
-    `/availability?date=${date}&barberId=igor&services=corte,barba&except=${reservation.id}`,
+    `/availability?date=${date}&barberId=igor&services=combo&except=${reservation.id}`,
   );
   assert.equal(available.data.slots.includes('09:00'), false);
   const admin = await request('/auth/login', 'POST', {
@@ -262,7 +267,7 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
     200,
   );
   assert.equal(
-    (await request(`/availability?date=${date}&barberId=igor&services=corte,barba`)).data.slots[0],
+    (await request(`/availability?date=${date}&barberId=igor&services=combo`)).data.slots[0],
     '09:00',
   );
 });

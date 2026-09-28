@@ -251,7 +251,7 @@ test('schedule API: permission, atomic changes, release idempotency and competin
   assert.ok(slots.includes('14:00'));
   assert.ok(!slots.includes('12:00'));
   assert.equal((await request('/appointments/guest', 'POST', booking(date, '12:00'))).status, 409);
-  const longSlots = (await availability(date, 'corte,barba')).data.slots;
+  const longSlots = (await availability(date, 'combo')).data.slots;
   assert.ok(
     longSlots.every((time) =>
       fitsWorkingDay(days()[weekday(date)], minutes(time), minutes(time) + 70),

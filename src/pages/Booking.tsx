@@ -36,9 +36,7 @@ export default function Booking() {
   const [step, setStep] = useState(0);
   const [services, setServices] = useState<Service[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [selected, setSelected] = useState<string[]>(
-    params.get('servico') ? [params.get('servico')!] : [],
-  );
+  const [selected, setSelected] = useState(params.get('servico') || '');
   const [barber, setBarber] = useState('');
   const weekParam = params.get('semana');
   const professionalParam = params.get('profissional');
@@ -82,17 +80,16 @@ export default function Booking() {
           const a = appointments.find((x) => x.id === reschedule);
           if (!a || a.status !== 'confirmed')
             throw new Error('Agendamento indisponível para remarcação.');
-          setSelected(
-            a.services
-              .filter((item) => s.some((service) => service.id === item.service_id))
-              .map((item) => item.service_id),
-          );
+          const previousService =
+            a.services.length === 1
+              ? s.find((service) => service.id === a.services[0].service_id)
+              : undefined;
+          // Old multi-service reservations must be explicitly reselected, never silently reduced.
+          setSelected(previousService?.id || '');
           setBarber(a.barber_id);
-          setStep(1);
+          setStep(previousService ? 1 : 0);
         } else
-          setSelected((previous) =>
-            previous.filter((id) => s.some((service) => service.id === id)),
-          );
+          setSelected((previous) => (s.some((service) => service.id === previous) ? previous : ''));
       })
       .catch((e) => {
         if (alive) setError(errorMessage(e));
@@ -124,12 +121,13 @@ export default function Booking() {
       });
     return () => controller.abort();
   }, [barber, reload]);
-  const selectedKey = selected.join(',');
+  const selectedKey = selected;
   useEffect(() => {
     setTime('');
     setSlots([]);
     setSlotError('');
     setAvailabilityMessage('');
+    setSlotsLoading(false);
     if (!barber || !selectedKey) return;
     const controller = new AbortController();
     setSlotsLoading(true);
@@ -154,7 +152,7 @@ export default function Booking() {
       });
     return () => controller.abort();
   }, [barber, date, selectedKey, reschedule, reload]);
-  const chosen = services.filter((s) => selected.includes(s.id));
+  const chosen = services.filter((s) => selected === s.id);
   const duration = chosen.reduce((n, s) => n + s.duration, 0);
   const total = chosen.reduce((n, s) => n + s.price, 0);
   const changeStep = (value: number) => {
@@ -177,7 +175,7 @@ export default function Booking() {
         {
           method: reschedule ? 'PATCH' : 'POST',
           body: JSON.stringify({
-            services: selected,
+            services: selected ? [selected] : [],
             barberId: barber,
             date,
             time,
@@ -304,29 +302,27 @@ export default function Booking() {
                 <span>01</span>
                 <div>
                   <h2>Como vamos cuidar do seu estilo?</h2>
-                  <p>Você pode escolher mais de um serviço.</p>
+                  <p>Escolha um serviço por agendamento.</p>
                 </div>
               </div>
               <div className="booking-service-list">
                 {services.map((service) => (
                   <label
                     key={service.id}
-                    className={`booking-service ${selected.includes(service.id) ? 'selected' : ''}`}
+                    className={`booking-service ${selected === service.id ? 'selected' : ''}`}
                   >
                     <input
-                      type="checkbox"
+                      type="radio"
+                      name="booking-service"
                       value={service.id}
-                      checked={selected.includes(service.id)}
-                      onChange={() =>
-                        setSelected((prev) =>
-                          prev.includes(service.id)
-                            ? prev.filter((id) => id !== service.id)
-                            : [...prev, service.id],
-                        )
-                      }
+                      checked={selected === service.id}
+                      onChange={() => {
+                        setSelected(service.id);
+                        setTime('');
+                      }}
                     />
                     <span className="custom-check">
-                      {selected.includes(service.id) && <Check size={14} />}
+                      {selected === service.id && <Check size={14} />}
                     </span>
                     <span className="booking-service-info">
                       <strong>{service.name}</strong>
@@ -473,7 +469,7 @@ export default function Booking() {
                     }
                   >
                     {availabilityMessage ||
-                      'Não há horários disponíveis para esses serviços neste dia. Escolha outra data.'}
+                      'Não há horários disponíveis para esse serviço neste dia. Escolha outra data.'}
                   </EmptyState>
                 )
               )}
@@ -652,7 +648,7 @@ export default function Booking() {
               ))}
             </div>
           ) : (
-            <p className="summary-empty">Escolha os serviços para montar o seu momento.</p>
+            <p className="summary-empty">Escolha o serviço para montar o seu momento.</p>
           )}
           <div className="summary-meta">
             <span>

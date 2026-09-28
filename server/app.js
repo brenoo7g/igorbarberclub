@@ -49,12 +49,11 @@ const serviceSchema = z.object({
   price: z.number().int().min(0).max(1000000),
   category: z.string().trim().min(2).max(40),
 });
+const singleServiceSchema = z
+  .array(z.string().min(1))
+  .length(1, 'Escolha apenas um serviço por agendamento.');
 const bookingSchema = z.object({
-  services: z
-    .array(z.string().min(1))
-    .min(1)
-    .max(10)
-    .refine((ids) => new Set(ids).size === ids.length),
+  services: singleServiceSchema,
   barberId: z.string().min(1),
   date: dateSchema,
   time: timeSchema,
@@ -315,12 +314,8 @@ export function createApp(
       const barberId = z.string().parse(req.query.barberId);
       if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [barberId])))
         fail(404, 'Profissional não encontrado.');
-      const ids = z
-        .array(z.string().min(1))
-        .min(1)
-        .max(10)
-        .parse(String(req.query.services || '').split(','));
-      const services = await getServices(tx, [...new Set(ids)]);
+      const ids = singleServiceSchema.parse(String(req.query.services || '').split(','));
+      const services = await getServices(tx, ids);
       let except = '';
       if (req.query.except) {
         const existing = await tx.get('SELECT * FROM appointments WHERE id=?', [

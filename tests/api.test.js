@@ -72,11 +72,11 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
   let date = addDays(dateInBrazil(), 15);
   while (weekday(date) === 0) date = addDays(date, 1);
   const payload = {
-    services: ['corte', 'barba'],
+    services: ['combo'],
     barberId: 'igor',
     date,
     time: '09:00',
-    expectedTotal: 6000,
+    expectedTotal: 5500,
     expectedDuration: 70,
   };
   const concurrent = await Promise.all([
@@ -87,7 +87,39 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
   const created = concurrent.find((r) => r.status === 201).data;
   const owner = created.user_id === clientLogin.data.user.id ? client : other.cookie;
   const nonOwner = owner === client ? other.cookie : client;
-  assert.equal(created.total, 6000);
+  const beforeRejected = (await db.get('SELECT COUNT(*) AS count FROM appointments')).count;
+  for (const services of [[], ['corte', 'barba'], ['corte', 'corte']]) {
+    assert.equal(
+      (await request('/appointments', 'POST', { ...payload, services }, owner)).status,
+      400,
+    );
+    assert.equal(
+      (
+        await request(
+          `/appointments/${created.id}/reschedule`,
+          'PATCH',
+          { ...payload, services },
+          owner,
+        )
+      ).status,
+      400,
+    );
+    assert.equal(
+      (await request(`/availability?date=${date}&barberId=igor&services=${services.join(',')}`))
+        .status,
+      400,
+    );
+  }
+  assert.equal((await db.get('SELECT COUNT(*) AS count FROM appointments')).count, beforeRejected);
+  assert.equal(
+    (
+      await db.get('SELECT COUNT(*) AS count FROM appointment_services WHERE appointment_id=?', [
+        created.id,
+      ])
+    ).count,
+    1,
+  );
+  assert.equal(created.total, 5500);
   assert.equal(created.end_minute, 610);
   assert.equal(
     (await request(`/appointments/${created.id}/cancel`, 'PATCH', {}, nonOwner)).status,
@@ -136,7 +168,7 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
     (await request('/appointments', 'POST', { ...payload, time: '11:00' }, owner)).status,
     409,
   );
-  const available = await request(`/availability?date=${date}&barberId=igor&services=corte,barba`);
+  const available = await request(`/availability?date=${date}&barberId=igor&services=combo`);
   assert.equal(available.data.slots.includes('09:30'), false);
   assert.equal(available.data.slots.includes('13:00'), true);
   const rescheduled = await request(
@@ -147,7 +179,7 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
   );
   assert.equal(rescheduled.status, 200);
   assert.equal(rescheduled.data.time, '14:10');
-  const freed = await request(`/availability?date=${date}&barberId=igor&services=corte,barba`);
+  const freed = await request(`/availability?date=${date}&barberId=igor&services=combo`);
   assert.equal(freed.data.slots.includes('09:00'), true);
   assert.equal(
     (await request('/appointments', 'POST', { ...payload, date: '2030-02-30' }, owner)).status,
@@ -310,11 +342,9 @@ test('API: access control, concurrency, rescheduling, snapshots, blocks and noti
     (await request(`/appointments/${forty.data.id}/cancel`, 'PATCH', {}, client)).status,
     200,
   );
-  const combined = await request(
-    `/availability?date=${adaptiveDate}&barberId=igor&services=corte,barba`,
-  );
-  assert.equal(combined.data.duration, 80);
-  assert.deepEqual(combined.data.slots.slice(0, 3), ['09:00', '10:20', '11:40']);
+  const combined = await request(`/availability?date=${adaptiveDate}&barberId=igor&services=combo`);
+  assert.equal(combined.data.duration, 70);
+  assert.deepEqual(combined.data.slots.slice(0, 3), ['09:00', '10:10', '11:20']);
   const preserved = (await request('/appointments', 'GET', undefined, client)).data.find(
     (a) => a.id === oldReservation.data.id,
   );

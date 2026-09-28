@@ -13,7 +13,7 @@ test('direct navigation and reload preserve SPA pages and API query strings', as
     expect(reloaded.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toContainText(title);
     if (path.startsWith('/agendar'))
-      await expect(page.getByRole('checkbox', { name: /Corte masculino/ })).toBeChecked();
+      await expect(page.getByRole('radio', { name: /Corte masculino/ })).toBeChecked();
   }
 });
 
@@ -49,7 +49,7 @@ test('Vercel plain text 404 and invalid JSON are explained without exposing pars
   await expect(page.getByRole('button', { name: 'Continuar', exact: true })).toBeDisabled();
   failure = '';
   await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
-  await expect(page.getByRole('checkbox')).toHaveCount(6);
+  await expect(page.getByRole('radio')).toHaveCount(6);
   failure = 'network';
   await page.reload();
   await expect(page.getByRole('alert')).toContainText('Verifique sua conexão');

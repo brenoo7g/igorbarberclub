@@ -30,7 +30,7 @@ O modo de demonstração existe somente fora de produção e pode ser desativado
 ## Recursos
 
 - Landing page com serviços vindos do banco, galeria filtrável e ampliação em diálogo acessível.
-- Agendamento em três etapas, com múltiplos serviços, escolha do profissional, disponibilidade real e cadastro somente na confirmação.
+- Agendamento em três etapas, com um serviço por reserva, escolha do profissional, disponibilidade real e cadastro somente na confirmação.
 - Na confirmação, **Continuar Sem Login** permite reservar com nome e sobrenome, telefone e e-mail, sem criar conta. A reserva aparece na agenda do administrador e recebe as notificações configuradas.
 - Conta do cliente com histórico, cancelamento e remarcação de reservas futuras.
 - Meu perfil para clientes e administradores: nome de exibição, e-mail, WhatsApp, foto e troca de senha com confirmação da senha atual.

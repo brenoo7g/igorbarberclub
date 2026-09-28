@@ -6,7 +6,8 @@ test('guest can book with three contact fields, recover errors and stay logged o
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/agendar?servico=corte');
-  await page.getByRole('checkbox', { name: /Barba completa/ }).check();
+  await page.getByRole('radio', { name: /Barba completa/ }).check();
+  await expect(page.getByRole('radio', { name: /Corte masculino/ })).not.toBeChecked();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   const date = new Date();
   date.setDate(date.getDate() + 70);
@@ -51,6 +52,8 @@ test('guest can book with three contact fields, recover errors and stay logged o
   );
   await page.getByRole('button', { name: 'Confirmar agendamento', exact: true }).click();
   const appointment = await (await posted).json();
+  expect(appointment.services).toHaveLength(1);
+  expect(appointment.services[0].service_id).toBe('barba');
   await expect(page.getByRole('heading', { name: 'Seu horário está na régua.' })).toBeVisible();
   await expect(page.getByText('Te esperamos, Visitante.', { exact: false })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Falar com a barbearia' })).toHaveAttribute(

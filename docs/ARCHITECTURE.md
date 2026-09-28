@@ -19,33 +19,33 @@
 
 Toda rota usa prefixo `/api`. Erros retornam `{ "error": "mensagem" }`; validações também podem incluir `details` com campos. Status 400 para dados inválidos, 401 para falta de sessão, 403 para papel/origem proibidos, 404 para recurso não encontrado, 409 para disputa de horário/e-mail duplicado e 412 para preço/duração alterados.
 
-| Método | Rota                                                               | Regra                                                                                                                 |
-| ------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/health`                                                          | Saúde e dialeto do banco                                                                                              |
-| GET    | `/config`                                                          | Expediente, demo e canais configurados, sem credenciais                                                               |
-| GET    | `/services`                                                        | Serviços ativos                                                                                                       |
-| GET    | `/barbers`                                                         | Profissionais ativos                                                                                                  |
-| GET    | `/availability?date=YYYY-MM-DD&barberId=igor&services=corte,barba` | Intervalos que acomodam todos os serviços; `except` só é considerado para proprietário/admin                          |
-| POST   | `/auth/register`                                                   | `{name,email,phone,password}`; cria cliente, nunca administrador                                                      |
-| POST   | `/auth/login`                                                      | `{email,password}`; cookie JWT HttpOnly SameSite=Lax                                                                  |
-| GET    | `/auth/me`                                                         | `{user}` público sanitizado ou null                                                                                   |
-| POST   | `/auth/logout`                                                     | Apaga cookie                                                                                                          |
-| PATCH  | `/auth/profile`                                                    | `{name,email,phone,avatar,profileVersion,currentPassword?}`; própria conta, senha atual obrigatória ao alterar e-mail |
-| PATCH  | `/auth/password`                                                   | `{currentPassword,password}`; própria conta, renova sessão e invalida as demais                                       |
-| GET    | `/appointments`                                                    | Reservas somente do usuário autenticado                                                                               |
-| POST   | `/appointments`                                                    | `{services:[id],barberId,date,time,expectedTotal?,expectedDuration?}`                                                 |
-| PATCH  | `/appointments/:id/reschedule`                                     | Mesmo corpo da criação; proprietário, futuro, confirmado                                                              |
-| PATCH  | `/appointments/:id/cancel`                                         | Proprietário, futuro, confirmado                                                                                      |
-| GET    | `/admin/appointments?from=YYYY-MM-DD&to=YYYY-MM-DD`                | Lista com cliente, serviços e profissional                                                                            |
-| PATCH  | `/admin/appointments/:id/status`                                   | `{status:"completed"                                                                                                  | "cancelled" | "no-show"}` |
-| POST   | `/admin/services`                                                  | `{name,description,duration,price,category}`; preço em centavos                                                       |
-| PUT    | `/admin/services/:id`                                              | Mesmos campos; altera somente o catálogo                                                                              |
-| DELETE | `/admin/services/:id`                                              | Exclusão lógica (`active=0`)                                                                                          |
-| GET    | `/admin/blocks?from=...&to=...`                                    | Bloqueios no período                                                                                                  |
-| POST   | `/admin/blocks`                                                    | `{barberId,date,start:"12:00",end:"13:00",reason}`                                                                    |
-| DELETE | `/admin/blocks/:id`                                                | Libera intervalo                                                                                                      |
-| GET    | `/admin/metrics`                                                   | KPIs e séries calculados no servidor                                                                                  |
-| GET    | `/admin/notifications`                                             | Contagem por canal e estado                                                                                           |
+| Método | Rota                                                         | Regra                                                                                                                 |
+| ------ | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/health`                                                    | Saúde e dialeto do banco                                                                                              |
+| GET    | `/config`                                                    | Expediente, demo e canais configurados, sem credenciais                                                               |
+| GET    | `/services`                                                  | Serviços ativos                                                                                                       |
+| GET    | `/barbers`                                                   | Profissionais ativos                                                                                                  |
+| GET    | `/availability?date=YYYY-MM-DD&barberId=igor&services=corte` | Intervalos que acomodam o serviço escolhido; `except` só é considerado para proprietário/admin                        |
+| POST   | `/auth/register`                                             | `{name,email,phone,password}`; cria cliente, nunca administrador                                                      |
+| POST   | `/auth/login`                                                | `{email,password}`; cookie JWT HttpOnly SameSite=Lax                                                                  |
+| GET    | `/auth/me`                                                   | `{user}` público sanitizado ou null                                                                                   |
+| POST   | `/auth/logout`                                               | Apaga cookie                                                                                                          |
+| PATCH  | `/auth/profile`                                              | `{name,email,phone,avatar,profileVersion,currentPassword?}`; própria conta, senha atual obrigatória ao alterar e-mail |
+| PATCH  | `/auth/password`                                             | `{currentPassword,password}`; própria conta, renova sessão e invalida as demais                                       |
+| GET    | `/appointments`                                              | Reservas somente do usuário autenticado                                                                               |
+| POST   | `/appointments`                                              | `{services:[id],barberId,date,time,expectedTotal?,expectedDuration?}`                                                 |
+| PATCH  | `/appointments/:id/reschedule`                               | Mesmo corpo da criação; proprietário, futuro, confirmado                                                              |
+| PATCH  | `/appointments/:id/cancel`                                   | Proprietário, futuro, confirmado                                                                                      |
+| GET    | `/admin/appointments?from=YYYY-MM-DD&to=YYYY-MM-DD`          | Lista com cliente, serviços e profissional                                                                            |
+| PATCH  | `/admin/appointments/:id/status`                             | `{status:"completed"                                                                                                  | "cancelled" | "no-show"}` |
+| POST   | `/admin/services`                                            | `{name,description,duration,price,category}`; preço em centavos                                                       |
+| PUT    | `/admin/services/:id`                                        | Mesmos campos; altera somente o catálogo                                                                              |
+| DELETE | `/admin/services/:id`                                        | Exclusão lógica (`active=0`)                                                                                          |
+| GET    | `/admin/blocks?from=...&to=...`                              | Bloqueios no período                                                                                                  |
+| POST   | `/admin/blocks`                                              | `{barberId,date,start:"12:00",end:"13:00",reason}`                                                                    |
+| DELETE | `/admin/blocks/:id`                                          | Libera intervalo                                                                                                      |
+| GET    | `/admin/metrics`                                             | KPIs e séries calculados no servidor                                                                                  |
+| GET    | `/admin/notifications`                                       | Contagem por canal e estado                                                                                           |
 
 ## Modelo de dados
 
@@ -75,7 +75,7 @@ Veja o esquema executável em [`server/schema.sql`](../server/schema.sql). Datas
 
 O intervalo de uma reserva é semiaberto `[início, fim)`. Existe conflito quando `novoInicio < fimExistente && novoFim > inicioExistente`. Logo, terminar às 10h permite que outro atendimento comece às 10h.
 
-O servidor soma as durações e os preços do catálogo; nunca confia em um total enviado pelo cliente. `expectedTotal` e `expectedDuration` permitem interromper a confirmação se o catálogo tiver mudado após a seleção. Também valida profissional, serviços ativos, dias de funcionamento, expediente, almoço, horários já passados, duração total e abertura automática/manual. A disponibilidade e a confirmação compartilham as mesmas regras, descritas em [SCHEDULE.md](./SCHEDULE.md).
+Cada nova reserva ou remarcação exige exatamente um ID em `services`, inclusive na consulta de disponibilidade. O servidor calcula a duração e o preço a partir do catálogo; nunca confia em um total enviado pelo cliente. `expectedTotal` e `expectedDuration` permitem interromper a confirmação se o catálogo tiver mudado após a seleção. Também valida profissional, serviços ativos, dias de funcionamento, expediente, almoço, horários já passados, duração total e abertura automática/manual. A disponibilidade e a confirmação compartilham as mesmas regras, descritas em [SCHEDULE.md](./SCHEDULE.md).
 
 Na transação, a agenda é bloqueada, a disponibilidade é recalculada e a reserva, seus snapshots e a outbox são gravados juntos. Agendamentos `confirmed` e `completed` ocupam o intervalo. Cancelamentos liberam o horário. Um bloqueio sobre reserva existente é rejeitado.
 
@@ -105,3 +105,5 @@ O corpo do perfil tem limite de 768 KB; as demais rotas mantêm 32 KB. Fotos na 
 Hashes bcrypt com custo 12, JWT HS256 com issuer/audience/expiração e segredo apenas no servidor; cookie HttpOnly, SameSite=Lax e Secure em produção. A autorização é reavaliada na API consultando a conta no banco. Cadastro não permite elevação de papel. Toda consulta que aceita identificadores usa parâmetros. Reservas de outros usuários não são expostas ao cliente.
 
 Helmet aplica cabeçalhos e CSP na distribuição de produção. Mutações com `Origin` diferente de `APP_URL` são rejeitadas; não há CORS aberto. Rate limiting geral e para tentativas de autenticação/edição do perfil. APIs não são armazenadas em cache. As sessões duram até sete dias, com revogação ao trocar credenciais. A [recuperação de senha por e-mail](PASSWORD-RECOVERY.md) usa links de uso único com validade de 30 minutos e invalidação das sessões após a troca. A verificação obrigatória do e-mail durante o cadastro ainda não está implementada.
+
+Reservas antigas com vários serviços mantêm seus dados e histórico. Para remarcá-las, o cliente precisa selecionar explicitamente um único serviço. Um combo cadastrado no catálogo conta como um serviço, com seu próprio preço e duração.
