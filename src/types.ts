@@ -81,6 +81,7 @@ export interface Block {
   reason: string;
 }
 export interface Config {
+  testGuestAccess?: boolean;
   demo: boolean;
   open: number;
   close: number;

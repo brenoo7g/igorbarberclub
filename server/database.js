@@ -89,6 +89,7 @@ export async function createDatabase(
     };
     db = {
       dialect: 'sqlite',
+      ephemeral: path === ':memory:',
       all: (...args) => enqueue(() => direct.all(...args)),
       get: (...args) => enqueue(() => direct.get(...args)),
       run: (...args) => enqueue(() => direct.run(...args)),

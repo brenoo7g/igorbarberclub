@@ -94,8 +94,18 @@ export function createApp(
     secret = process.env.JWT_SECRET || randomBytes(48).toString('hex'),
     test = false,
     serveStatic = true,
+    testGuestAccess = false,
   } = {},
 ) {
+  if (
+    testGuestAccess &&
+    (!demoMode ||
+      process.env.VERCEL ||
+      process.env.NODE_ENV === 'production' ||
+      db.dialect !== 'sqlite' ||
+      db.ephemeral !== true)
+  )
+    throw new Error('Acesso sem verificação exige demonstração com banco temporário isolado.');
   const app = express();
   const allowedOrigins = new Set([new URL(process.env.APP_URL || 'http://localhost:5173').origin]);
   if (process.env.VERCEL && process.env.VERCEL_URL)
@@ -204,6 +214,7 @@ export function createApp(
   app.get('/api/config', (_req, res) =>
     res.json({
       demo: demoMode,
+      testGuestAccess,
       open,
       close,
       timezone: 'America/Sao_Paulo',
@@ -218,7 +229,21 @@ export function createApp(
       },
     }),
   );
-  const visitors = installGuestSessions(app, db, { secureCookies });
+  const visitors = installGuestSessions(app, db, { secureCookies, testGuestAccess });
+  if (testGuestAccess)
+    app.post('/api/auth/test-access', authLimiter, async (req, res) => {
+      const { email } = z.object({ email: emailSchema }).strict().parse(req.body);
+      const result = await visitors.restoreTestAccess(email);
+      if (!result) fail(404, 'Faça primeiro um agendamento de teste com esse e-mail.');
+      res.clearCookie('session', {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: secureCookies,
+      });
+      visitors.setCookie(res, result.token);
+      res.json({ visitor: publicVisitor(result.visitor) });
+    });
   const bookingAuthenticated = (req, _res, next) =>
     req.user || req.visitor
       ? next()
@@ -462,12 +487,10 @@ export function createApp(
       await enqueueNotification(tx, id, reschedule ? 'rescheduled' : 'confirmed');
     });
     if (guestSession) visitors.setCookie(res, guestSession.token);
-    res
-      .status(reschedule ? 200 : 201)
-      .json({
-        ...(await appointmentList('WHERE a.id=?', [id]))[0],
-        ...(guestSession ? { visitor: publicVisitor(guestSession.visitor) } : {}),
-      });
+    res.status(reschedule ? 200 : 201).json({
+      ...(await appointmentList('WHERE a.id=?', [id]))[0],
+      ...(guestSession ? { visitor: publicVisitor(guestSession.visitor) } : {}),
+    });
   }
   app.post('/api/appointments', authenticated, (req, res) => book(req, res));
   app.post(

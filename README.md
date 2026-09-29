@@ -1,5 +1,7 @@
 # Igor Barber Club
 
+Para testar acesso sem senha ou confirmação em uma base temporária separada, use `npm run dev:test-access`. Veja [o modo de teste e como acessar pelo celular](docs/TEST-ACCESS.md).
+
 Aplicação full-stack em português para a barbearia de Igor Borges, em Campo Grande, RJ. React 19 + TypeScript + Vite, API Express 5, autenticação JWT em cookie HttpOnly e SQL persistente. Interface autoral em CSS responsivo, sem dependência de Tailwind.
 
 ## Executar

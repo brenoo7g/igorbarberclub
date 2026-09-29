@@ -3,7 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useApp } from '../context';
 import { api, errorMessage } from '../lib';
-import type { User } from '../types';
+import type { User, Visitor } from '../types';
 import { ErrorBox, Modal } from './UI';
 import { PasswordRecoveryForm } from './PasswordRecoveryForm';
 
@@ -28,7 +28,28 @@ export function AuthForm({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [recover, setRecover] = useState(false);
-  const { setUser, config } = useApp();
+  const { setUser, setVisitor, config } = useApp();
+  const [testAccess, setTestAccess] = useState(false);
+  async function enterTest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api<{ visitor: Visitor }>('/auth/test-access', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      setUser(null);
+      setVisitor(result.visitor);
+      setTestAccess(false);
+      onSuccess?.();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -53,6 +74,19 @@ export function AuthForm({
   }
   return (
     <div className="auth-form-wrap">
+      {!admin && config?.testGuestAccess && (
+        <button
+          type="button"
+          className="button secondary full"
+          disabled={busy}
+          onClick={() => {
+            setError('');
+            setTestAccess(true);
+          }}
+        >
+          Acessar agendamentos de teste
+        </button>
+      )}
       {!admin && (
         <div className={`segmented auth-tabs ${guest ? 'with-guest' : ''}`}>
           <button
@@ -208,6 +242,37 @@ export function AuthForm({
       {recover && (
         <Modal title="Esqueceu sua senha?" onClose={() => setRecover(false)}>
           <PasswordRecoveryForm initialEmail={email} />
+        </Modal>
+      )}
+      {testAccess && (
+        <Modal
+          title="Acesso de teste"
+          onClose={() => {
+            if (!busy) setTestAccess(false);
+          }}
+        >
+          <form className="form-stack" onSubmit={enterTest}>
+            <p>
+              Use o e-mail informado no agendamento de teste. Sem senha ou confirmação neste
+              ambiente temporário.
+            </p>
+            <ErrorBox message={error} />
+            <label>
+              E-mail do agendamento
+              <input
+                type="email"
+                autoComplete="email"
+                required
+                maxLength={200}
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <button type="submit" className="button primary full" disabled={busy}>
+              {busy ? 'Aguarde...' : 'Entrar no teste'}
+            </button>
+          </form>
         </Modal>
       )}
     </div>

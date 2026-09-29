@@ -13,10 +13,15 @@ export const publicVisitor = (session) =>
       }
     : null;
 
-export function installGuestSessions(app, db, { secureCookies }) {
+export function installGuestSessions(app, db, { secureCookies, testGuestAccess = false }) {
   const cookieName = secureCookies ? '__Host-igor-visitor' : 'igor-visitor';
   const options = { httpOnly: true, secure: secureCookies, sameSite: 'lax', path: '/' };
-  const setCookie = (res, token) => res.cookie(cookieName, token, { ...options, maxAge: duration });
+  // Only the disposable test server retains credentials in memory for unverified reentry.
+  const testTokens = testGuestAccess ? new Map() : null;
+  const setCookie = (res, token) => {
+    testTokens?.set(hash(token), token);
+    return res.cookie(cookieName, token, { ...options, maxAge: duration });
+  };
   app.use('/api', async (req, res, next) => {
     const token = req.cookies[cookieName];
     if (typeof token === 'string' && /^[a-f0-9]{64}$/.test(token)) {
@@ -44,6 +49,41 @@ export function installGuestSessions(app, db, { secureCookies }) {
     next();
   });
   return {
+    async restoreTestAccess(email) {
+      if (!testTokens || db.ephemeral !== true) throw new Error('Modo de teste indisponível.');
+      return db.transaction(async (tx) => {
+        const latest = await tx.get(
+          'SELECT a.guest_name AS name,a.guest_phone AS phone,a.guest_email AS email,g.visitor_id FROM appointments a JOIN guest_appointments g ON g.appointment_id=a.id WHERE a.user_id IS NULL AND a.guest_email=? ORDER BY a.created_at DESC,a.id DESC LIMIT 1',
+          [email],
+        );
+        if (!latest) return null;
+        const session = await tx.get('SELECT * FROM guest_sessions WHERE id=?', [
+          latest.visitor_id,
+        ]);
+        const token =
+          (active(session) && testTokens.get(session.token_hash)) ||
+          randomBytes(32).toString('hex');
+        await tx.run(
+          'UPDATE guest_sessions SET token_hash=?,name=?,email=?,phone=?,expires_at=? WHERE id=?',
+          [
+            hash(token),
+            latest.name,
+            latest.email,
+            latest.phone,
+            new Date(Date.now() + duration).toISOString(),
+            session.id,
+          ],
+        );
+        await tx.run(
+          'UPDATE guest_appointments SET visitor_id=? WHERE appointment_id IN (SELECT id FROM appointments WHERE user_id IS NULL AND guest_email=?)',
+          [session.id, email],
+        );
+        return {
+          token,
+          visitor: { id: session.id, name: latest.name, email: latest.email, phone: latest.phone },
+        };
+      });
+    },
     // Seed an opaque cookie before the first booking, without creating a profile.
     // Parallel bookings from the same browser then share an identity under the booking lock.
     prepare(req, res) {
