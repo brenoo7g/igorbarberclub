@@ -32,7 +32,7 @@ Substitua `SEU-DOMINIO-VERIFICADO` pelo domínio real. Cole somente os valores, 
 
 ## Domínio e remetente
 
-Para agendamentos feitos em **Continuar Sem Login**, o destinatário é o e-mail informado pelo visitante. A confirmação mantém todos os detalhes, mas orienta o cliente a entrar em contato com a barbearia para cancelamento/remarcação, com link para `/#contato`. Nenhuma conta é criada automaticamente.
+Para agendamentos feitos em **Continuar Sem Login**, o destinatário é o e-mail informado pelo visitante. Reservas com sessão persistente recebem um link para `/minha-conta`, com instrução de abrir no mesmo navegador para consultar, cancelar ou remarcar. Reservas antigas sem sessão mantêm o link para `/#contato`. Nenhuma conta é criada automaticamente. Consulte [o acesso de visitantes](GUEST_BOOKING.md).
 
 O envio para clientes exige domínio próprio verificado; não é possível verificar `gmail.com`, `outlook.com` ou `vercel.app` como seu domínio. O site pode continuar hospedado em `igorbarberclub.vercel.app` enquanto o remetente usa um domínio próprio. O Resend permite enviar de endereços do domínio verificado sem cadastrar cada remetente individualmente. [Remetentes no Resend](https://resend.com/docs/knowledge-base/how-do-I-create-an-email-address-or-sender-in-resend).
 

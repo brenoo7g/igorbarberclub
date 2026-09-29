@@ -8,7 +8,8 @@ import { useApp } from '../context';
 export function Layout() {
   const [menu, setMenu] = useState(false);
   const location = useLocation();
-  const { user } = useApp();
+  const { user, visitor } = useApp();
+  const identity = user || visitor;
   const close = () => setMenu(false);
   return (
     <>
@@ -55,10 +56,14 @@ export function Layout() {
             <Link
               to="/minha-conta"
               className="account-link"
-              aria-label={user ? 'Minha conta' : 'Entrar na minha conta'}
+              aria-label={identity ? 'Minha conta' : 'Entrar na minha conta'}
             >
-              {user ? <Avatar name={user.name} avatar={user.avatar} /> : <UserRound size={18} />}
-              <span>{user ? user.name.split(' ')[0] : 'Minha conta'}</span>
+              {identity ? (
+                <Avatar name={identity.name} avatar={user?.avatar || null} />
+              ) : (
+                <UserRound size={18} />
+              )}
+              <span>{identity ? identity.name.split(' ')[0] : 'Minha conta'}</span>
             </Link>
             <Link to="/agendar" className="button primary header-book" onClick={close}>
               Agendar horário

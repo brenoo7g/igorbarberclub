@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { Config, User } from './types';
+import type { Config, User, Visitor } from './types';
 import { api } from './lib';
 
 interface AppContext {
   user: User | null;
+  visitor: Visitor | null;
+  setVisitor: (visitor: Visitor | null) => void;
   loading: boolean;
   config: Config | null;
   setUser: (user: User | null) => void;
@@ -14,11 +16,17 @@ interface AppContext {
 const Context = createContext<AppContext | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, updateUser] = useState<User | null>(null);
+  const [visitor, updateVisitor] = useState<Visitor | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
   const revision = useRef(0);
   const setUser = useCallback((next: User | null) => {
     revision.current++;
     updateUser(next);
+    channel.current?.postMessage('account-changed');
+  }, []);
+  const setVisitor = useCallback((next: Visitor | null) => {
+    revision.current++;
+    updateVisitor(next);
     channel.current?.postMessage('account-changed');
   }, []);
   const [config, setConfig] = useState<Config | null>(null);
@@ -29,8 +37,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async function refreshUser() {
       const requestRevision = ++revision.current;
       try {
-        const result = await api<{ user: User | null }>('/auth/me');
-        if (active && requestRevision === revision.current) updateUser(result.user);
+        const result = await api<{ user: User | null; visitor?: Visitor | null }>('/auth/me');
+        if (active && requestRevision === revision.current) {
+          updateUser(result.user);
+          updateVisitor(result.visitor || null);
+        }
       } catch {
         /* Preserve the current view during a temporary network failure. */
       }
@@ -44,6 +55,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const expired = () => {
       setUser(null);
+      setVisitor(null);
       setToast('Sua sessão expirou. Entre novamente para continuar.');
     };
     window.addEventListener('focus', refreshUser);
@@ -55,7 +67,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', refreshUser);
       window.removeEventListener('session-expired', expired);
     };
-  }, [setUser]);
+  }, [setUser, setVisitor]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(''), 5000);
@@ -66,9 +78,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   async function logout() {
     await api('/auth/logout', { method: 'POST' });
     setUser(null);
+    setVisitor(null);
   }
   return (
-    <Context.Provider value={{ user, loading, config, setUser, logout, notify }}>
+    <Context.Provider
+      value={{ user, visitor, setVisitor, loading, config, setUser, logout, notify }}
+    >
       {children}
       {toast && (
         <div role="status" className="toast">

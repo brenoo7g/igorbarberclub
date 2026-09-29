@@ -21,6 +21,11 @@ export async function enqueueNotification(db, appointmentId, event) {
     duration: appointment.end_minute - appointment.start_minute,
     reference: appointment.id,
     guest: appointment.user_id === null,
+    guestSession: Boolean(
+      await db.get('SELECT appointment_id FROM guest_appointments WHERE appointment_id=?', [
+        appointmentId,
+      ]),
+    ),
   });
   for (const channel of ['email', 'whatsapp']) {
     const now = new Date().toISOString();
@@ -62,9 +67,11 @@ export function appointmentEmail(payload, event, url) {
   if (payload.reference) lines.push(`Código do agendamento: ${payload.reference}`);
   lines.push(
     '',
-    payload.guest
-      ? 'Para cancelar ou remarcar, entre em contato com a barbearia e informe o código do agendamento:'
-      : 'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
+    payload.guestSession
+      ? 'Para consultar, cancelar ou remarcar, abra Meus agendamentos no mesmo navegador usado na reserva. Se perdeu esse acesso, entre em contato com a barbearia e informe o código do agendamento:'
+      : payload.guest
+        ? 'Para cancelar ou remarcar, entre em contato com a barbearia e informe o código do agendamento:'
+        : 'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
     url,
     '',
     'Igor Barber Club · Campo Grande, RJ',
@@ -115,7 +122,7 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
             { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[
               row.event
             ] || row.event;
-          const url = `${process.env.APP_URL || 'http://localhost:5173'}/${p.guest ? '#contato' : 'minha-conta'}`;
+          const url = `${process.env.APP_URL || 'http://localhost:5173'}/${p.guest && !p.guestSession ? '#contato' : 'minha-conta'}`;
           let response;
           if (row.channel === 'email') {
             response = await fetch('https://api.resend.com/emails', {

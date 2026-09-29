@@ -25,6 +25,7 @@ import { installPortfolioRoutes } from './portfolio.js';
 import { installScheduleRoutes, readSchedule, lockSchedule } from './schedule.js';
 import { dateAccess, minutes } from './schedule-domain.js';
 import { installPasswordRecovery } from './password-recovery.js';
+import { installGuestSessions, ownsAppointment, publicVisitor } from './guest-session.js';
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -217,7 +218,17 @@ export function createApp(
       },
     }),
   );
-  app.get('/api/auth/me', (req, res) => res.json({ user: publicUser(req.user) }));
+  const visitors = installGuestSessions(app, db, { secureCookies });
+  const bookingAuthenticated = (req, _res, next) =>
+    req.user || req.visitor
+      ? next()
+      : next(
+          new HttpError(401, 'Acesse pelo navegador usado no agendamento ou entre na sua conta.'),
+        );
+  app.get('/api/auth/me', (req, res) => {
+    visitors.prepare(req, res);
+    res.json({ user: publicUser(req.user), visitor: publicVisitor(req.visitor) });
+  });
   app.post('/api/auth/register', authLimiter, async (req, res) => {
     const data = z
       .object({
@@ -261,7 +272,8 @@ export function createApp(
     login(res, user);
     res.json({ user: publicUser(user) });
   });
-  app.post('/api/auth/logout', (_req, res) => {
+  app.post('/api/auth/logout', async (req, res) => {
+    await visitors.forget(req, res);
     res.clearCookie('session', {
       path: '/',
       httpOnly: true,
@@ -321,7 +333,7 @@ export function createApp(
         const existing = await tx.get('SELECT * FROM appointments WHERE id=?', [
           String(req.query.except),
         ]);
-        if (existing && (existing.user_id === req.user?.id || req.user?.role === 'admin'))
+        if (existing && (req.user?.role === 'admin' || (await ownsAppointment(tx, req, existing))))
           except = existing.id;
       }
       const duration = services.reduce((sum, s) => sum + s.duration, 0);
@@ -359,8 +371,15 @@ export function createApp(
       services: items.filter((i) => i.appointment_id === a.id),
     }));
   };
-  app.get('/api/appointments', authenticated, async (req, res) =>
-    res.json(await appointmentList('WHERE a.user_id=?', [req.user.id])),
+  app.get('/api/appointments', bookingAuthenticated, async (req, res) =>
+    res.json(
+      await appointmentList(
+        req.user
+          ? 'WHERE a.user_id=?'
+          : 'WHERE a.user_id IS NULL AND a.id IN (SELECT appointment_id FROM guest_appointments WHERE visitor_id=?)',
+        [req.user ? req.user.id : req.visitor.id],
+      ),
+    ),
   );
   async function book(req, res, reschedule = false, asGuest = false) {
     const data = (
@@ -368,6 +387,7 @@ export function createApp(
     ).parse(req.body);
     verifyDate(data.date);
     const id = reschedule ? String(req.params.id) : randomUUID();
+    let guestSession;
     await db.transaction(async (tx) => {
       if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [data.barberId])))
         fail(404, 'Profissional não encontrado.');
@@ -375,7 +395,8 @@ export function createApp(
       let current;
       if (reschedule) {
         current = await tx.get('SELECT * FROM appointments WHERE id=?', [id]);
-        if (!current || current.user_id !== req.user.id) fail(404, 'Agendamento não encontrado.');
+        if (!current || !(await ownsAppointment(tx, req, current, true)))
+          fail(404, 'Agendamento não encontrado.');
         if (current.status !== 'confirmed' || !isFuture(current.date, current.start_minute))
           fail(400, 'Este agendamento não pode mais ser remarcado.');
       }
@@ -431,9 +452,22 @@ export function createApp(
           'INSERT INTO appointment_services (appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?)',
           [id, s.id, s.name, s.price, s.duration],
         );
+      if (asGuest) {
+        guestSession = await visitors.save(tx, req, data.guest);
+        await tx.run('INSERT INTO guest_appointments (appointment_id,visitor_id) VALUES (?,?)', [
+          id,
+          guestSession.visitor.id,
+        ]);
+      }
       await enqueueNotification(tx, id, reschedule ? 'rescheduled' : 'confirmed');
     });
-    res.status(reschedule ? 200 : 201).json((await appointmentList('WHERE a.id=?', [id]))[0]);
+    if (guestSession) visitors.setCookie(res, guestSession.token);
+    res
+      .status(reschedule ? 200 : 201)
+      .json({
+        ...(await appointmentList('WHERE a.id=?', [id]))[0],
+        ...(guestSession ? { visitor: publicVisitor(guestSession.visitor) } : {}),
+      });
   }
   app.post('/api/appointments', authenticated, (req, res) => book(req, res));
   app.post(
@@ -445,12 +479,15 @@ export function createApp(
     }),
     (req, res) => book(req, res, false, true),
   );
-  app.patch('/api/appointments/:id/reschedule', authenticated, (req, res) => book(req, res, true));
-  app.patch('/api/appointments/:id/cancel', authenticated, async (req, res) => {
+  app.patch('/api/appointments/:id/reschedule', bookingAuthenticated, (req, res) =>
+    book(req, res, true),
+  );
+  app.patch('/api/appointments/:id/cancel', bookingAuthenticated, async (req, res) => {
     await db.transaction(async (tx) => {
       const a = await tx.get('SELECT * FROM appointments WHERE id=?', [String(req.params.id)]);
-      if (!a || a.user_id !== req.user.id) fail(404, 'Agendamento não encontrado.');
+      if (!a) fail(404, 'Agendamento não encontrado.');
       await lockBarber(tx, a.barber_id);
+      if (!(await ownsAppointment(tx, req, a, true))) fail(404, 'Agendamento não encontrado.');
       const fresh = await tx.get('SELECT * FROM appointments WHERE id=?', [a.id]);
       if (fresh.status !== 'confirmed' || !isFuture(fresh.date, fresh.start_minute))
         fail(400, 'Este agendamento não pode mais ser cancelado.');

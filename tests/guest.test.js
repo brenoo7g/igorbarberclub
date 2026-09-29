@@ -149,7 +149,11 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   assert.deepEqual(race.map((result) => result.status).sort(), [201, 409]);
   const result = race.find((result) => result.status === 201);
   const reservation = result.data;
-  assert.equal(result.cookie, undefined);
+  assert.match(result.cookie, /^igor-visitor=[a-f0-9]{64}$/);
+  assert.equal(
+    (await request('/auth/me', 'GET', undefined, result.cookie)).data.visitor.name,
+    'Visitante Sem Conta',
+  );
   assert.equal(reservation.user_id, null);
   assert.equal(reservation.client_name, 'Visitante Sem Conta');
   assert.equal(reservation.client_phone, '21988887777');
@@ -254,7 +258,8 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].to, ['cliente@example.com']);
   assert.match(calls[0].text, /Visitante Sem Conta/);
-  assert.match(calls[0].text, /#contato/);
+  assert.match(calls[0].text, /minha-conta/);
+  assert.match(calls[0].text, /mesmo navegador/);
   assert.equal(
     (
       await request(

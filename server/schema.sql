@@ -57,6 +57,16 @@ CREATE TABLE IF NOT EXISTS appointment_services (
   price INTEGER NOT NULL, duration INTEGER NOT NULL,
   PRIMARY KEY(appointment_id,service_id)
 );
+CREATE TABLE IF NOT EXISTS guest_sessions (
+  id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL, email TEXT NOT NULL, phone TEXT NOT NULL,
+  created_at TEXT NOT NULL, expires_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS guest_appointments (
+  appointment_id TEXT PRIMARY KEY REFERENCES appointments(id),
+  visitor_id TEXT NOT NULL REFERENCES guest_sessions(id)
+);
+CREATE INDEX IF NOT EXISTS guest_appointments_visitor ON guest_appointments(visitor_id);
 CREATE TABLE IF NOT EXISTS blocks (
   id TEXT PRIMARY KEY, barber_id TEXT NOT NULL REFERENCES barbers(id),
   date TEXT NOT NULL, start_minute INTEGER NOT NULL, end_minute INTEGER NOT NULL,

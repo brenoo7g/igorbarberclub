@@ -56,11 +56,10 @@ test('guest can book with three contact fields, recover errors and stay logged o
   expect(appointment.services[0].service_id).toBe('barba');
   await expect(page.getByRole('heading', { name: 'Seu horário está na régua.' })).toBeVisible();
   await expect(page.getByText('Te esperamos, Visitante.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Falar com a barbearia' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Ver meus agendamentos' })).toHaveAttribute(
     'href',
-    '/#contato',
+    '/minha-conta',
   );
-  await expect(page.getByRole('link', { name: 'Ver meus agendamentos' })).toHaveCount(0);
   expect((await (await page.request.get('/api/auth/me')).json()).user).toBeNull();
   await page.goto('/admin');
   await page.getByRole('button', { name: 'Preencher acesso de demonstração' }).click();

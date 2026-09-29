@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CalendarDays, Clock3, LogOut, Scissors, UserRound } from 'lucide-react';
 import { useApp } from '../context';
@@ -17,23 +17,39 @@ import {
 } from '../components/UI';
 
 export default function Account() {
-  const { user, loading, logout, notify } = useApp();
+  const { user, visitor, loading, logout, notify } = useApp();
+  const identity = user || visitor;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
   const [tab, setTab] = useState('upcoming');
   const [cancel, setCancel] = useState<Appointment | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forget, setForget] = useState(false);
+  const [signIn, setSignIn] = useState(false);
+  const requestVersion = useRef(0);
   const refresh = useCallback(() => {
+    const version = ++requestVersion.current;
     setFetching(true);
     api<Appointment[]>('/appointments')
-      .then(setAppointments)
-      .catch((e) => setError(errorMessage(e)))
-      .finally(() => setFetching(false));
+      .then((result) => {
+        if (version === requestVersion.current) setAppointments(result);
+      })
+      .catch((e) => {
+        if (version === requestVersion.current) setError(errorMessage(e));
+      })
+      .finally(() => {
+        if (version === requestVersion.current) setFetching(false);
+      });
   }, []);
   useEffect(() => {
-    if (user) refresh();
-  }, [user, refresh]);
+    setAppointments([]);
+    setCancel(null);
+    if (identity) refresh();
+    return () => {
+      requestVersion.current++;
+    };
+  }, [identity, refresh]);
   async function cancelBooking() {
     if (!cancel) return;
     setBusy(true);
@@ -50,7 +66,7 @@ export default function Account() {
     }
   }
   if (loading) return <Spinner />;
-  if (!user)
+  if (!identity)
     return (
       <div className="container account-login">
         <div className="auth-intro">
@@ -60,7 +76,13 @@ export default function Account() {
             <br />
             Sua agenda.
           </h1>
-          <p>Entre na sua conta para consultar, remarcar ou cancelar seus horários.</p>
+          <p>
+            Entre na sua conta ou use o mesmo navegador em que reservou sem login para consultar
+            seus horários.
+          </p>
+          <Link className="button primary" to="/agendar">
+            Agendar sem criar conta
+          </Link>
           <span className="auth-decoration">
             <Scissors size={95} strokeWidth={1} />
           </span>
@@ -80,27 +102,46 @@ export default function Account() {
       : [...appointments].filter((a) => !upcoming.some((u) => u.id === a.id)).reverse();
   return (
     <div className="container account-page">
-      <PageHeading eyebrow="MINHA CONTA" title={`Chega junto, ${user.name.split(' ')[0]}.`}>
+      <PageHeading
+        eyebrow="MEUS AGENDAMENTOS"
+        title={`Chega junto, ${identity.name.split(' ')[0]}.`}
+      >
         <button
           className="button ghost"
-          onClick={() => logout().catch((e) => setError(errorMessage(e)))}
+          onClick={() =>
+            user ? logout().catch((e) => setError(errorMessage(e))) : setForget(true)
+          }
         >
           <LogOut size={16} />
-          Sair
+          {user ? 'Sair' : 'Esquecer este dispositivo'}
         </button>
       </PageHeading>
+      {!user && (
+        <p className="form-note">
+          Acesso sem conta salvo neste navegador por 90 dias de inatividade. Se limpar os dados do
+          navegador ou usar outro aparelho, fale com a barbearia para gerenciar as reservas feitas
+          aqui.
+        </p>
+      )}
+      {!user && (
+        <button className="text-link" onClick={() => setSignIn(true)}>
+          Entrar ou criar conta
+        </button>
+      )}
       <div className="account-profile">
-        <Avatar name={user.name} avatar={user.avatar} />
+        <Avatar name={identity.name} avatar={user?.avatar || null} />
         <div>
-          <strong>{user.name}</strong>
+          <strong>{identity.name}</strong>
           <p>
-            {user.email} · {user.phone}
+            {identity.email} · {identity.phone}
           </p>
         </div>
-        <Link className="text-link" to="/minha-conta/perfil">
-          Editar perfil
-        </Link>
-        {user.role === 'admin' && (
+        {user && (
+          <Link className="text-link" to="/minha-conta/perfil">
+            Editar perfil
+          </Link>
+        )}
+        {user?.role === 'admin' && (
           <Link className="text-link" to="/admin">
             Painel administrativo
             <ArrowRight size={16} />
@@ -178,6 +219,48 @@ export default function Account() {
             ? 'Você ainda não tem horários futuros. Escolha um serviço e reserve seu momento.'
             : 'Seus atendimentos anteriores aparecerão aqui.'}
         </EmptyState>
+      )}
+      {forget && (
+        <Modal
+          title="Esquecer este dispositivo?"
+          onClose={() => {
+            if (!busy) setForget(false);
+          }}
+        >
+          <p>
+            Isso não cancela seus agendamentos. Você perderá o acesso ao histórico e aos contatos
+            salvos neste navegador. Para gerenciar suas reservas depois, entre em contato com a
+            barbearia.
+          </p>
+          <ErrorBox message={error} />
+          <div className="modal-actions">
+            <button className="button ghost" disabled={busy} onClick={() => setForget(false)}>
+              Manter acesso
+            </button>
+            <button
+              className="button danger"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await logout();
+                  setForget(false);
+                } catch (error) {
+                  setError(errorMessage(error));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? 'Aguarde...' : 'Sim, esquecer dispositivo'}
+            </button>
+          </div>
+        </Modal>
+      )}
+      {signIn && (
+        <Modal title="Entrar ou criar conta" onClose={() => setSignIn(false)}>
+          <AuthForm onSuccess={() => setSignIn(false)} />
+        </Modal>
       )}
       {cancel && (
         <Modal

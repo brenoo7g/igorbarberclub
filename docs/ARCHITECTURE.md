@@ -49,7 +49,7 @@ Toda rota usa prefixo `/api`. Erros retornam `{ "error": "mensagem" }`; validaç
 
 ## Modelo de dados
 
-Agendamento sem conta: `POST /api/appointments/guest` recebe `{services,barberId,date,time,expectedTotal?,expectedDuration?,guest:{name,email,phone}}`. Valida nome e sobrenome, telefone e e-mail; usa as mesmas regras transacionais de disponibilidade e possui limite por IP. O retorno não cria sessão. Consulte [o contrato completo e a migração](GUEST_BOOKING.md).
+Agendamento sem conta: `POST /api/appointments/guest` recebe `{services,barberId,date,time,expectedTotal?,expectedDuration?,guest:{name,email,phone}}`. Valida nome e sobrenome, telefone e e-mail; usa as mesmas regras transacionais de disponibilidade e possui limite por IP. Cria ou reutiliza uma sessão de visitante em cookie HttpOnly para lembrar contatos e acessar somente as reservas desse navegador. `GET /auth/me` inclui `visitor`; `POST /auth/logout` também revoga a sessão de visitante. Consulte [o contrato completo e a migração](GUEST_BOOKING.md).
 
 ```mermaid
 erDiagram

@@ -25,7 +25,7 @@ import {
   money,
   today,
 } from '../lib';
-import type { Appointment, Barber, Service, PublicSchedule } from '../types';
+import type { Appointment, Barber, Service, PublicSchedule, Visitor } from '../types';
 import { EmptyState, ErrorBox, Eyebrow, Spinner } from '../components/UI';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
@@ -59,8 +59,28 @@ export default function Booking() {
   const [confirmed, setConfirmed] = useState<Appointment | null>(null);
   const [guestMode, setGuestMode] = useState(false);
   const [guest, setGuest] = useState({ name: '', phone: '', email: '' });
+  const [rescheduleContact, setRescheduleContact] = useState<{
+    name: string;
+    email: string;
+    phone: string;
+  } | null>(null);
   const submitting = useRef(false);
-  const { user, config } = useApp();
+  const { user, visitor, setVisitor, loading: identityLoading, config } = useApp();
+  const hydratedVisitor = useRef<string | null>(null);
+  useEffect(() => {
+    const visitorId = visitor?.id || null;
+    if (hydratedVisitor.current === visitorId) return;
+    hydratedVisitor.current = visitorId;
+    if (visitor) {
+      setGuest({ name: visitor.name, email: visitor.email, phone: visitor.phone });
+      setGuestMode(true);
+    } else {
+      setGuest({ name: '', email: '', phone: '' });
+      setGuestMode(false);
+    }
+  }, [visitor]);
+  const returningGuest = !user && visitor;
+  const confirmationContact = user || rescheduleContact || visitor;
   const asGuest = !user && guestMode && !reschedule;
   useEffect(() => {
     let alive = true;
@@ -80,6 +100,11 @@ export default function Booking() {
           const a = appointments.find((x) => x.id === reschedule);
           if (!a || a.status !== 'confirmed')
             throw new Error('Agendamento indisponível para remarcação.');
+          setRescheduleContact({
+            name: a.client_name,
+            email: a.client_email,
+            phone: a.client_phone,
+          });
           const previousService =
             a.services.length === 1
               ? s.find((service) => service.id === a.services[0].service_id)
@@ -166,7 +191,7 @@ export default function Booking() {
     setBusy(true);
     setError('');
     try {
-      const a = await api<Appointment>(
+      const a = await api<Appointment & { visitor?: Visitor }>(
         reschedule
           ? `/appointments/${reschedule}/reschedule`
           : asGuest
@@ -186,6 +211,7 @@ export default function Booking() {
         },
       );
       setConfirmed(a);
+      if (a.visitor) setVisitor(a.visitor);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       setError(errorMessage(e));
@@ -198,7 +224,7 @@ export default function Booking() {
       setBusy(false);
     }
   }
-  if (loading) return <Spinner />;
+  if (loading || identityLoading) return <Spinner />;
   if (confirmed)
     return (
       <div className="container success-page">
@@ -245,16 +271,13 @@ export default function Booking() {
         </div>
         <p className="confirmation-note">
           {confirmed.user_id === null
-            ? `Seu agendamento está salvo. ${config?.notifications.email ? 'A confirmação será enviada para o e-mail informado. ' : 'Guarde o código e os detalhes acima. '}Para cancelar ou remarcar, entre em contato com a barbearia e informe o código do agendamento.`
+            ? `Seu agendamento está salvo. ${config?.notifications.email ? 'A confirmação será enviada para o e-mail informado. ' : ''}Você pode consultar, cancelar ou remarcar em Meus agendamentos neste navegador, sem criar conta.`
             : config?.notifications.email || config?.notifications.whatsapp
               ? 'A confirmação será enviada pelos canais disponíveis. Você também pode consultar tudo na sua conta.'
               : 'Seu agendamento está salvo. Consulte os detalhes, cancele ou remarque pela sua conta.'}
         </p>
-        <Link
-          className="button primary large"
-          to={confirmed.user_id === null ? '/#contato' : '/minha-conta'}
-        >
-          {confirmed.user_id === null ? 'Falar com a barbearia' : 'Ver meus agendamentos'}
+        <Link className="button primary large" to="/minha-conta">
+          Ver meus agendamentos
           <ArrowRight size={18} />
         </Link>
         <Link className="text-link" to="/">
@@ -482,19 +505,19 @@ export default function Booking() {
                 <div>
                   <h2>Falta só confirmar.</h2>
                   <p>
-                    {user
+                    {user || (returningGuest && reschedule)
                       ? 'Confira seu resumo e confirme o agendamento.'
                       : 'Escolha como prefere confirmar seu horário.'}
                   </p>
                 </div>
               </div>
-              {user ? (
+              {user || (returningGuest && reschedule) ? (
                 <div className="client-confirmation">
-                  <Avatar name={user.name} avatar={user.avatar} />
+                  <Avatar name={confirmationContact!.name} avatar={user?.avatar || null} />
                   <div>
-                    <strong>{user.name}</strong>
-                    <span>{user.email}</span>
-                    <span>{user.phone}</span>
+                    <strong>{confirmationContact!.name}</strong>
+                    <span>{confirmationContact!.email}</span>
+                    <span>{confirmationContact!.phone}</span>
                   </div>
                   <ShieldCheck size={22} />
                 </div>
@@ -520,7 +543,9 @@ export default function Booking() {
                               }}
                             >
                               <p className="guest-intro">
-                                Preencha seus contatos para reservar sem criar uma conta.
+                                {visitor
+                                  ? 'Seus contatos já estão preenchidos. Confira antes de confirmar.'
+                                  : 'Preencha seus contatos para reservar sem criar uma conta.'}
                               </p>
                               <label>
                                 Nome + Sobrenome
@@ -572,7 +597,10 @@ export default function Booking() {
                               </label>
                               <p className="form-note">
                                 <ShieldCheck size={16} /> Usaremos esses dados para identificar sua
-                                reserva e enviar informações sobre o agendamento.
+                                reserva e enviar informações sobre o agendamento. Seus dados e
+                                horários ficarão acessíveis neste navegador por 90 dias de
+                                inatividade. Em um dispositivo compartilhado, use “Esquecer este
+                                dispositivo” ao terminar.
                               </p>
                             </form>
                           ),
@@ -587,7 +615,7 @@ export default function Booking() {
                   <p>
                     O pagamento é feito na barbearia.{' '}
                     {asGuest
-                      ? 'Para cancelar ou remarcar, entre em contato com a barbearia e informe o código da reserva.'
+                      ? 'Consulte, cancele ou remarque em Meus agendamentos neste navegador, antes do horário reservado.'
                       : 'Precisa mudar os planos? Cancele ou remarque pela sua conta antes do horário reservado.'}
                   </p>
                 </div>
@@ -603,16 +631,22 @@ export default function Booking() {
             )}
             {step < 2 ? (
               <button
+                key="next-step"
+                type="button"
                 className="button primary"
                 disabled={!chosen.length || (step === 1 && (!time || slotsLoading))}
-                onClick={() => changeStep(step + 1)}
+                onClick={(event) => {
+                  event.preventDefault();
+                  changeStep(step + 1);
+                }}
               >
                 Continuar
                 <ArrowRight size={17} />
               </button>
             ) : (
-              (user || asGuest) && (
+              (user || asGuest || (returningGuest && reschedule)) && (
                 <button
+                  key="confirm-booking"
                   className="button primary"
                   disabled={busy || !time || !chosen.length}
                   type={asGuest ? 'submit' : 'button'}

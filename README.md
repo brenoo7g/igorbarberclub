@@ -128,7 +128,7 @@ Depois do build, Express também serve a SPA em sua porta (3001 por padrão), in
 
 Para ativar confirmações completas por e-mail na Vercel, siga o [passo a passo do Resend](docs/RESEND.md).
 
-Reservas sem login usam os contatos informados na confirmação e orientam o cliente a falar com a barbearia para cancelar ou remarcar. Reservas autenticadas continuam disponíveis na conta. Veja [o fluxo sem login e suas regras](docs/GUEST_BOOKING.md).
+Reservas sem login lembram os contatos e permitem consultar o histórico, cancelar ou remarcar no mesmo navegador, com sessão persistente de 90 dias renovada durante o uso. A opção **Esquecer este dispositivo** revoga esse acesso sem cancelar reservas. Reservas autenticadas continuam disponíveis na conta. Veja [o fluxo sem login e suas regras](docs/GUEST_BOOKING.md).
 
 Configure as credenciais somente no servidor:
 
