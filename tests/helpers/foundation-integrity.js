@@ -43,7 +43,7 @@ export async function assertFoundationIntegrity(db) {
     company_members: {
       company_id: company,
       user_id: 'integrity-user',
-      role: 'admin',
+      role: 'manager',
       created_at: now,
     },
     company_settings: { company_id: company, updated_at: now },

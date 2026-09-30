@@ -91,18 +91,28 @@ export async function seedLegacyCompany(db, companyId) {
         error.missing = ['ADMIN_PASSWORD'];
         throw error;
       }
-      await db.run(
-        'INSERT INTO users (id,name,email,phone,password_hash,role,created_at) VALUES (?,?,?,?,?,?,?)',
-        [
-          randomUUID(),
-          'Igor Borges',
-          email,
-          '21999990000',
-          await bcrypt.hash(password, 12),
-          'admin',
-          new Date().toISOString(),
-        ],
-      );
+      const adminId = randomUUID();
+      const passwordHash = await bcrypt.hash(password, 12);
+      const createAdmin = async (tx) => {
+        await tx.run(
+          'INSERT INTO users (id,name,email,phone,password_hash,role,created_at) VALUES (?,?,?,?,?,?,?)',
+          [
+            adminId,
+            'Igor Borges',
+            email,
+            '21999990000',
+            passwordHash,
+            'admin',
+            new Date().toISOString(),
+          ],
+        );
+        await tx.run(
+          'INSERT INTO company_members(company_id,user_id,role,created_at) VALUES(?,?,?,?)',
+          [companyId, adminId, 'manager', new Date().toISOString()],
+        );
+      };
+      if (typeof db.transaction === 'function') await db.transaction(createAdmin);
+      else await createAdmin(db);
     } else if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
       const error = new Error('Defina ADMIN_PASSWORD para criar o primeiro administrador.');
       error.code = 'SERVER_NOT_CONFIGURED';

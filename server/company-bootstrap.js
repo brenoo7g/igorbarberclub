@@ -37,8 +37,11 @@ export async function bootstrapIgorCompany(db) {
     'INSERT INTO company_settings (company_id,city,region,instagram_url,updated_at) VALUES (?,?,?,?,?) ON CONFLICT(company_id) DO NOTHING',
     [IGOR_COMPANY_ID, 'Campo Grande', 'RJ', 'https://www.instagram.com/igor_barber_club/', now],
   );
-  // Preserve existing authority without guessing which administrator owns the business.
-  // These memberships are metadata only; existing authentication does not read this table.
+  // After 004, membership is authorization. Never recreate a removed membership
+  // from the global user role during startup/seed/redeploy.
+  const accessApplied = await db.all('SELECT version FROM schema_migrations WHERE version=4');
+  if (accessApplied.length) return;
+  // Compatibility for checksummed pre-004 upgrades only.
   const administrators = await db.all("SELECT id FROM users WHERE role='admin'");
   for (const user of administrators)
     await db.run(

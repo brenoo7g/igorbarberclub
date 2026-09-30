@@ -116,7 +116,7 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
     )
       fail(404, 'Profissional não encontrado.');
   };
-  app.get('/api/barbers/:id/schedule', async (req, res) => {
+  app.get('/barbers/:id/schedule', async (req, res) => {
     const result = await db.transaction(async (tx) => {
       await lockSchedule(tx);
       await exists(tx, req.params.id);
@@ -138,7 +138,7 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
     });
     res.json(result);
   });
-  app.get('/api/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
+  app.get('/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
     const result = await db.transaction(async (tx) => {
       await lockSchedule(tx);
       await exists(tx, req.params.id);
@@ -147,7 +147,7 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
     });
     res.json(result);
   });
-  app.put('/api/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
+  app.put('/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
     const data = settingsSchema.parse(req.body);
     const days = data.days.map((d) => ({
       ...d,
@@ -228,7 +228,7 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
     });
     res.json({ ok: true });
   });
-  app.post('/api/admin/barbers/:id/released-weeks', authenticated, admin, async (req, res) => {
+  app.post('/admin/barbers/:id/released-weeks', authenticated, admin, async (req, res) => {
     const data = z
       .object({ week_start: z.string().refine(validDate), version: z.number().int().nonnegative() })
       .strict()

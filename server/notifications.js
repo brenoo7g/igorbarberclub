@@ -210,3 +210,35 @@ export function startNotifications(db, companyId) {
   void tick();
   return () => clearInterval(timer);
 }
+
+// The dispatcher discovers company IDs from pending events, never from a user
+// session. Each worker still validates and operates on a single explicit company.
+export function createCompanyNotificationDispatcher(db, options = {}) {
+  let busy = false;
+  return async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const companies = await db.all(
+        "SELECT n.company_id FROM notifications n JOIN companies c ON c.id=n.company_id WHERE c.status='active' AND n.status='pending' AND n.attempts<5 AND n.next_attempt_at<=? GROUP BY n.company_id ORDER BY MIN(n.created_at)",
+        [new Date().toISOString()],
+      );
+      for (const { company_id } of companies)
+        await createNotificationProcessor(db, company_id, options)();
+    } finally {
+      busy = false;
+    }
+  };
+}
+
+export function startCompanyNotifications(db) {
+  const process = createCompanyNotificationDispatcher(db);
+  const tick = () =>
+    process().catch((error) =>
+      console.error('Falha na fila empresarial:', error.code || error.name),
+    );
+  const timer = setInterval(tick, 15000);
+  timer.unref();
+  void tick();
+  return () => clearInterval(timer);
+}

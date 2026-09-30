@@ -1,9 +1,8 @@
-import { getLegacyCompanyId } from './company-context.js';
 import 'dotenv/config';
 import { createDatabase } from './database.js';
 import { createApp } from './app.js';
 import { seed, demoMode } from './seed.js';
-import { startNotifications } from './notifications.js';
+import { startCompanyNotifications } from './notifications.js';
 
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)
@@ -33,7 +32,7 @@ if (testGuestAccess) {
 }
 const db = testGuestAccess ? await createDatabase('', ':memory:') : await createDatabase();
 await seed(db);
-const stopNotifications = startNotifications(db, getLegacyCompanyId());
+const stopNotifications = startCompanyNotifications(db);
 const port = Number(process.env.PORT || 3001);
 const app = createApp(db, { testGuestAccess });
 const recoveryTimer = setInterval(() => void app.locals.processPasswordEmails(), 15000);

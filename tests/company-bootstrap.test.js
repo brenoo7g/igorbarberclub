@@ -26,7 +26,7 @@ test('Gradefy bootstrap: repeat and concurrent calls create only one company and
   const users = await db.all('SELECT * FROM users ORDER BY id');
   const members = await db.all('SELECT * FROM company_members');
   assert.equal(members.length, users.filter((u) => u.role === 'admin').length);
-  assert.ok(members.every((m) => m.role === 'admin'));
+  assert.ok(members.every((m) => m.role === 'manager'));
   await db.run(
     `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}','second-professional','Outro Profissional','Teste')`,
   );
@@ -73,16 +73,13 @@ test('Gradefy bootstrap: preserve edited metadata, revoked memberships and manua
   );
 });
 
-test('Gradefy foundation: database refuses a second company, foreign memberships and duplicate current subscriptions', async (t) => {
+test('Gradefy foundation: database allows a second company, rejects foreign memberships and duplicate current subscriptions', async (t) => {
   const db = await createDatabase('', ':memory:');
   t.after(() => db.close());
-  await assert.rejects(
-    db.run(
-      "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES ('another','another','Outra Empresa','barbershop','barber-classic','2026-01-01','2026-01-01')",
-    ),
-    /gradefy_single_company/,
+  await db.run(
+    "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES ('another','another','Outra Empresa','barbershop','barber-classic','2026-01-01','2026-01-01')",
   );
-  await assert.rejects(db.run("UPDATE companies SET id='another'"), /gradefy_single_company/);
+  assert.equal((await db.get('SELECT COUNT(*) AS count FROM companies')).count, 2);
   await assert.rejects(
     db.run(
       "INSERT INTO company_members (company_id,user_id,role,created_at) VALUES (?,'missing','owner','2026-01-01')",

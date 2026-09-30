@@ -30,6 +30,10 @@ export async function assertApplicationContext(t, db) {
       'INSERT INTO users(id,name,email,phone,password_hash,role,created_at) VALUES(?,?,?,?,?,?,?)',
       [id, 'Conta de Teste', email, '21999999999', 'fixture-no-password-login', role, '2026'],
     );
+  await db.run(
+    "INSERT INTO company_members(company_id,user_id,role,created_at) VALUES(?,'context-admin','manager','2026') ON CONFLICT(company_id,user_id) DO NOTHING",
+    [companyId],
+  );
   await seed(db);
   const today = dateInBrazil();
   for (const [id, serviceId, price, bookingDate] of [

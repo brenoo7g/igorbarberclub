@@ -106,7 +106,7 @@ test('Gradefy migration: repeat initialization preserves every legacy table, IDs
     if (foundation) assert.deepEqual(current, foundation);
     foundation = current;
     assert.equal(current.company_members[0].user_id, 'legacy-admin');
-    assert.equal(current.company_members[0].role, 'admin');
+    assert.equal(current.company_members[0].role, 'manager');
     assert.equal(current.subscriptions.length, 0);
     await db.close();
     db = null;
@@ -127,7 +127,11 @@ test('Gradefy migration: repeat initialization preserves every legacy table, IDs
       services.map((s) => s.id),
       ['corte'],
     );
-    for (const route of ['/companies', '/admin/companies', '/subscriptions'])
+    assert.equal(
+      (await fetch(base + '/companies', { headers: { Cookie: `session=${token}` } })).status,
+      200,
+    );
+    for (const route of ['/admin/companies', '/subscriptions'])
       assert.equal(
         (await fetch(base + route, { headers: { Cookie: `session=${token}` } })).status,
         404,
@@ -215,7 +219,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
       0,
     );
     fail = false;
-    assert.deepEqual(await runMigrations(db), [1, 2, 3]);
+    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4]);
     assert.deepEqual(await runMigrations(db), []);
   } finally {
     sqlite.close();

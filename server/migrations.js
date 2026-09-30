@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { bootstrapIgorCompany, IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { prepareDataOwnership, finishDataOwnership } from './data-ownership.js';
+import { prepareMultitenantAccess, finishMultitenantAccess } from './multitenant-migration.js';
 
 export const migrations = Object.freeze([
   Object.freeze({ version: 1, name: 'gradefy-foundation', file: '001-gradefy-foundation.sql' }),
@@ -14,6 +15,11 @@ export const migrations = Object.freeze([
     version: 3,
     name: 'gradefy-data-ownership',
     file: '003-gradefy-data-ownership.sql',
+  }),
+  Object.freeze({
+    version: 4,
+    name: 'gradefy-multitenant-access',
+    file: '004-gradefy-multitenant-access.sql',
   }),
 ]);
 
@@ -107,6 +113,7 @@ export async function applyMigrations(tx) {
     // must already contain Igor; never silently repair a missing company during adoption.
     if (migration.version === 3 && applied.length === 0) await bootstrapIgorCompany(tx);
     const ownership = migration.version === 3 ? await prepareDataOwnership(tx) : null;
+    const access = migration.version === 4 ? await prepareMultitenantAccess(tx) : null;
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx, true);
     for (const statement of migration.statements) {
       // Both dialect branches belong to the same immutable, checksummed migration file.
@@ -117,6 +124,7 @@ export async function applyMigrations(tx) {
     }
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx);
     if (ownership) await finishDataOwnership(tx, ownership);
+    if (access) await finishMultitenantAccess(tx, access);
     await tx.run(
       'INSERT INTO schema_migrations (version,name,checksum,applied_at) VALUES (?,?,?,?)',
       [migration.version, migration.name, migration.checksum, new Date().toISOString()],

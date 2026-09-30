@@ -75,7 +75,7 @@ export async function assertOwnershipUpgrade(db) {
   assert.equal(metrics.daily, 12321);
   assert.equal(metrics.clients, 2);
   assert.equal(metrics.visits, 2);
-  assert.deepEqual(await runMigrations(db), [3]);
+  assert.deepEqual(await runMigrations(db), [3, 4]);
   const after = await ownershipSnapshot(db);
   assert.deepEqual(after.schema_migrations.slice(0, 2), before.schema_migrations);
   delete after.schema_migrations;
@@ -163,10 +163,8 @@ export async function assertOwnershipConstraints(db) {
     assert.equal(column.is_nullable, 'NO');
     assert.equal(column.column_default, null);
   }
-  await assert.rejects(
-    db.run(
-      "INSERT INTO companies(id,slug,name,niche_id,template_id,created_at,updated_at) VALUES('second','second','Não habilitada','barbershop','barber-classic','2026','2026')",
-    ),
+  await db.run(
+    "INSERT INTO companies(id,slug,name,niche_id,template_id,created_at,updated_at) VALUES('second','second','Fixture após 004','barbershop','barber-classic','2026','2026')",
   );
 }
 

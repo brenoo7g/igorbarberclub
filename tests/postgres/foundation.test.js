@@ -45,16 +45,14 @@ const control = new pg.Client({
   connectionTimeoutMillis: 5000,
 });
 
-test('18 Gradefy 2B PostgreSQL: application company context contract', async (t) => {
+test('18 Gradefy 2B/3 PostgreSQL: data context and multitenant attack contract', async (t) => {
   const { db } = await makeCase(t, 'application_context');
   const { assertApplicationContext, secondCompanySql } =
     await import('../helpers/application-context.js');
-  await assert.rejects(db.run(secondCompanySql), { code: '23514' });
-  // This database was created above in the guarded disposable localhost cluster.
-  // Never remove this constraint in application initialization or migrations 001–003.
-  await db.run('ALTER TABLE companies DROP CONSTRAINT gradefy_single_company');
   await db.run(secondCompanySql);
   await assertApplicationContext(t, db);
+  const { assertMultitenantAccess } = await import('../helpers/multitenant-access.js');
+  await assertMultitenantAccess(t, db);
 });
 let createDatabase, runMigrations, bootstrapIgorCompany, readMigration, migrations;
 const schema = await readFile(new URL('../../server/schema.sql', import.meta.url), 'utf8');
@@ -138,7 +136,7 @@ const count = async (db, table) =>
 async function assertCatalog(db) {
   for (const table of ['companies', 'niches', 'templates', 'company_settings'])
     assert.equal(await count(db, table), 1);
-  assert.equal(await count(db, 'schema_migrations'), 3);
+  assert.equal(await count(db, 'schema_migrations'), 4);
   assert.deepEqual(
     (await db.all('SELECT id,max_professionals FROM plans ORDER BY id')).map((p) => [
       p.id,
@@ -211,6 +209,12 @@ function rawAdapter(raw) {
     },
   };
 }
+
+test('19 Gradefy 004 PostgreSQL: upgrade, rollback, preservation and idempotence', async (t) => {
+  const { raw } = await makeCase(t, 'access_upgrade', { initialize: false });
+  const { assertAccessMigration } = await import('../helpers/access-migration.js');
+  await assertAccessMigration(t, rawAdapter(raw));
+});
 
 test('15 Gradefy 2A PostgreSQL: backfill 13 tabelas, preservação, métricas e constraints', async (t) => {
   const { raw } = await makeCase(t, 'ownership', { initialize: false });
@@ -418,20 +422,18 @@ test('07 Checksum: alteração artificial do arquivo já aplicado é recusada se
   assert.equal(sha(await readFile(originalMigrationPath)), originalChecksum);
 });
 
-test('08 Restrição de empresa: segunda empresa e ID nulo são rejeitados pelo PostgreSQL', async (t) => {
+test('08 PostgreSQL 004: segunda empresa permitida, ID nulo e referência inválida rejeitados', async (t) => {
   const { db } = await makeCase(t, 'single');
   const insert =
     "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES (?,?,?,'barbershop','barber-classic',?,?)";
-  const now = new Date().toISOString();
-  await assert.rejects(db.run(insert, ['another', 'another', 'Outra Empresa', now, now]), {
-    code: '23514',
-    constraint: 'gradefy_single_company',
-  });
-  await assert.rejects(db.run(insert, [null, 'null-id', 'ID inválido', now, now]), {
+  await db.run(insert, ['another', 'another', 'Outra', '2026', '2026']);
+  await assert.rejects(db.run(insert, [null, 'null-id', 'Inválida', '2026', '2026']), {
     code: '23502',
   });
-  await assert.rejects(db.run("UPDATE companies SET id='another'"), { code: '23514' });
-  await assertCatalog(db);
+  await assert.rejects(db.run("UPDATE companies SET niche_id='missing' WHERE id='another'"), {
+    code: '23503',
+  });
+  assert.equal(await count(db, 'companies'), 2);
 });
 
 test('09 SQL PostgreSQL: tipos, defaults, FKs, índices parciais, timestamps textuais e UPSERT', async (t) => {
@@ -469,7 +471,7 @@ test('09 SQL PostgreSQL: tipos, defaults, FKs, índices parciais, timestamps tex
   );
   await assert.rejects(
     db.run(
-      "INSERT INTO company_members (company_id,user_id,role,created_at) VALUES ('igor-barber-club','missing','admin','2026-01-01')",
+      "INSERT INTO company_members (company_id,user_id,role,created_at) VALUES ('igor-barber-club','missing','manager','2026-01-01')",
     ),
     { code: '23503' },
   );
@@ -524,47 +526,13 @@ test('09 SQL PostgreSQL: tipos, defaults, FKs, índices parciais, timestamps tex
   assert.equal(await db.get("SELECT id FROM plans WHERE id='rollback-probe'"), undefined);
 });
 
-test('10 Evolução futura: migration 004 temporária remove a restrição sem edição manual do banco', async (t) => {
-  const { db, url } = await makeCase(t, 'future');
-  const copy = await shadow(t);
-  const manifest = join(copy.directory, 'server', 'migrations.js');
-  const original = await readFile(manifest, 'utf8');
-  const anchor = '\n]);';
-  assert.ok(original.includes(anchor));
-  await writeFile(
-    manifest,
-    original.replace(
-      anchor,
-      "\n  Object.freeze({ version: 4, name: 'test-remove-single-company', file: '004-test-only.sql' })," +
-        anchor,
-    ),
+test('10 PostgreSQL 004: duas empresas preservam FKs compostas e reexecução idempotente', async (t) => {
+  const { db } = await makeCase(t, 'future');
+  await db.run(
+    "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES ('test-second','test-second','Somente teste','barbershop','barber-classic','2026','2026')",
   );
-  await writeFile(
-    join(copy.directory, 'server', 'migrations', '004-test-only.sql'),
-    'ALTER TABLE companies DROP CONSTRAINT gradefy_single_company;\n',
-  );
-  const temporary = await copy.loadDatabase();
-  const upgraded = await temporary.createDatabase(url);
-  try {
-    assert.deepEqual(
-      (await upgraded.all('SELECT version FROM schema_migrations ORDER BY version')).map(
-        (r) => r.version,
-      ),
-      [1, 2, 3, 4],
-    );
-    const runner = await copy.loadRunner();
-    assert.deepEqual(await runner.runMigrations(upgraded), []);
-    await upgraded.run(
-      "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES ('test-second','test-second','Somente teste','barbershop','barber-classic','2026-01-01','2026-01-01')",
-    );
-    assert.equal(await count(upgraded, 'companies'), 2);
-    await assertCrossCompanyRelations(upgraded);
-    // The unmodified application refuses a newer database instead of ignoring its migration.
-    await assert.rejects(runMigrations(db), /versão 4/);
-  } finally {
-    await upgraded.close();
-  }
-  assert.equal(sha(await readFile(originalMigrationPath)), originalChecksum);
+  await assertCrossCompanyRelations(db);
+  assert.deepEqual(await runMigrations(db), []);
 });
 
 test('11 Comparação SQLite em memória: chave nula corrigida; diferenças restantes documentadas', async (t) => {
@@ -630,7 +598,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3],
+    [1, 2, 3, 4],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -644,45 +612,14 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   assert.deepEqual(await runMigrations(db), []);
 });
 
-test('14 Evolução SQLite: migration futura remove só a restrição de empresa e mantém NOT NULL e FKs', async (t) => {
-  const copy = await shadow(t);
-  const manifest = join(copy.directory, 'server', 'migrations.js');
-  const original = await readFile(manifest, 'utf8');
-  assert.ok(original.includes('\n]);'));
-  await writeFile(
-    manifest,
-    original.replace(
-      '\n]);',
-      "\n  Object.freeze({version:4,name:'test-remove-single-company',file:'004-test-only.sql'}),\n]);",
-    ),
+test('14 SQLite 004: duas empresas preservam NOT NULL e FKs', async (t) => {
+  const db = await createDatabase('', ':memory:');
+  t.after(() => db.close());
+  await db.run(
+    "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES ('test-second','test-second','Somente teste','barbershop','barber-classic','2026','2026')",
   );
-  const statements = readMigration(migrations[1]).statements.filter((sql) =>
-    sql.startsWith('-- dialect: sqlite\n'),
-  );
-  const sql = statements.join('\n-- statement-breakpoint\n');
-  const restriction = ",\n  CONSTRAINT gradefy_single_company CHECK(id = 'igor-barber-club')";
-  assert.ok(sql.includes(restriction));
-  await writeFile(
-    join(copy.directory, 'server', 'migrations', '004-test-only.sql'),
-    sql.replace(restriction, ''),
-  );
-  const temporary = await copy.loadDatabase();
-  const db = await temporary.createDatabase('', ':memory:');
-  try {
-    await db.run(
-      "INSERT INTO companies(id,slug,name,niche_id,template_id,created_at,updated_at) VALUES('test-second','test-second','Somente teste','barbershop','barber-classic','2026','2026')",
-    );
-    await assert.rejects(db.run("UPDATE companies SET id=NULL WHERE id='test-second'"), /NOT NULL/);
-    await assert.rejects(
-      db.run("UPDATE companies SET niche_id='missing' WHERE id='test-second'"),
-      /FOREIGN KEY/,
-    );
-    assert.deepEqual(await db.all('PRAGMA foreign_key_check'), []);
-    assert.equal(await count(db, 'companies'), 2);
-    await assertCrossCompanyRelations(db);
-    const runner = await copy.loadRunner();
-    assert.deepEqual(await runner.runMigrations(db), []);
-  } finally {
-    await db.close();
-  }
+  await assert.rejects(db.run("UPDATE companies SET id=NULL WHERE id='test-second'"), /NOT NULL/);
+  await assertCrossCompanyRelations(db);
+  assert.deepEqual(await db.all('PRAGMA foreign_key_check'), []);
+  assert.deepEqual(await runMigrations(db), []);
 });

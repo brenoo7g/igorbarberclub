@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from './company-context.js';
 import { requireCompanyId } from './company-context.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
@@ -21,7 +22,11 @@ export function installGuestSessions(
   { secureCookies, testGuestAccess = false },
 ) {
   requireCompanyId(companyId);
-  const cookieName = secureCookies ? '__Host-igor-visitor' : 'igor-visitor';
+  const baseCookieName = secureCookies ? '__Host-igor-visitor' : 'igor-visitor';
+  const cookieName =
+    companyId === getLegacyCompanyId()
+      ? baseCookieName
+      : `${baseCookieName}-${hash(companyId).slice(0, 24)}`;
   const options = { httpOnly: true, secure: secureCookies, sameSite: 'lax', path: '/' };
   // Only the disposable test server retains credentials in memory for unverified reentry.
   const testTokens = testGuestAccess ? new Map() : null;
@@ -29,7 +34,7 @@ export function installGuestSessions(
     testTokens?.set(hash(token), token);
     return res.cookie(cookieName, token, { ...options, maxAge: duration });
   };
-  app.use('/api', async (req, res, next) => {
+  app.use('/', async (req, res, next) => {
     const token = req.cookies[cookieName];
     if (typeof token === 'string' && /^[a-f0-9]{64}$/.test(token)) {
       req.visitorToken = token;

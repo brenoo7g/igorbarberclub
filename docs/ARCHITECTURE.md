@@ -1,10 +1,10 @@
 # Arquitetura, rotas e regras
 
-## Fundação Gradefy (Fase 1)
+## Gradefy (Fases 1–3)
 
-O schema operacional abaixo permanece inalterado. A inicialização também aplica migrações versionadas de `server/migrations/` e registra a Igor em `companies`, com catálogos `niches`, `templates`, `plans`, metadados `company_settings` e vínculos `company_members`. A estrutura `subscriptions` não recebe atribuição automática. `schema_migrations` controla versões e checksums. Veja [o modelo e os limites da fase](GRADEFY-MIGRATION.md).
+O schema operacional possui `company_id` obrigatório e FKs compostas. A inicialização aplica migrations 001–004 de `server/migrations/` e registra Igor em `companies`, com catálogos `niches`, `templates`, `plans`, metadados `company_settings` e vínculos `company_members`. `subscriptions` não recebe atribuição automática. `schema_migrations` controla versões e checksums. Veja [o histórico da migração](GRADEFY-MIGRATION.md).
 
-Nenhuma rota usa essas tabelas para filtrar dados ou autorizar usuários. `users.role` continua tendo o significado legado, sem promover ninguém a administrador do SaaS. A constraint `gradefy_single_company` impede um segundo estabelecimento até a futura implementação de isolamento.
+As operações filtram dados por empresa. JWT identifica o usuário; membership ativa em empresa ativa autoriza a gestão para `owner/manager`. `users.role` não concede acesso empresarial nem representa Super Admin. A migration 004 removeu `gradefy_single_company`; empresas adicionais existem apenas nas fixtures, sem cadastro automático. GET `/api/companies` lista vínculos ativos; `/api/admin/*` aceita `X-Gradefy-Company-Id` como seletor validado. Sem header, um único vínculo é selecionado; múltiplos retornam 409 `COMPANY_CONTEXT_REQUIRED`. As rotas públicas usam `/api/public/:companySlug/...`, compartilhando handlers com aliases legados de Igor. [Contrato completo, segurança e limites](GRADEFY-MULTITENANCY.md).
 
 ## Páginas
 
