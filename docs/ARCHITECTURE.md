@@ -1,5 +1,11 @@
 # Arquitetura, rotas e regras
 
+## Fundação Gradefy (Fase 1)
+
+O schema operacional abaixo permanece inalterado. A inicialização também aplica migrações versionadas de `server/migrations/` e registra a Igor em `companies`, com catálogos `niches`, `templates`, `plans`, metadados `company_settings` e vínculos `company_members`. A estrutura `subscriptions` não recebe atribuição automática. `schema_migrations` controla versões e checksums. Veja [o modelo e os limites da fase](GRADEFY-MIGRATION.md).
+
+Nenhuma rota usa essas tabelas para filtrar dados ou autorizar usuários. `users.role` continua tendo o significado legado, sem promover ninguém a administrador do SaaS. A constraint `gradefy_single_company` impede um segundo estabelecimento até a futura implementação de isolamento.
+
 ## Páginas
 
 | Rota                    | Conteúdo                                         | Acesso                    |

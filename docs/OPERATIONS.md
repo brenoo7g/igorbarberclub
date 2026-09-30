@@ -1,5 +1,11 @@
 # Operação
 
+## Fundação Gradefy
+
+Antes de publicar a Fase 1, faça backup e valide em uma cópia do banco. `npm run db:migrate` executa a inicialização e o bootstrap empresarial sem iniciar a API, criar usuários demo ou enviar mensagens. Repetir o comando não duplica entidades; o plano da Igor permanece sem atribuição. Confira [procedimento, integridade e testes](GRADEFY-MIGRATION.md).
+
+Não remova `gradefy_single_company` nem altere checksums registrados para forçar uma implantação. Não há isolamento empresarial nas rotas atuais. Uma reversão desta fase deve preservar as tabelas novas; não exige apagar dados. O bloco de limitações e validações abaixo descreve a implementação legada e não representa uma verificação recente da produção.
+
 ## Antes de disponibilizar publicamente
 
 1. Revise nome comercial, textos, referência de formação, catálogo, preços e expediente com Igor. As informações fornecidas pelo solicitante não foram verificadas com a barbearia.

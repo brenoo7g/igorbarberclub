@@ -4,7 +4,7 @@ dist/
 .env.*
 !.env.example
 .vercel/
-data/
+/data/
 test-results/
 playwright-report/
 *.log

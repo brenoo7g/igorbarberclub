@@ -12,6 +12,7 @@
     "build": "tsc -b && npm run check:schedule && vite build",
     "check:schedule": "tsc --allowJs --checkJs --noEmit --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck server/schedule.js",
     "start": "node server/index.js",
+    "db:migrate": "node server/migrate.js",
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "check": "npm run build && npm test",

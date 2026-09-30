@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { addDays, dateInBrazil, weekday, isFuture } from './domain.js';
+import { bootstrapIgorCompany } from './company-bootstrap.js';
 
 export const demoMode =
   !process.env.VERCEL && process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE !== 'false';
@@ -99,6 +100,8 @@ export async function seed(db) {
       throw error;
     }
   }
+  // Include a newly created legacy admin; repeated bootstrap preserves existing metadata.
+  await bootstrapIgorCompany(db);
   if (!demoMode || (await db.get("SELECT id FROM users WHERE email='cliente@example.com'"))) return;
   const hash = await bcrypt.hash('ClienteDemo2026!', 12);
   const names = [

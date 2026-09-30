@@ -3,6 +3,8 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { migrateGuestBookings } from './guest-migration.js';
 import { seedPortfolio } from './portfolio-seed.js';
+import { applyMigrations } from './migrations.js';
+import { bootstrapIgorCompany } from './company-bootstrap.js';
 
 export async function createDatabase(
   url = process.env.DATABASE_URL,
@@ -140,6 +142,8 @@ export async function createDatabase(
       }
       await migrateGuestBookings(tx);
       await seedPortfolio(tx);
+      await applyMigrations(tx);
+      await bootstrapIgorCompany(tx);
     });
     if (db.dialect === 'sqlite') await db.run('PRAGMA foreign_keys=ON');
   } catch (error) {

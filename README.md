@@ -1,5 +1,7 @@
 # Igor Barber Club
 
+O repositório inclui a [fundação do Gradefy — Fase 1](docs/GRADEFY-MIGRATION.md): migrações versionadas, catálogos e registro idempotente da Igor como única empresa. O site, a autenticação e o aplicativo mantêm o comportamento atual. Nenhuma rota opera como multi-tenant; planos não são atribuídos nem cobrados automaticamente.
+
 Para testar acesso sem senha ou confirmação em uma base temporária separada, use `npm run dev:test-access`. Veja [o modo de teste e como acessar pelo celular](docs/TEST-ACCESS.md).
 
 Aplicação full-stack em português para a barbearia de Igor Borges, em Campo Grande, RJ. React 19 + TypeScript + Vite, API Express 5, autenticação JWT em cookie HttpOnly e SQL persistente. Interface autoral em CSS responsivo, sem dependência de Tailwind.

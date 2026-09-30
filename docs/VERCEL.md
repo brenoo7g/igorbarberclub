@@ -1,5 +1,11 @@
 # Configuração na Vercel
 
+## Migrações Gradefy — Fase 1
+
+O bundle `server/**` já inclui os novos arquivos de migração. A função continua inicializando o banco sob lock; agora verifica `schema_migrations` e executa o bootstrap idempotente da Igor. Antes do deploy, valide `npm run db:migrate` duas vezes em uma cópia PostgreSQL e compare o legado; execute em produção apenas com backup e ambiente conferido. O comando não envia notificações nem cria contas de demonstração.
+
+Não há variáveis novas obrigatórias, mudança de cookies/JWT, cobrança, novos domínios ou segunda empresa. Se houver divergência de checksum/versão, corrija a combinação de código e banco; não apague o histórico. Consulte [o procedimento da migração](GRADEFY-MIGRATION.md).
+
 A aplicação tem duas partes: a SPA React em `dist/` e a API Express. Publicar somente o build do Vite deixa `/api/*` sem servidor. Além disso, uma SPA precisa direcionar acessos diretos como `/agendar` para `index.html`.
 
 `vercel.json` configura os dois casos: `/api/*` vai para `api/index.js`; páginas da interface vão para `index.html`. Imagens e JavaScript continuam no CDN. O esquema SQL é incluído explicitamente na função.
