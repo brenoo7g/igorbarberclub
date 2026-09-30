@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+test-results/
+playwright-report/
+*.tgz
+*.log
+*.tsbuildinfo
+.env
+.env.*
+android/
+ios/

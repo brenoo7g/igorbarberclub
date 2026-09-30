@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Igor Barber Club",
+    "slug": "igor-barber-club-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0D0D0D",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.igorbarberclub.mobile"
+    },
+    "android": {
+      "package": "com.igorbarberclub.mobile",
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "name": "Igor Barber Club",
+      "bundler": "metro"
+    },
+    "plugins": ["expo-font", "expo-image"]
+  }
+}
