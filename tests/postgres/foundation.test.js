@@ -44,6 +44,18 @@ const control = new pg.Client({
   ssl: false,
   connectionTimeoutMillis: 5000,
 });
+
+test('18 Gradefy 2B PostgreSQL: application company context contract', async (t) => {
+  const { db } = await makeCase(t, 'application_context');
+  const { assertApplicationContext, secondCompanySql } =
+    await import('../helpers/application-context.js');
+  await assert.rejects(db.run(secondCompanySql), { code: '23514' });
+  // This database was created above in the guarded disposable localhost cluster.
+  // Never remove this constraint in application initialization or migrations 001–003.
+  await db.run('ALTER TABLE companies DROP CONSTRAINT gradefy_single_company');
+  await db.run(secondCompanySql);
+  await assertApplicationContext(t, db);
+});
 let createDatabase, runMigrations, bootstrapIgorCompany, readMigration, migrations;
 const schema = await readFile(new URL('../../server/schema.sql', import.meta.url), 'utf8');
 const legacyTables = [...schema.matchAll(/CREATE TABLE IF NOT EXISTS (\w+)/g)].map((m) => m[1]);

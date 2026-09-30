@@ -1,4 +1,4 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { requireCompanyId } from './company-context.js';
 import { z } from 'zod';
 import { addDays, clock, dateInBrazil, isFuture, weekday } from './domain.js';
 import {
@@ -59,18 +59,21 @@ const settingsSchema = z
   });
 
 /** @returns {Promise<import('./schedule-domain.js').Schedule>} */
-export async function readSchedule(db, barberId) {
+export async function readSchedule(db, companyId, barberId) {
+  requireCompanyId(companyId);
+  if (!(await db.get('SELECT id FROM barbers WHERE company_id=? AND id=?', [companyId, barberId])))
+    fail(404, 'Profissional não encontrado.');
   const settings = await db.get(
-    'SELECT agenda_mode,max_days_ahead,version FROM barber_settings WHERE barber_id=?',
-    [barberId],
+    'SELECT agenda_mode,max_days_ahead,version FROM barber_settings WHERE company_id=? AND barber_id=?',
+    [companyId, barberId],
   );
   const hours = await db.all(
-    'SELECT * FROM barber_working_hours WHERE barber_id=? ORDER BY weekday',
-    [barberId],
+    'SELECT * FROM barber_working_hours WHERE company_id=? AND barber_id=? ORDER BY weekday',
+    [companyId, barberId],
   );
   const extras = await db.all(
-    'SELECT * FROM barber_working_breaks WHERE barber_id=? ORDER BY position',
-    [barberId],
+    'SELECT * FROM barber_working_breaks WHERE company_id=? AND barber_id=? ORDER BY position',
+    [companyId, barberId],
   );
   const days = hours.length
     ? hours.map((h) => ({
@@ -96,22 +99,28 @@ export async function readSchedule(db, barberId) {
     settings: settings || { agenda_mode: 'auto', max_days_ahead: 90, version: 0 },
     days,
     released_weeks: await db.all(
-      'SELECT week_start,start_date,end_date FROM released_weeks WHERE barber_id=? AND week_start>=? ORDER BY week_start',
-      [barberId, monday(dateInBrazil())],
+      'SELECT week_start,start_date,end_date FROM released_weeks WHERE company_id=? AND barber_id=? AND week_start>=? ORDER BY week_start',
+      [companyId, barberId, monday(dateInBrazil())],
     ),
   };
 }
 
-export function installScheduleRoutes(app, db, { authenticated, admin }) {
+export function installScheduleRoutes(app, db, companyId, { authenticated, admin }) {
+  requireCompanyId(companyId);
   const exists = async (tx, barberId) => {
-    if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [barberId])))
+    if (
+      !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
+        companyId,
+        barberId,
+      ]))
+    )
       fail(404, 'Profissional não encontrado.');
   };
   app.get('/api/barbers/:id/schedule', async (req, res) => {
     const result = await db.transaction(async (tx) => {
       await lockSchedule(tx);
       await exists(tx, req.params.id);
-      const schedule = await readSchedule(tx, req.params.id);
+      const schedule = await readSchedule(tx, companyId, req.params.id);
       const today = dateInBrazil();
       const dates =
         schedule.settings.agenda_mode === 'auto'
@@ -133,7 +142,7 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
     const result = await db.transaction(async (tx) => {
       await lockSchedule(tx);
       await exists(tx, req.params.id);
-      const schedule = await readSchedule(tx, req.params.id);
+      const schedule = await readSchedule(tx, companyId, req.params.id);
       return { ...schedule, next_week: nextWeek(schedule, dateInBrazil()) };
     });
     res.json(result);
@@ -147,12 +156,12 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
     await db.transaction(async (tx) => {
       await lockSchedule(tx);
       await exists(tx, req.params.id);
-      const current = await readSchedule(tx, req.params.id);
+      const current = await readSchedule(tx, companyId, req.params.id);
       if (current.settings.version !== data.version)
         fail(409, 'A agenda foi alterada em outra aba. Atualize as configurações antes de salvar.');
       const appointments = await tx.all(
-        "SELECT date,start_minute,end_minute FROM appointments WHERE barber_id=? AND status='confirmed' AND date>=? ORDER BY date,start_minute",
-        [req.params.id, dateInBrazil()],
+        "SELECT date,start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND status='confirmed' AND date>=? ORDER BY date,start_minute",
+        [companyId, req.params.id, dateInBrazil()],
       );
       const conflict = appointments.find(
         (a) =>
@@ -169,15 +178,22 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
           `Esta alteração afeta o agendamento de ${conflict.date.split('-').reverse().join('/')} às ${clock(conflict.start_minute)}. Remarque ou cancele esse atendimento antes de alterar o expediente.`,
         );
       await tx.run(
-        `INSERT INTO barber_settings (company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?) ON CONFLICT(barber_id) DO UPDATE SET agenda_mode=excluded.agenda_mode,max_days_ahead=excluded.max_days_ahead,version=excluded.version`,
-        [req.params.id, data.agenda_mode, data.max_days_ahead, data.version + 1],
+        `INSERT INTO barber_settings (company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES (?,?,?,?,?) ON CONFLICT(barber_id) DO UPDATE SET agenda_mode=excluded.agenda_mode,max_days_ahead=excluded.max_days_ahead,version=excluded.version WHERE barber_settings.company_id=excluded.company_id`,
+        [companyId, req.params.id, data.agenda_mode, data.max_days_ahead, data.version + 1],
       );
-      await tx.run('DELETE FROM barber_working_breaks WHERE barber_id=?', [req.params.id]);
-      await tx.run('DELETE FROM barber_working_hours WHERE barber_id=?', [req.params.id]);
+      await tx.run('DELETE FROM barber_working_breaks WHERE company_id=? AND barber_id=?', [
+        companyId,
+        req.params.id,
+      ]);
+      await tx.run('DELETE FROM barber_working_hours WHERE company_id=? AND barber_id=?', [
+        companyId,
+        req.params.id,
+      ]);
       for (const day of days) {
         await tx.run(
-          `INSERT INTO barber_working_hours (company_id,barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?)`,
+          `INSERT INTO barber_working_hours (company_id,barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES (?,?,?,?,?,?,?,?)`,
           [
+            companyId,
             req.params.id,
             day.weekday,
             day.active ? 1 : 0,
@@ -189,8 +205,15 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
         );
         for (let i = 1; i < day.breaks.length; i++)
           await tx.run(
-            `INSERT INTO barber_working_breaks (company_id,barber_id,weekday,position,start_time,end_time) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
-            [req.params.id, day.weekday, i, day.breaks[i].start_time, day.breaks[i].end_time],
+            `INSERT INTO barber_working_breaks (company_id,barber_id,weekday,position,start_time,end_time) VALUES (?,?,?,?,?,?)`,
+            [
+              companyId,
+              req.params.id,
+              day.weekday,
+              i,
+              day.breaks[i].start_time,
+              day.breaks[i].end_time,
+            ],
           );
       }
       // An opened calendar week follows the new active days; never reinsert an existing cycle.
@@ -198,8 +221,8 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
         const period = weekPeriod(days, released.week_start);
         if (period)
           await tx.run(
-            'UPDATE released_weeks SET start_date=?,end_date=? WHERE barber_id=? AND week_start=?',
-            [period.start_date, period.end_date, req.params.id, released.week_start],
+            'UPDATE released_weeks SET start_date=?,end_date=? WHERE company_id=? AND barber_id=? AND week_start=?',
+            [period.start_date, period.end_date, companyId, req.params.id, released.week_start],
           );
       }
     });
@@ -213,7 +236,7 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
     const period = await db.transaction(async (tx) => {
       await lockSchedule(tx);
       await exists(tx, req.params.id);
-      const schedule = await readSchedule(tx, req.params.id);
+      const schedule = await readSchedule(tx, companyId, req.params.id);
       if (schedule.settings.agenda_mode !== 'manual')
         fail(409, 'Selecione e salve o modo manual antes de liberar uma semana.');
       const existing = schedule.released_weeks.find((w) => w.week_start === data.week_start);
@@ -226,12 +249,20 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
       )
         fail(409, 'O período disponível mudou. Atualize a agenda antes de liberar a semana.');
       await tx.run(
-        `INSERT INTO released_weeks (company_id,barber_id,week_start,start_date,end_date,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
-        [req.params.id, next.week_start, next.start_date, next.end_date, new Date().toISOString()],
+        `INSERT INTO released_weeks (company_id,barber_id,week_start,start_date,end_date,created_at) VALUES (?,?,?,?,?,?)`,
+        [
+          companyId,
+          req.params.id,
+          next.week_start,
+          next.start_date,
+          next.end_date,
+          new Date().toISOString(),
+        ],
       );
-      await tx.run('UPDATE barber_settings SET version=version+1 WHERE barber_id=?', [
-        req.params.id,
-      ]);
+      await tx.run(
+        'UPDATE barber_settings SET version=version+1 WHERE company_id=? AND barber_id=?',
+        [companyId, req.params.id],
+      );
       return next;
     });
     const url = new URL('/agendar', process.env.APP_URL || 'http://localhost:5173');

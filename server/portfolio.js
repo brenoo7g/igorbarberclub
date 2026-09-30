@@ -1,4 +1,4 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { requireCompanyId } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
@@ -39,18 +39,23 @@ async function normalizeImage(value) {
   }
 }
 
-export function installPortfolioRoutes(app, db, { authenticated, admin, authLimiter }) {
+export function installPortfolioRoutes(app, db, companyId, { authenticated, admin, authLimiter }) {
+  requireCompanyId(companyId);
   app.get('/api/portfolio', async (_req, res) => {
     res.json(
       (
         await db.all(
-          'SELECT id,title,category,version FROM portfolio ORDER BY created_at DESC,id DESC',
+          'SELECT id,title,category,version FROM portfolio WHERE company_id=? ORDER BY created_at DESC,id DESC',
+          [companyId],
         )
       ).map(metadata),
     );
   });
   app.get('/api/portfolio/:id/image', async (req, res) => {
-    const row = await db.get('SELECT image FROM portfolio WHERE id=?', [req.params.id]);
+    const row = await db.get('SELECT image FROM portfolio WHERE company_id=? AND id=?', [
+      companyId,
+      req.params.id,
+    ]);
     if (!row) fail(404, 'Foto não encontrada.');
     res.type('image/webp').send(Buffer.from(row.image, 'base64'));
   });
@@ -60,12 +65,14 @@ export function installPortfolioRoutes(app, db, { authenticated, admin, authLimi
     const row = { id: randomUUID(), title: data.title, category: data.category, version: 1 };
     await db.transaction(async (tx) => {
       if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789128)');
-      const count = await tx.get('SELECT COUNT(*) AS total FROM portfolio');
+      const count = await tx.get('SELECT COUNT(*) AS total FROM portfolio WHERE company_id=?', [
+        companyId,
+      ]);
       if (Number(count.total) >= 40)
         fail(409, 'A galeria permite até 40 fotos. Remova uma foto antes de adicionar outra.');
       await tx.run(
-        `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
-        [row.id, row.title, row.category, image, row.version, new Date().toISOString()],
+        `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES (?,?,?,?,?,?,?)`,
+        [companyId, row.id, row.title, row.category, image, row.version, new Date().toISOString()],
       );
     });
     res.status(201).json(metadata(row));
@@ -78,15 +85,15 @@ export function installPortfolioRoutes(app, db, { authenticated, admin, authLimi
     const image = data.image ? await normalizeImage(data.image) : null;
     const result = await db.transaction(async (tx) => {
       const row = await tx.get(
-        `SELECT id,version FROM portfolio WHERE id=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
-        [req.params.id],
+        `SELECT id,version FROM portfolio WHERE company_id=? AND id=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
+        [companyId, req.params.id],
       );
       if (!row) fail(404, 'Esta foto foi removida. Atualize a galeria.');
       if (row.version !== data.version)
         fail(409, 'Esta foto foi alterada em outra aba. Feche a edição e atualize a galeria.');
       await tx.run(
-        'UPDATE portfolio SET title=?,category=?,image=COALESCE(?,image),version=version+1 WHERE id=?',
-        [data.title, data.category, image, row.id],
+        'UPDATE portfolio SET title=?,category=?,image=COALESCE(?,image),version=version+1 WHERE company_id=? AND id=?',
+        [data.title, data.category, image, companyId, row.id],
       );
       return metadata({
         ...row,
@@ -98,7 +105,7 @@ export function installPortfolioRoutes(app, db, { authenticated, admin, authLimi
     res.json(result);
   });
   app.delete('/api/admin/portfolio/:id', authenticated, admin, async (req, res) => {
-    await db.run('DELETE FROM portfolio WHERE id=?', [req.params.id]);
+    await db.run('DELETE FROM portfolio WHERE company_id=? AND id=?', [companyId, req.params.id]);
     res.json({ ok: true });
   });
 }

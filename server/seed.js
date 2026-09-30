@@ -1,4 +1,4 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { getLegacyCompanyId, requireCompanyId } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { addDays, dateInBrazil, weekday, isFuture } from './domain.js';
@@ -6,14 +6,24 @@ import { bootstrapIgorCompany } from './company-bootstrap.js';
 
 export const demoMode =
   !process.env.VERCEL && process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE !== 'false';
+// Compatibility entry point for the single operational company.
 export async function seed(db) {
-  if (!(await db.get('SELECT id FROM barbers LIMIT 1'))) {
-    await db.run(
-      `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}',?,?,?)`,
-      ['igor', 'Igor Borges', 'Especialista em cortes e degradês'],
-    );
+  return seedLegacyCompany(db, getLegacyCompanyId());
+}
+
+export async function seedLegacyCompany(db, companyId) {
+  requireCompanyId(companyId);
+  if (companyId !== getLegacyCompanyId())
+    throw new Error('Seed disponível somente para a empresa legada.');
+  if (!(await db.get('SELECT id FROM barbers WHERE company_id=? LIMIT 1', [companyId]))) {
+    await db.run(`INSERT INTO barbers (company_id,id,name,specialty) VALUES (?,?,?,?)`, [
+      companyId,
+      'igor',
+      'Igor Borges',
+      'Especialista em cortes e degradês',
+    ]);
   }
-  if (!(await db.get('SELECT id FROM services LIMIT 1'))) {
+  if (!(await db.get('SELECT id FROM services WHERE company_id=? LIMIT 1', [companyId]))) {
     const services = [
       [
         'corte',
@@ -66,8 +76,8 @@ export async function seed(db) {
     ];
     for (const service of services)
       await db.run(
-        `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
-        service,
+        `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES (?,?,?,?,?,?,?)`,
+        [companyId, ...service],
       );
   }
   const email = (process.env.ADMIN_EMAIL || 'admin@igorbarberclub.com.br').toLowerCase();
@@ -130,7 +140,8 @@ export async function seed(db) {
     );
   }
   const services = await db.all(
-    "SELECT * FROM services WHERE id IN ('corte','barba','combo','jaca') ORDER BY id",
+    "SELECT * FROM services WHERE company_id=? AND id IN ('corte','barba','combo','jaca') ORDER BY id",
+    [companyId],
   );
   const today = dateInBrazil();
   await db.transaction(async (tx) => {
@@ -142,8 +153,9 @@ export async function seed(db) {
         const start = 540 + j * 100;
         const id = randomUUID();
         await tx.run(
-          `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
           [
+            companyId,
             id,
             users[j % users.length],
             'igor',
@@ -156,8 +168,8 @@ export async function seed(db) {
           ],
         );
         await tx.run(
-          `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
-          [id, service.id, service.name, service.price, service.duration],
+          `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?,?)`,
+          [companyId, id, service.id, service.name, service.price, service.duration],
         );
       }
     }

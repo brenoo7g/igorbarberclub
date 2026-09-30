@@ -1,8 +1,11 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { getLegacyCompanyId, requireCompanyId } from './company-context.js';
 import { readFileSync } from 'node:fs';
 
 // Imported once, under the database schema lock. Removed/edited photos stay that way on redeploy.
-export async function seedPortfolio(tx) {
+export async function seedPortfolio(tx, companyId) {
+  requireCompanyId(companyId);
+  if (companyId !== getLegacyCompanyId())
+    throw new Error('Importação disponível somente para a empresa legada.');
   const migration = 'igor-real-portfolio-2026-09-10';
   if (await tx.get('SELECT id FROM content_migrations WHERE id=?', [migration])) return;
   const photos = [
@@ -17,8 +20,8 @@ export async function seedPortfolio(tx) {
       new URL(`./portfolio-photos/corte-${number}.webp`, import.meta.url),
     ).toString('base64');
     await tx.run(
-      `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
-      [`igor-corte-${number}`, title, 'Degradês', image, 1, `${date}T12:00:00.000Z`],
+      `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES (?,?,?,?,?,?,?)`,
+      [companyId, `igor-corte-${number}`, title, 'Degradês', image, 1, `${date}T12:00:00.000Z`],
     );
   }
   await tx.run('INSERT INTO content_migrations (id) VALUES (?)', [migration]);

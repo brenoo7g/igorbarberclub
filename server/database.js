@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from './company-context.js';
 import 'dotenv/config';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -143,7 +144,7 @@ export async function createDatabase(
       await migrateGuestBookings(tx);
       await applyMigrations(tx);
       await bootstrapIgorCompany(tx);
-      await seedPortfolio(tx);
+      await seedPortfolio(tx, getLegacyCompanyId());
     });
     if (db.dialect === 'sqlite') await db.run('PRAGMA foreign_keys=ON');
   } catch (error) {

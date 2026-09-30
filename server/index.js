@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from './company-context.js';
 import 'dotenv/config';
 import { createDatabase } from './database.js';
 import { createApp } from './app.js';
@@ -32,7 +33,7 @@ if (testGuestAccess) {
 }
 const db = testGuestAccess ? await createDatabase('', ':memory:') : await createDatabase();
 await seed(db);
-const stopNotifications = startNotifications(db);
+const stopNotifications = startNotifications(db, getLegacyCompanyId());
 const port = Number(process.env.PORT || 3001);
 const app = createApp(db, { testGuestAccess });
 const recoveryTimer = setInterval(() => void app.locals.processPasswordEmails(), 15000);

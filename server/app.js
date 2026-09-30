@@ -1,4 +1,4 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { getLegacyCompanyId, requireCompanyId } from './company-context.js';
 import express from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -12,13 +12,13 @@ import { z } from 'zod';
 import {
   availableSlots,
   addDays,
-  calculateMetrics,
   clock,
   dateInBrazil,
   isFuture,
   overlaps,
   weekday,
 } from './domain.js';
+import { getCompanyMetrics } from './company-metrics.js';
 import { enqueueNotification } from './notifications.js';
 import { demoMode } from './seed.js';
 import { installProfileRoutes, passwordSchema, publicUser } from './profile.js';
@@ -107,6 +107,7 @@ export function createApp(
       db.ephemeral !== true)
   )
     throw new Error('Acesso sem verificação exige demonstração com banco temporário isolado.');
+  const companyId = getLegacyCompanyId();
   const app = express();
   const allowedOrigins = new Set([new URL(process.env.APP_URL || 'http://localhost:5173').origin]);
   if (process.env.VERCEL && process.env.VERCEL_URL)
@@ -230,7 +231,7 @@ export function createApp(
       },
     }),
   );
-  const visitors = installGuestSessions(app, db, { secureCookies, testGuestAccess });
+  const visitors = installGuestSessions(app, db, companyId, { secureCookies, testGuestAccess });
   if (testGuestAccess)
     app.post('/api/auth/test-access', authLimiter, async (req, res) => {
       const { email } = z.object({ email: emailSchema }).strict().parse(req.body);
@@ -310,33 +311,38 @@ export function createApp(
   });
   installProfileRoutes(app, db, { authenticated, login, authLimiter });
   installPasswordRecovery(app, db, { secret, secureCookies });
-  installPortfolioRoutes(app, db, { authenticated, admin, authLimiter });
-  installScheduleRoutes(app, db, { authenticated, admin });
+  installPortfolioRoutes(app, db, companyId, { authenticated, admin, authLimiter });
+  installScheduleRoutes(app, db, companyId, { authenticated, admin });
   app.get('/api/services', async (_req, res) =>
-    res.json(await db.all('SELECT * FROM services WHERE active=1 ORDER BY price')),
+    res.json(
+      await db.all('SELECT * FROM services WHERE company_id=? AND active=1 ORDER BY price', [
+        companyId,
+      ]),
+    ),
   );
   app.get('/api/barbers', async (_req, res) =>
-    res.json(await db.all('SELECT * FROM barbers WHERE active=1')),
+    res.json(await db.all('SELECT * FROM barbers WHERE company_id=? AND active=1', [companyId])),
   );
 
-  const getServices = async (tx, ids) => {
+  const getServices = async (tx, companyId, ids) => {
+    requireCompanyId(companyId);
     const services = await tx.all(
-      `SELECT * FROM services WHERE active=1 AND id IN (${ids.map(() => '?').join(',')})`,
-      ids,
+      `SELECT * FROM services WHERE company_id=? AND active=1 AND id IN (${ids.map(() => '?').join(',')})`,
+      [companyId, ...ids],
     );
     if (services.length !== ids.length)
       fail(400, 'Um dos serviços não está mais disponível. Atualize sua seleção.');
     return services;
   };
-  const occupied = async (tx, barber, date, except = '') => [
+  const occupied = async (tx, companyId, barber, date, except = '') => [
     ...(await tx.all(
-      "SELECT start_minute,end_minute FROM appointments WHERE barber_id=? AND date=? AND status IN ('confirmed','completed') AND id<>?",
-      [barber, date, except],
+      "SELECT start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND date=? AND status IN ('confirmed','completed') AND id<>?",
+      [companyId, barber, date, except],
     )),
-    ...(await tx.all('SELECT start_minute,end_minute FROM blocks WHERE barber_id=? AND date=?', [
-      barber,
-      date,
-    ])),
+    ...(await tx.all(
+      'SELECT start_minute,end_minute FROM blocks WHERE company_id=? AND barber_id=? AND date=?',
+      [companyId, barber, date],
+    )),
   ];
   const verifyDate = (date) => {
     if (date < dateInBrazil() || date > addDays(dateInBrazil(), 730))
@@ -350,27 +356,36 @@ export function createApp(
     const result = await db.transaction(async (tx) => {
       await lockSchedule(tx);
       const barberId = z.string().parse(req.query.barberId);
-      if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [barberId])))
+      if (
+        !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
+          companyId,
+          barberId,
+        ]))
+      )
         fail(404, 'Profissional não encontrado.');
       const ids = singleServiceSchema.parse(String(req.query.services || '').split(','));
-      const services = await getServices(tx, ids);
+      const services = await getServices(tx, companyId, ids);
       let except = '';
       if (req.query.except) {
-        const existing = await tx.get('SELECT * FROM appointments WHERE id=?', [
+        const existing = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+          companyId,
           String(req.query.except),
         ]);
-        if (existing && (req.user?.role === 'admin' || (await ownsAppointment(tx, req, existing))))
+        if (
+          existing &&
+          (req.user?.role === 'admin' || (await ownsAppointment(tx, companyId, req, existing)))
+        )
           except = existing.id;
       }
       const duration = services.reduce((sum, s) => sum + s.duration, 0);
-      const schedule = await readSchedule(tx, barberId);
+      const schedule = await readSchedule(tx, companyId, barberId);
       const access = dateAccess(schedule, date, dateInBrazil());
       return {
         slots: access.allowed
           ? availableSlots({
               date,
               duration,
-              occupied: await occupied(tx, barberId, date, except),
+              occupied: await occupied(tx, companyId, barberId, date, except),
               workingDay: schedule.days.find((d) => d.weekday === weekday(date)),
             })
           : [],
@@ -381,15 +396,16 @@ export function createApp(
     });
     res.json(result);
   });
-  const appointmentList = async (where, args) => {
+  const appointmentList = async (companyId, where, args) => {
+    requireCompanyId(companyId);
     const rows = await db.all(
-      `SELECT a.*,COALESCE(u.name,a.guest_name) AS client_name,COALESCE(u.email,a.guest_email) AS client_email,COALESCE(u.phone,a.guest_phone) AS client_phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id ${where} ORDER BY a.date,a.start_minute`,
-      args,
+      `SELECT a.*,COALESCE(u.name,a.guest_name) AS client_name,COALESCE(u.email,a.guest_email) AS client_email,COALESCE(u.phone,a.guest_phone) AS client_phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id AND b.company_id=a.company_id WHERE a.company_id=? AND (${where}) ORDER BY a.date,a.start_minute`,
+      [companyId, ...args],
     );
     if (!rows.length) return [];
     const items = await db.all(
-      `SELECT * FROM appointment_services WHERE appointment_id IN (${rows.map(() => '?').join(',')})`,
-      rows.map((a) => a.id),
+      `SELECT * FROM appointment_services WHERE company_id=? AND appointment_id IN (${rows.map(() => '?').join(',')})`,
+      [companyId, ...rows.map((a) => a.id)],
     );
     return rows.map((a) => ({
       ...a,
@@ -400,14 +416,15 @@ export function createApp(
   app.get('/api/appointments', bookingAuthenticated, async (req, res) =>
     res.json(
       await appointmentList(
+        companyId,
         req.user
-          ? 'WHERE a.user_id=?'
-          : 'WHERE a.user_id IS NULL AND a.id IN (SELECT appointment_id FROM guest_appointments WHERE visitor_id=?)',
+          ? 'a.user_id=?'
+          : 'a.user_id IS NULL AND a.id IN (SELECT appointment_id FROM guest_appointments WHERE company_id=a.company_id AND visitor_id=?)',
         [req.user ? req.user.id : req.visitor.id],
       ),
     ),
   );
-  async function book(req, res, reschedule = false, asGuest = false) {
+  async function book(companyId, req, res, reschedule = false, asGuest = false) {
     const data = (
       asGuest ? bookingSchema.extend({ guest: guestSchema }).strict() : bookingSchema
     ).parse(req.body);
@@ -415,18 +432,26 @@ export function createApp(
     const id = reschedule ? String(req.params.id) : randomUUID();
     let guestSession;
     await db.transaction(async (tx) => {
-      if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [data.barberId])))
+      if (
+        !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
+          companyId,
+          data.barberId,
+        ]))
+      )
         fail(404, 'Profissional não encontrado.');
       await lockBarber(tx, data.barberId);
       let current;
       if (reschedule) {
-        current = await tx.get('SELECT * FROM appointments WHERE id=?', [id]);
-        if (!current || !(await ownsAppointment(tx, req, current, true)))
+        current = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+          companyId,
+          id,
+        ]);
+        if (!current || !(await ownsAppointment(tx, companyId, req, current, true)))
           fail(404, 'Agendamento não encontrado.');
         if (current.status !== 'confirmed' || !isFuture(current.date, current.start_minute))
           fail(400, 'Este agendamento não pode mais ser remarcado.');
       }
-      const services = await getServices(tx, data.services);
+      const services = await getServices(tx, companyId, data.services);
       const duration = services.reduce((sum, s) => sum + s.duration, 0);
       const total = services.reduce((sum, s) => sum + s.price, 0);
       if (
@@ -437,13 +462,13 @@ export function createApp(
           412,
           'O preço ou a duração mudou. Atualize a página para revisar os serviços antes de confirmar.',
         );
-      const schedule = await readSchedule(tx, data.barberId);
+      const schedule = await readSchedule(tx, companyId, data.barberId);
       const access = dateAccess(schedule, data.date, dateInBrazil());
       if (!access.allowed) fail(409, access.message);
       const slots = availableSlots({
         date: data.date,
         duration,
-        occupied: await occupied(tx, data.barberId, data.date, reschedule ? id : ''),
+        occupied: await occupied(tx, companyId, data.barberId, data.date, reschedule ? id : ''),
         workingDay: schedule.days.find((d) => d.weekday === weekday(data.date)),
       });
       if (!slots.includes(data.time))
@@ -451,14 +476,18 @@ export function createApp(
       const start = minuteOf(data.time);
       if (reschedule) {
         await tx.run(
-          'UPDATE appointments SET barber_id=?,date=?,start_minute=?,end_minute=?,total=? WHERE id=?',
-          [data.barberId, data.date, start, start + duration, total, id],
+          'UPDATE appointments SET barber_id=?,date=?,start_minute=?,end_minute=?,total=? WHERE company_id=? AND id=?',
+          [data.barberId, data.date, start, start + duration, total, companyId, id],
         );
-        await tx.run('DELETE FROM appointment_services WHERE appointment_id=?', [id]);
+        await tx.run('DELETE FROM appointment_services WHERE company_id=? AND appointment_id=?', [
+          companyId,
+          id,
+        ]);
       } else
         await tx.run(
-          `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
+            companyId,
             id,
             asGuest ? null : req.user.id,
             data.barberId,
@@ -475,25 +504,25 @@ export function createApp(
         );
       for (const s of services)
         await tx.run(
-          `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
-          [id, s.id, s.name, s.price, s.duration],
+          `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?,?)`,
+          [companyId, id, s.id, s.name, s.price, s.duration],
         );
       if (asGuest) {
         guestSession = await visitors.save(tx, req, data.guest);
         await tx.run(
-          `INSERT INTO guest_appointments (company_id,appointment_id,visitor_id) VALUES ('${IGOR_COMPANY_ID}',?,?)`,
-          [id, guestSession.visitor.id],
+          `INSERT INTO guest_appointments (company_id,appointment_id,visitor_id) VALUES (?,?,?)`,
+          [companyId, id, guestSession.visitor.id],
         );
       }
-      await enqueueNotification(tx, id, reschedule ? 'rescheduled' : 'confirmed');
+      await enqueueNotification(tx, companyId, id, reschedule ? 'rescheduled' : 'confirmed');
     });
     if (guestSession) visitors.setCookie(res, guestSession.token);
     res.status(reschedule ? 200 : 201).json({
-      ...(await appointmentList('WHERE a.id=?', [id]))[0],
+      ...(await appointmentList(companyId, 'a.id=?', [id]))[0],
       ...(guestSession ? { visitor: publicVisitor(guestSession.visitor) } : {}),
     });
   }
-  app.post('/api/appointments', authenticated, (req, res) => book(req, res));
+  app.post('/api/appointments', authenticated, (req, res) => book(companyId, req, res));
   app.post(
     '/api/appointments/guest',
     rateLimit({
@@ -501,22 +530,32 @@ export function createApp(
       limit: test ? 1000 : 10,
       message: { error: 'Muitas tentativas de agendamento. Aguarde 15 minutos e tente novamente.' },
     }),
-    (req, res) => book(req, res, false, true),
+    (req, res) => book(companyId, req, res, false, true),
   );
   app.patch('/api/appointments/:id/reschedule', bookingAuthenticated, (req, res) =>
-    book(req, res, true),
+    book(companyId, req, res, true),
   );
   app.patch('/api/appointments/:id/cancel', bookingAuthenticated, async (req, res) => {
     await db.transaction(async (tx) => {
-      const a = await tx.get('SELECT * FROM appointments WHERE id=?', [String(req.params.id)]);
+      const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+        companyId,
+        String(req.params.id),
+      ]);
       if (!a) fail(404, 'Agendamento não encontrado.');
       await lockBarber(tx, a.barber_id);
-      if (!(await ownsAppointment(tx, req, a, true))) fail(404, 'Agendamento não encontrado.');
-      const fresh = await tx.get('SELECT * FROM appointments WHERE id=?', [a.id]);
+      if (!(await ownsAppointment(tx, companyId, req, a, true)))
+        fail(404, 'Agendamento não encontrado.');
+      const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+        companyId,
+        a.id,
+      ]);
       if (fresh.status !== 'confirmed' || !isFuture(fresh.date, fresh.start_minute))
         fail(400, 'Este agendamento não pode mais ser cancelado.');
-      await tx.run("UPDATE appointments SET status='cancelled' WHERE id=?", [a.id]);
-      await enqueueNotification(tx, a.id, 'cancelled');
+      await tx.run("UPDATE appointments SET status='cancelled' WHERE company_id=? AND id=?", [
+        companyId,
+        a.id,
+      ]);
+      await enqueueNotification(tx, companyId, a.id, 'cancelled');
     });
     res.json({ ok: true });
   });
@@ -526,22 +565,32 @@ export function createApp(
     const from = dateSchema.parse(req.query.from || dateInBrazil()),
       to = dateSchema.parse(req.query.to || from);
     if (to < from || to > addDays(from, 366)) fail(400, 'Intervalo inválido.');
-    res.json(await appointmentList('WHERE a.date>=? AND a.date<=?', [from, to]));
+    res.json(await appointmentList(companyId, 'a.date>=? AND a.date<=?', [from, to]));
   });
   app.patch('/api/admin/appointments/:id/status', async (req, res) => {
     const status = z.enum(['completed', 'cancelled', 'no-show']).parse(req.body.status);
     await db.transaction(async (tx) => {
-      const a = await tx.get('SELECT * FROM appointments WHERE id=?', [String(req.params.id)]);
+      const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+        companyId,
+        String(req.params.id),
+      ]);
       if (!a) fail(404, 'Agendamento não encontrado.');
       await lockBarber(tx, a.barber_id);
-      const fresh = await tx.get('SELECT * FROM appointments WHERE id=?', [a.id]);
+      const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+        companyId,
+        a.id,
+      ]);
       if (fresh.status !== 'confirmed') fail(400, 'Este agendamento já foi finalizado.');
       if (status === 'completed' && isFuture(fresh.date, fresh.end_minute))
         fail(400, 'Aguarde o fim do horário para concluir o atendimento.');
       if (status === 'no-show' && isFuture(fresh.date, fresh.start_minute))
         fail(400, 'Aguarde o horário do atendimento para marcar ausência.');
-      await tx.run('UPDATE appointments SET status=? WHERE id=?', [status, a.id]);
-      if (status === 'cancelled') await enqueueNotification(tx, a.id, 'cancelled');
+      await tx.run('UPDATE appointments SET status=? WHERE company_id=? AND id=?', [
+        status,
+        companyId,
+        a.id,
+      ]);
+      if (status === 'cancelled') await enqueueNotification(tx, companyId, a.id, 'cancelled');
     });
     res.json({ ok: true });
   });
@@ -549,8 +598,8 @@ export function createApp(
     const data = serviceSchema.parse(req.body),
       id = randomUUID();
     await db.run(
-      `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
-      [id, data.name, data.description, data.duration, data.price, data.category],
+      `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES (?,?,?,?,?,?,?)`,
+      [companyId, id, data.name, data.description, data.duration, data.price, data.category],
     );
     res.status(201).json({ id, ...data, active: 1 });
   });
@@ -559,11 +608,16 @@ export function createApp(
       id = String(req.params.id);
     await db.transaction(async (tx) => {
       await lockSchedule(tx);
-      if (!(await tx.get('SELECT id FROM services WHERE id=? AND active=1', [id])))
+      if (
+        !(await tx.get('SELECT id FROM services WHERE company_id=? AND id=? AND active=1', [
+          companyId,
+          id,
+        ]))
+      )
         fail(404, 'Serviço não encontrado.');
       await tx.run(
-        'UPDATE services SET name=?,description=?,duration=?,price=?,category=? WHERE id=?',
-        [data.name, data.description, data.duration, data.price, data.category, id],
+        'UPDATE services SET name=?,description=?,duration=?,price=?,category=? WHERE company_id=? AND id=?',
+        [data.name, data.description, data.duration, data.price, data.category, companyId, id],
       );
     });
     res.json({ id, ...data, active: 1 });
@@ -572,10 +626,16 @@ export function createApp(
     await db.transaction(async (tx) => {
       await lockSchedule(tx);
       if (
-        !(await tx.get('SELECT id FROM services WHERE id=? AND active=1', [String(req.params.id)]))
+        !(await tx.get('SELECT id FROM services WHERE company_id=? AND id=? AND active=1', [
+          companyId,
+          String(req.params.id),
+        ]))
       )
         fail(404, 'Serviço não encontrado.');
-      await tx.run('UPDATE services SET active=0 WHERE id=?', [String(req.params.id)]);
+      await tx.run('UPDATE services SET active=0 WHERE company_id=? AND id=?', [
+        companyId,
+        String(req.params.id),
+      ]);
     });
     res.json({ ok: true });
   });
@@ -583,10 +643,10 @@ export function createApp(
     const from = dateSchema.parse(req.query.from || dateInBrazil()),
       to = dateSchema.parse(req.query.to || from);
     res.json(
-      await db.all('SELECT * FROM blocks WHERE date>=? AND date<=? ORDER BY date,start_minute', [
-        from,
-        to,
-      ]),
+      await db.all(
+        'SELECT * FROM blocks WHERE company_id=? AND date>=? AND date<=? ORDER BY date,start_minute',
+        [companyId, from, to],
+      ),
     );
   });
   app.post('/api/admin/blocks', async (req, res) => {
@@ -604,10 +664,15 @@ export function createApp(
       end = minuteOf(data.end),
       id = randomUUID();
     await db.transaction(async (tx) => {
-      if (!(await tx.get('SELECT id FROM barbers WHERE id=? AND active=1', [data.barberId])))
+      if (
+        !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
+          companyId,
+          data.barberId,
+        ]))
+      )
         fail(404, 'Profissional não encontrado.');
       await lockBarber(tx, data.barberId);
-      const day = (await readSchedule(tx, data.barberId)).days.find(
+      const day = (await readSchedule(tx, companyId, data.barberId)).days.find(
         (d) => d.weekday === weekday(data.date),
       );
       if (
@@ -617,11 +682,11 @@ export function createApp(
         end > minutes(day.end_time)
       )
         fail(400, 'Escolha um intervalo válido dentro do expediente.');
-      if (overlaps(start, end, await occupied(tx, data.barberId, data.date)))
+      if (overlaps(start, end, await occupied(tx, companyId, data.barberId, data.date)))
         fail(409, 'Há um agendamento ou bloqueio nesse intervalo.');
       await tx.run(
-        `INSERT INTO blocks (company_id,id,barber_id,date,start_minute,end_minute,reason) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
-        [id, data.barberId, data.date, start, end, data.reason],
+        `INSERT INTO blocks (company_id,id,barber_id,date,start_minute,end_minute,reason) VALUES (?,?,?,?,?,?,?)`,
+        [companyId, id, data.barberId, data.date, start, end, data.reason],
       );
     });
     res.status(201).json({ id });
@@ -629,30 +694,21 @@ export function createApp(
   app.delete('/api/admin/blocks/:id', async (req, res) => {
     await db.transaction(async (tx) => {
       await lockSchedule(tx);
-      await tx.run('DELETE FROM blocks WHERE id=?', [String(req.params.id)]);
+      await tx.run('DELETE FROM blocks WHERE company_id=? AND id=?', [
+        companyId,
+        String(req.params.id),
+      ]);
     });
     res.json({ ok: true });
   });
   app.get('/api/admin/metrics', async (_req, res) => {
-    const today = dateInBrazil();
-    const start =
-      `${today.slice(0, 4)}-01-01` < addDays(today, -29)
-        ? `${today.slice(0, 4)}-01-01`
-        : addDays(today, -29);
-    const appointments = await db.all('SELECT * FROM appointments WHERE date>=? AND date<=?', [
-      start,
-      today,
-    ]);
-    const items = await db.all(
-      'SELECT s.* FROM appointment_services s JOIN appointments a ON a.id=s.appointment_id WHERE a.date>=? AND a.date<=?',
-      [addDays(today, -29), today],
-    );
-    res.json(calculateMetrics(appointments, items, today));
+    res.json(await getCompanyMetrics(db, companyId, dateInBrazil()));
   });
   app.get('/api/admin/notifications', async (_req, res) =>
     res.json(
       await db.all(
-        'SELECT channel,status,COUNT(*) AS count FROM notifications GROUP BY channel,status',
+        'SELECT channel,status,COUNT(*) AS count FROM notifications WHERE company_id=? GROUP BY channel,status',
+        [companyId],
       ),
     ),
   );

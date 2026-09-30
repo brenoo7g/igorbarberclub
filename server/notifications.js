@@ -1,15 +1,18 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { requireCompanyId } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import { clock } from './domain.js';
 
-export async function enqueueNotification(db, appointmentId, event) {
+export async function enqueueNotification(db, companyId, appointmentId, event) {
+  requireCompanyId(companyId);
   const appointment = await db.get(
-    'SELECT a.*,COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id WHERE a.id=?',
-    [appointmentId],
+    'SELECT a.*,COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id AND b.company_id=a.company_id WHERE a.company_id=? AND a.id=?',
+    [companyId, appointmentId],
   );
-  const services = await db.all('SELECT name FROM appointment_services WHERE appointment_id=?', [
-    appointmentId,
-  ]);
+  if (!appointment) throw Object.assign(new Error('Agendamento não encontrado.'), { status: 404 });
+  const services = await db.all(
+    'SELECT name FROM appointment_services WHERE company_id=? AND appointment_id=?',
+    [companyId, appointmentId],
+  );
   const payload = JSON.stringify({
     name: appointment.name,
     email: appointment.email,
@@ -23,16 +26,17 @@ export async function enqueueNotification(db, appointmentId, event) {
     reference: appointment.id,
     guest: appointment.user_id === null,
     guestSession: Boolean(
-      await db.get('SELECT appointment_id FROM guest_appointments WHERE appointment_id=?', [
-        appointmentId,
-      ]),
+      await db.get(
+        'SELECT appointment_id FROM guest_appointments WHERE company_id=? AND appointment_id=?',
+        [companyId, appointmentId],
+      ),
     ),
   });
   for (const channel of ['email', 'whatsapp']) {
     const now = new Date().toISOString();
     await db.run(
-      `INSERT INTO notifications (company_id,id,appointment_id,channel,event,payload,created_at,next_attempt_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?)`,
-      [randomUUID(), appointmentId, channel, event, payload, now, now],
+      `INSERT INTO notifications (company_id,id,appointment_id,channel,event,payload,created_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?)`,
+      [companyId, randomUUID(), appointmentId, channel, event, payload, now, now],
     );
   }
 }
@@ -80,7 +84,8 @@ export function appointmentEmail(payload, event, url) {
   return { subject: `Agendamento ${label} — Igor Barber Club`, text: lines.join('\n') };
 }
 
-export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
+export function createNotificationProcessor(db, companyId, { batchSize = 20 } = {}) {
+  requireCompanyId(companyId);
   let busy = false;
   const tick = async () => {
     if (busy) return;
@@ -100,13 +105,14 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
         // Advisory transaction lock also coordinates independent PostgreSQL workers.
         if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789125)');
         const jobs = await tx.all(
-          `SELECT * FROM notifications WHERE status='pending' AND attempts<5 AND next_attempt_at<=? AND channel IN (${channels.map(() => '?').join(',')}) ORDER BY created_at LIMIT ?`,
-          [new Date().toISOString(), ...channels, batchSize],
+          `SELECT * FROM notifications WHERE company_id=? AND status='pending' AND attempts<5 AND next_attempt_at<=? AND channel IN (${channels.map(() => '?').join(',')}) ORDER BY created_at LIMIT ?`,
+          [companyId, new Date().toISOString(), ...channels, batchSize],
         );
         for (const job of jobs)
-          await tx.run("UPDATE notifications SET status='sending',attempts=attempts+1 WHERE id=?", [
-            job.id,
-          ]);
+          await tx.run(
+            "UPDATE notifications SET status='sending',attempts=attempts+1 WHERE company_id=? AND id=?",
+            [companyId, job.id],
+          );
         return jobs;
       });
       for (const row of rows) {
@@ -114,8 +120,8 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
           const p = JSON.parse(row.payload);
           // Keep the event snapshot, but deliver to the account's current contact details.
           const recipient = await db.get(
-            'SELECT COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.id=?',
-            [row.appointment_id],
+            'SELECT COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.company_id=? AND a.id=?',
+            [companyId, row.appointment_id],
           );
           if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');
           Object.assign(p, recipient);
@@ -167,17 +173,24 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
             );
           }
           if (!response.ok) throw new Error(`O provedor retornou HTTP ${response.status}`);
-          await db.run("UPDATE notifications SET status='sent',error=NULL WHERE id=?", [row.id]);
+          await db.run(
+            "UPDATE notifications SET status='sent',error=NULL WHERE company_id=? AND id=?",
+            [companyId, row.id],
+          );
         } catch (e) {
           // WhatsApp timeouts are marked for manual review to avoid blind duplicate delivery.
           const uncertain =
             row.channel === 'whatsapp' && (e.name === 'TimeoutError' || e.name === 'TypeError');
-          await db.run('UPDATE notifications SET status=?,error=?,next_attempt_at=? WHERE id=?', [
-            uncertain ? 'review' : row.attempts >= 4 ? 'failed' : 'pending',
-            e.message,
-            new Date(Date.now() + 60_000 * 2 ** row.attempts).toISOString(),
-            row.id,
-          ]);
+          await db.run(
+            'UPDATE notifications SET status=?,error=?,next_attempt_at=? WHERE company_id=? AND id=?',
+            [
+              uncertain ? 'review' : row.attempts >= 4 ? 'failed' : 'pending',
+              e.message,
+              new Date(Date.now() + 60_000 * 2 ** row.attempts).toISOString(),
+              companyId,
+              row.id,
+            ],
+          );
         }
       }
     } catch (e) {
@@ -189,8 +202,9 @@ export function createNotificationProcessor(db, { batchSize = 20 } = {}) {
   return tick;
 }
 
-export function startNotifications(db) {
-  const tick = createNotificationProcessor(db);
+export function startNotifications(db, companyId) {
+  requireCompanyId(companyId);
+  const tick = createNotificationProcessor(db, companyId);
   const timer = setInterval(tick, 15000);
   timer.unref();
   void tick();

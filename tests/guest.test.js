@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from '../server/company-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -254,7 +255,7 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
     }
     return realFetch(url, options);
   });
-  await createNotificationProcessor(db)();
+  await createNotificationProcessor(db, getLegacyCompanyId())();
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].to, ['cliente@example.com']);
   assert.match(calls[0].text, /Visitante Sem Conta/);

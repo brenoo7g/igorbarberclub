@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from './company-context.js';
 import { createDatabase } from './database.js';
 import { createApp } from './app.js';
 import { seed } from './seed.js';
@@ -57,7 +58,7 @@ async function initialize() {
     });
     stage = 'application';
     const app = createApp(db, { secret: process.env.JWT_SECRET, serveStatic: false });
-    const notifications = createNotificationProcessor(db, { batchSize: 2 });
+    const notifications = createNotificationProcessor(db, getLegacyCompanyId(), { batchSize: 2 });
     return {
       app,
       processNotifications: () =>

@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from '../server/company-context.js';
 import { IGOR_COMPANY_ID } from '../server/company-bootstrap.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -119,7 +120,7 @@ test('portfolio: real seed, permissions, validated images, concurrent edits and 
     2,
   );
   await request('/admin/portfolio/igor-corte-1', 'DELETE', undefined, admin.cookie);
-  await db.transaction(seedPortfolio);
+  await db.transaction((tx) => seedPortfolio(tx, getLegacyCompanyId()));
   assert.equal(await db.get('SELECT id FROM portfolio WHERE id=?', ['igor-corte-1']), undefined);
   assert.equal(
     (await request(`/admin/portfolio/${created.body.id}`, 'DELETE', undefined, admin.cookie))

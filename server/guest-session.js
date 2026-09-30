@@ -1,4 +1,4 @@
-import { IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { requireCompanyId } from './company-context.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const duration = 90 * 86400000;
@@ -14,7 +14,13 @@ export const publicVisitor = (session) =>
       }
     : null;
 
-export function installGuestSessions(app, db, { secureCookies, testGuestAccess = false }) {
+export function installGuestSessions(
+  app,
+  db,
+  companyId,
+  { secureCookies, testGuestAccess = false },
+) {
+  requireCompanyId(companyId);
   const cookieName = secureCookies ? '__Host-igor-visitor' : 'igor-visitor';
   const options = { httpOnly: true, secure: secureCookies, sameSite: 'lax', path: '/' };
   // Only the disposable test server retains credentials in memory for unverified reentry.
@@ -27,9 +33,10 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
     const token = req.cookies[cookieName];
     if (typeof token === 'string' && /^[a-f0-9]{64}$/.test(token)) {
       req.visitorToken = token;
-      const session = await db.get('SELECT * FROM guest_sessions WHERE token_hash=?', [
-        hash(token),
-      ]);
+      const session = await db.get(
+        'SELECT * FROM guest_sessions WHERE company_id=? AND token_hash=?',
+        [companyId, hash(token)],
+      );
       req.visitorSession = session;
       if (active(session)) {
         req.visitor = session;
@@ -38,11 +45,10 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
           session.expires_at < new Date(Date.now() + duration - 86400000).toISOString()
         ) {
           const expires = new Date(Date.now() + duration).toISOString();
-          await db.run('UPDATE guest_sessions SET expires_at=? WHERE id=? AND expires_at>?', [
-            expires,
-            session.id,
-            new Date().toISOString(),
-          ]);
+          await db.run(
+            'UPDATE guest_sessions SET expires_at=? WHERE company_id=? AND id=? AND expires_at>?',
+            [expires, companyId, session.id, new Date().toISOString()],
+          );
           setCookie(res, token);
         }
       }
@@ -54,30 +60,32 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
       if (!testTokens || db.ephemeral !== true) throw new Error('Modo de teste indisponível.');
       return db.transaction(async (tx) => {
         const latest = await tx.get(
-          'SELECT a.guest_name AS name,a.guest_phone AS phone,a.guest_email AS email,g.visitor_id FROM appointments a JOIN guest_appointments g ON g.appointment_id=a.id WHERE a.user_id IS NULL AND a.guest_email=? ORDER BY a.created_at DESC,a.id DESC LIMIT 1',
-          [email],
+          'SELECT a.guest_name AS name,a.guest_phone AS phone,a.guest_email AS email,g.visitor_id FROM appointments a JOIN guest_appointments g ON g.appointment_id=a.id AND g.company_id=a.company_id WHERE a.company_id=? AND a.user_id IS NULL AND a.guest_email=? ORDER BY a.created_at DESC,a.id DESC LIMIT 1',
+          [companyId, email],
         );
         if (!latest) return null;
-        const session = await tx.get('SELECT * FROM guest_sessions WHERE id=?', [
+        const session = await tx.get('SELECT * FROM guest_sessions WHERE company_id=? AND id=?', [
+          companyId,
           latest.visitor_id,
         ]);
         const token =
           (active(session) && testTokens.get(session.token_hash)) ||
           randomBytes(32).toString('hex');
         await tx.run(
-          'UPDATE guest_sessions SET token_hash=?,name=?,email=?,phone=?,expires_at=? WHERE id=?',
+          'UPDATE guest_sessions SET token_hash=?,name=?,email=?,phone=?,expires_at=? WHERE company_id=? AND id=?',
           [
             hash(token),
             latest.name,
             latest.email,
             latest.phone,
             new Date(Date.now() + duration).toISOString(),
+            companyId,
             session.id,
           ],
         );
         await tx.run(
-          'UPDATE guest_appointments SET visitor_id=? WHERE appointment_id IN (SELECT id FROM appointments WHERE user_id IS NULL AND guest_email=?)',
-          [session.id, email],
+          'UPDATE guest_appointments SET visitor_id=? WHERE company_id=? AND appointment_id IN (SELECT id FROM appointments WHERE company_id=? AND user_id IS NULL AND guest_email=?)',
+          [session.id, companyId, companyId, email],
         );
         return {
           token,
@@ -93,8 +101,9 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
     },
     async forget(req, res) {
       if (req.visitorToken)
-        await db.run('UPDATE guest_sessions SET expires_at=? WHERE token_hash=?', [
+        await db.run('UPDATE guest_sessions SET expires_at=? WHERE company_id=? AND token_hash=?', [
           new Date().toISOString(),
+          companyId,
           hash(req.visitorToken),
         ]);
       res.clearCookie(cookieName, options);
@@ -102,8 +111,8 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
     async save(tx, req, contact) {
       let token = req.visitorToken || randomBytes(32).toString('hex');
       let session = await tx.get(
-        `SELECT * FROM guest_sessions WHERE token_hash=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
-        [hash(token)],
+        `SELECT * FROM guest_sessions WHERE company_id=? AND token_hash=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
+        [companyId, hash(token)],
       );
       if (session && !active(session)) {
         // A revoked or expired credential must never reopen its old history.
@@ -113,44 +122,65 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
       const id = session?.id || randomUUID();
       const expires = new Date(Date.now() + duration).toISOString();
       if (session)
-        await tx.run('UPDATE guest_sessions SET name=?,email=?,phone=?,expires_at=? WHERE id=?', [
-          contact.name,
-          contact.email,
-          contact.phone,
-          expires,
-          id,
-        ]);
-      else
         await tx.run(
-          `INSERT INTO guest_sessions (company_id,id,token_hash,name,email,phone,created_at,expires_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?)`,
-          [
-            id,
-            hash(token),
-            contact.name,
-            contact.email,
-            contact.phone,
-            new Date().toISOString(),
-            expires,
-          ],
+          'UPDATE guest_sessions SET name=?,email=?,phone=?,expires_at=? WHERE company_id=? AND id=?',
+          [contact.name, contact.email, contact.phone, expires, companyId, id],
         );
+      else {
+        const insert = () =>
+          tx.run(
+            'INSERT INTO guest_sessions (company_id,id,token_hash,name,email,phone,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(token_hash) DO NOTHING',
+            [
+              companyId,
+              id,
+              hash(token),
+              contact.name,
+              contact.email,
+              contact.phone,
+              new Date().toISOString(),
+              expires,
+            ],
+          );
+        await insert();
+        // Token hashes are globally unique. A foreign credential must neither reveal
+        // its owner nor abort a valid new booking. Rotate it instead of reusing it.
+        if (
+          !(await tx.get('SELECT id FROM guest_sessions WHERE company_id=? AND id=?', [
+            companyId,
+            id,
+          ]))
+        ) {
+          token = randomBytes(32).toString('hex');
+          await insert();
+          if (
+            !(await tx.get('SELECT id FROM guest_sessions WHERE company_id=? AND id=?', [
+              companyId,
+              id,
+            ]))
+          )
+            throw new Error('Não foi possível criar a sessão visitante.');
+        }
+      }
       return { token, visitor: { id, ...contact } };
     },
     setCookie,
   };
 }
 
-export async function ownsAppointment(db, req, appointment, lock = false) {
+export async function ownsAppointment(db, companyId, req, appointment, lock = false) {
+  requireCompanyId(companyId);
+  if (appointment.company_id !== companyId) return false;
   if (req.user) return appointment.user_id === req.user.id;
   if (!req.visitor || appointment.user_id !== null) return false;
   const session = await db.get(
-    `SELECT * FROM guest_sessions WHERE id=?${lock && db.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
-    [req.visitor.id],
+    `SELECT * FROM guest_sessions WHERE company_id=? AND id=?${lock && db.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
+    [companyId, req.visitor.id],
   );
   if (!active(session) || session.token_hash !== hash(req.visitorToken)) return false;
   return Boolean(
     await db.get(
-      'SELECT appointment_id FROM guest_appointments WHERE appointment_id=? AND visitor_id=?',
-      [appointment.id, session.id],
+      'SELECT appointment_id FROM guest_appointments WHERE company_id=? AND appointment_id=? AND visitor_id=?',
+      [companyId, appointment.id, session.id],
     ),
   );
 }

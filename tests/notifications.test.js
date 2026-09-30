@@ -1,3 +1,4 @@
+import { getLegacyCompanyId } from '../server/company-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDatabase } from '../server/database.js';
@@ -35,10 +36,10 @@ test('notification worker: disabled channels cannot starve email; provider contr
   const appointment = await db.get('SELECT id FROM appointments LIMIT 1');
   // Older unconfigured-channel events used to fill the batch before eligible emails.
   for (let i = 0; i < 25; i++) {
-    await enqueueNotification(db, appointment.id, 'confirmed');
+    await enqueueNotification(db, getLegacyCompanyId(), appointment.id, 'confirmed');
   }
   await db.run("DELETE FROM notifications WHERE channel='email'");
-  await enqueueNotification(db, appointment.id, 'confirmed');
+  await enqueueNotification(db, getLegacyCompanyId(), appointment.id, 'confirmed');
   const email = await db.get("SELECT * FROM notifications WHERE channel='email'");
   const snapshot = JSON.parse(email.payload);
   assert.equal(snapshot.barber, 'Igor Borges');
@@ -65,7 +66,7 @@ test('notification worker: disabled channels cannot starve email; provider contr
     }
     assert.fail('Worker did not reach expected state');
   };
-  stop = startNotifications(db);
+  stop = startNotifications(db, getLegacyCompanyId());
   await waitFor(
     async () =>
       (await db.get('SELECT status FROM notifications WHERE id=?', [email.id])).status === 'sent',
@@ -100,11 +101,11 @@ test('notification worker: disabled channels cannot starve email; provider contr
   );
 
   fail = true;
-  await enqueueNotification(db, appointment.id, 'rescheduled');
+  await enqueueNotification(db, getLegacyCompanyId(), appointment.id, 'rescheduled');
   const retry = await db.get(
     "SELECT * FROM notifications WHERE channel='email' AND event='rescheduled'",
   );
-  stop = startNotifications(db);
+  stop = startNotifications(db, getLegacyCompanyId());
   await waitFor(async () => {
     const row = await db.get('SELECT * FROM notifications WHERE id=?', [retry.id]);
     return row.attempts === 1 && row.status === 'pending';
