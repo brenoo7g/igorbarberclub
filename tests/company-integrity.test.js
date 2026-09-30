@@ -64,7 +64,7 @@ test('Gradefy integrity: upgrade from checksummed 001 preserves all data and is 
     "INSERT INTO subscriptions(id,company_id,plan_id,status,source,created_at,updated_at) VALUES('manual','igor-barber-club','team','active','manual','2025-01-01','2025-01-01')",
   );
   const before = await snapshotFoundation(db);
-  assert.deepEqual(await runMigrations(db), [2]);
+  assert.deepEqual(await runMigrations(db), [2, 3]);
   const after = await snapshotFoundation(db);
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -123,5 +123,5 @@ test('Gradefy integrity: failure after SQLite table replacement rolls back schem
   await assert.rejects(runMigrations(fail), /simulated 002 failure/);
   assert.deepEqual(await snapshotFoundation(db), before);
   assert.deepEqual(await db.all('SELECT type,name,sql FROM sqlite_schema ORDER BY name'), schema);
-  assert.deepEqual(await runMigrations(db), [2]);
+  assert.deepEqual(await runMigrations(db), [2, 3]);
 });

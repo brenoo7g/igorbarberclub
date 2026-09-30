@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { randomUUID } from 'node:crypto';
 import { clock } from './domain.js';
 
@@ -30,7 +31,7 @@ export async function enqueueNotification(db, appointmentId, event) {
   for (const channel of ['email', 'whatsapp']) {
     const now = new Date().toISOString();
     await db.run(
-      'INSERT INTO notifications (id,appointment_id,channel,event,payload,created_at,next_attempt_at) VALUES (?,?,?,?,?,?,?)',
+      `INSERT INTO notifications (company_id,id,appointment_id,channel,event,payload,created_at,next_attempt_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?)`,
       [randomUUID(), appointmentId, channel, event, payload, now, now],
     );
   }

@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from '../server/company-bootstrap.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -139,7 +140,7 @@ test('portfolio: real seed, permissions, validated images, concurrent edits and 
   );
   for (let i = 4; i < 40; i++)
     await db.run(
-      'INSERT INTO portfolio (id,title,category,image,version,created_at) VALUES (?,?,?,?,?,?)',
+      `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
       [`limit-${i}`, 'Test', 'Test', 'AA==', 1, '2026-09-10'],
     );
   assert.equal((await request('/admin/portfolio', 'POST', data, admin.cookie)).status, 409);

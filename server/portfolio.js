@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
@@ -63,7 +64,7 @@ export function installPortfolioRoutes(app, db, { authenticated, admin, authLimi
       if (Number(count.total) >= 40)
         fail(409, 'A galeria permite até 40 fotos. Remova uma foto antes de adicionar outra.');
       await tx.run(
-        'INSERT INTO portfolio (id,title,category,image,version,created_at) VALUES (?,?,?,?,?,?)',
+        `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
         [row.id, row.title, row.category, image, row.version, new Date().toISOString()],
       );
     });

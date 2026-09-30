@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { readFileSync } from 'node:fs';
 
 // Imported once, under the database schema lock. Removed/edited photos stay that way on redeploy.
@@ -16,7 +17,7 @@ export async function seedPortfolio(tx) {
       new URL(`./portfolio-photos/corte-${number}.webp`, import.meta.url),
     ).toString('base64');
     await tx.run(
-      'INSERT INTO portfolio (id,title,category,image,version,created_at) VALUES (?,?,?,?,?,?)',
+      `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
       [`igor-corte-${number}`, title, 'Degradês', image, 1, `${date}T12:00:00.000Z`],
     );
   }

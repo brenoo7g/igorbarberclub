@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from '../server/company-bootstrap.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -123,11 +124,10 @@ test('weekly cycles and rolling windows use configured working days and Brazil d
 test('schedule API: permission, atomic changes, release idempotency and competing reservations/settings/blocks', async (t) => {
   const db = await createDatabase('', ':memory:');
   await seed(db);
-  await db.run('INSERT INTO barbers (id,name,specialty) VALUES (?,?,?)', [
-    'schedule-test',
-    'Agenda QA',
-    'Teste',
-  ]);
+  await db.run(
+    `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}',?,?,?)`,
+    ['schedule-test', 'Agenda QA', 'Teste'],
+  );
   const server = createApp(db, { test: true }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;

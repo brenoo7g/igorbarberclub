@@ -30,7 +30,14 @@ const foundationTables = [
 const plain = (value) => JSON.parse(JSON.stringify(value));
 async function snapshot(db, tables) {
   const result = {};
-  for (const table of tables) result[table] = plain(await db.all(`SELECT * FROM ${table}`));
+  for (const table of tables) {
+    result[table] = plain(await db.all(`SELECT * FROM ${table}`));
+    if (legacyTables.includes(table))
+      for (const row of result[table]) {
+        if ('company_id' in row) assert.equal(row.company_id, 'igor-barber-club');
+        delete row.company_id;
+      }
+  }
   return result;
 }
 
@@ -208,7 +215,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
       0,
     );
     fail = false;
-    assert.deepEqual(await runMigrations(db), [1, 2]);
+    assert.deepEqual(await runMigrations(db), [1, 2, 3]);
     assert.deepEqual(await runMigrations(db), []);
   } finally {
     sqlite.close();

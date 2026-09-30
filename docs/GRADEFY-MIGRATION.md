@@ -1,5 +1,7 @@
 # Gradefy — Fase 1: fundação
 
+**Atualização: Fase 2A implementada.** A migration `003-gradefy-data-ownership.sql` acrescenta propriedade explícita às 13 tabelas operacionais, preservando 001/002 e atribuindo o legado à Igor. Nenhuma rota resolve empresas dinamicamente e a segunda empresa permanece bloqueada. Veja a [documentação da propriedade dos dados](GRADEFY-DATA-OWNERSHIP.md), com constraints, índices, preservação e testes. O restante deste documento registra as decisões da Fase 1; a ausência de `company_id` operacional descrita abaixo corresponde àquela etapa anterior.
+
 Esta entrega adiciona apenas metadados e migrações versionadas. A Igor Barber Club continua sendo a única empresa operacional. Nenhuma rota consulta as tabelas novas para autorizar, filtrar dados, renderizar templates ou limitar profissionais.
 
 Não há onboarding, cobrança, pagamentos, seleção de empresa ou nova interface. A autenticação continua usando as mesmas contas, senhas, segredo, cookies, issuer/audience e formato JWT. O aplicativo mantém seu funcionamento local de demonstração.

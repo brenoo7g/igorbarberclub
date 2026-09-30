@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from '../server/company-bootstrap.js';
 process.env.DEMO_MODE = 'true';
 process.env.APP_URL = 'http://127.0.0.1:4173';
 const { createDatabase } = await import('../server/database.js');
@@ -37,11 +38,10 @@ await db.run(
     'sent',
   ],
 );
-await db.run('INSERT INTO barbers (id,name,specialty) VALUES (?,?,?)', [
-  'week-qa',
-  'Agenda QA',
-  'Teste de abertura semanal',
-]);
+await db.run(
+  `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}',?,?,?)`,
+  ['week-qa', 'Agenda QA', 'Teste de abertura semanal'],
+);
 createApp(db, { test: true }).listen(4173, '127.0.0.1', () =>
   console.log('Browser test server listening on 4173'),
 );

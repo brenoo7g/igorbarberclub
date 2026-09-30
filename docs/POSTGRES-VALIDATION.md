@@ -1,5 +1,7 @@
 # Gradefy — validação da fundação em PostgreSQL
 
+**Validação posterior da Fase 2A:** a suíte agora também cobre a migration 003, backfill empresarial, regressão financeira, rollback e FKs compostas, com 17 testes aprovados. Consulte [GRADEFY-DATA-OWNERSHIP.md](GRADEFY-DATA-OWNERSHIP.md). Os números e limitações abaixo são históricos.
+
 **Registro histórico da validação da migration 001.** A correção posterior criou a migration 002, eliminando a exceção de ID nulo e restringindo os contadores inteiros no SQLite. A suíte atual passou com 14 testes, incluindo upgrade 001→002 e remoção futura da restrição em ambos os bancos. Resultados atuais, auditoria e arquivos em [GRADEFY-INTEGRITY.md](GRADEFY-INTEGRITY.md). Os artefatos locais são substituídos a cada execução; os números abaixo descrevem a execução original.
 
 Execução concluída em 30/09/2026. Os **10 cenários PostgreSQL passaram**. Um teste adicional em SQLite documentou diferenças e uma fragilidade da restrição de empresa única nesse dialeto. Essa fragilidade foi reproduzida, não corrigida nesta etapa exclusivamente de validação.

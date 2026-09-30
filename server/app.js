@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import express from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -456,7 +457,7 @@ export function createApp(
         await tx.run('DELETE FROM appointment_services WHERE appointment_id=?', [id]);
       } else
         await tx.run(
-          'INSERT INTO appointments (id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+          `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?,?,?,?,?,?)`,
           [
             id,
             asGuest ? null : req.user.id,
@@ -474,15 +475,15 @@ export function createApp(
         );
       for (const s of services)
         await tx.run(
-          'INSERT INTO appointment_services (appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?)',
+          `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
           [id, s.id, s.name, s.price, s.duration],
         );
       if (asGuest) {
         guestSession = await visitors.save(tx, req, data.guest);
-        await tx.run('INSERT INTO guest_appointments (appointment_id,visitor_id) VALUES (?,?)', [
-          id,
-          guestSession.visitor.id,
-        ]);
+        await tx.run(
+          `INSERT INTO guest_appointments (company_id,appointment_id,visitor_id) VALUES ('${IGOR_COMPANY_ID}',?,?)`,
+          [id, guestSession.visitor.id],
+        );
       }
       await enqueueNotification(tx, id, reschedule ? 'rescheduled' : 'confirmed');
     });
@@ -548,7 +549,7 @@ export function createApp(
     const data = serviceSchema.parse(req.body),
       id = randomUUID();
     await db.run(
-      'INSERT INTO services (id,name,description,duration,price,category) VALUES (?,?,?,?,?,?)',
+      `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
       [id, data.name, data.description, data.duration, data.price, data.category],
     );
     res.status(201).json({ id, ...data, active: 1 });
@@ -619,7 +620,7 @@ export function createApp(
       if (overlaps(start, end, await occupied(tx, data.barberId, data.date)))
         fail(409, 'Há um agendamento ou bloqueio nesse intervalo.');
       await tx.run(
-        'INSERT INTO blocks (id,barber_id,date,start_minute,end_minute,reason) VALUES (?,?,?,?,?,?)',
+        `INSERT INTO blocks (company_id,id,barber_id,date,start_minute,end_minute,reason) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
         [id, data.barberId, data.date, start, end, data.reason],
       );
     });

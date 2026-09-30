@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { z } from 'zod';
 import { addDays, clock, dateInBrazil, isFuture, weekday } from './domain.js';
 import {
@@ -168,14 +169,14 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
           `Esta alteração afeta o agendamento de ${conflict.date.split('-').reverse().join('/')} às ${clock(conflict.start_minute)}. Remarque ou cancele esse atendimento antes de alterar o expediente.`,
         );
       await tx.run(
-        'INSERT INTO barber_settings (barber_id,agenda_mode,max_days_ahead,version) VALUES (?,?,?,?) ON CONFLICT(barber_id) DO UPDATE SET agenda_mode=excluded.agenda_mode,max_days_ahead=excluded.max_days_ahead,version=excluded.version',
+        `INSERT INTO barber_settings (company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?) ON CONFLICT(barber_id) DO UPDATE SET agenda_mode=excluded.agenda_mode,max_days_ahead=excluded.max_days_ahead,version=excluded.version`,
         [req.params.id, data.agenda_mode, data.max_days_ahead, data.version + 1],
       );
       await tx.run('DELETE FROM barber_working_breaks WHERE barber_id=?', [req.params.id]);
       await tx.run('DELETE FROM barber_working_hours WHERE barber_id=?', [req.params.id]);
       for (const day of days) {
         await tx.run(
-          'INSERT INTO barber_working_hours (barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES (?,?,?,?,?,?,?)',
+          `INSERT INTO barber_working_hours (company_id,barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?)`,
           [
             req.params.id,
             day.weekday,
@@ -188,7 +189,7 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
         );
         for (let i = 1; i < day.breaks.length; i++)
           await tx.run(
-            'INSERT INTO barber_working_breaks (barber_id,weekday,position,start_time,end_time) VALUES (?,?,?,?,?)',
+            `INSERT INTO barber_working_breaks (company_id,barber_id,weekday,position,start_time,end_time) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
             [req.params.id, day.weekday, i, day.breaks[i].start_time, day.breaks[i].end_time],
           );
       }
@@ -225,7 +226,7 @@ export function installScheduleRoutes(app, db, { authenticated, admin }) {
       )
         fail(409, 'O período disponível mudou. Atualize a agenda antes de liberar a semana.');
       await tx.run(
-        'INSERT INTO released_weeks (barber_id,week_start,start_date,end_date,created_at) VALUES (?,?,?,?,?)',
+        `INSERT INTO released_weeks (company_id,barber_id,week_start,start_date,end_date,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
         [req.params.id, next.week_start, next.start_date, next.end_date, new Date().toISOString()],
       );
       await tx.run('UPDATE barber_settings SET version=version+1 WHERE barber_id=?', [

@@ -5,6 +5,14 @@ import { readFile, writeFile, mkdir, mkdtemp, cp, rm } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import pg from 'pg';
+import { ownedTables } from '../../server/data-ownership.js';
+import {
+  installOwnershipFixture,
+  assertOwnershipUpgrade,
+  assertOwnershipConstraints,
+  ownershipSnapshot,
+  assertCrossCompanyRelations,
+} from '../helpers/data-ownership.js';
 import { assertFoundationIntegrity } from '../helpers/foundation-integrity.js';
 
 // This suite is intentionally NOT part of tests/*.test.js. Only run-local.mjs provisions it.
@@ -103,9 +111,13 @@ async function snapshot(raw, tables) {
   const result = {};
   for (const table of tables) {
     assert.match(table, /^[a-z_]+$/);
-    result[table] = (await raw.query(`SELECT * FROM ${table}`)).rows.sort((a, b) =>
-      JSON.stringify(a).localeCompare(JSON.stringify(b)),
-    );
+    const rows = (await raw.query(`SELECT * FROM ${table}`)).rows;
+    if (ownedTables.includes(table))
+      for (const row of rows) {
+        if ('company_id' in row) assert.equal(row.company_id, 'igor-barber-club');
+        delete row.company_id;
+      }
+    result[table] = rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }
   return result;
 }
@@ -114,7 +126,7 @@ const count = async (db, table) =>
 async function assertCatalog(db) {
   for (const table of ['companies', 'niches', 'templates', 'company_settings'])
     assert.equal(await count(db, table), 1);
-  assert.equal(await count(db, 'schema_migrations'), 2);
+  assert.equal(await count(db, 'schema_migrations'), 3);
   assert.deepEqual(
     (await db.all('SELECT id,max_professionals FROM plans ORDER BY id')).map((p) => [
       p.id,
@@ -149,6 +161,97 @@ async function shadow(t) {
   };
 }
 
+function rawAdapter(raw) {
+  const tx = {
+    dialect: 'postgres',
+    all: async (sql, args = []) => {
+      let n = 0;
+      return (
+        await raw.query(
+          sql.replace(/\?/g, () => `$${++n}`),
+          args,
+        )
+      ).rows;
+    },
+    get: async function (sql, args) {
+      return (await this.all(sql, args))[0];
+    },
+    run: async (sql, args = []) => {
+      let n = 0;
+      return raw.query(
+        sql.replace(/\?/g, () => `$${++n}`),
+        args,
+      );
+    },
+  };
+  return {
+    ...tx,
+    transaction: async (fn) => {
+      await raw.query('BEGIN');
+      try {
+        const value = await fn(tx);
+        await raw.query('COMMIT');
+        return value;
+      } catch (error) {
+        await raw.query('ROLLBACK');
+        throw error;
+      }
+    },
+  };
+}
+
+test('15 Gradefy 2A PostgreSQL: backfill 13 tabelas, preservação, métricas e constraints', async (t) => {
+  const { raw } = await makeCase(t, 'ownership', { initialize: false });
+  const db = rawAdapter(raw);
+  await installOwnershipFixture(db);
+  await assertOwnershipUpgrade(db);
+  await assertOwnershipConstraints(db);
+});
+
+test('16 Gradefy 2A PostgreSQL: rollback após backfill e retry preservam todo legado', async (t) => {
+  const { raw } = await makeCase(t, 'ownership_rollback', { initialize: false });
+  const db = rawAdapter(raw);
+  await installOwnershipFixture(db);
+  const before = await ownershipSnapshot(db);
+  const failing = {
+    transaction: (fn) =>
+      db.transaction((tx) =>
+        fn({
+          ...tx,
+          run: async (sql, args) => {
+            if (sql.startsWith('ALTER TABLE notifications ALTER COLUMN company_id'))
+              await tx.run('SELECT deliberate_003_error()');
+            return tx.run(sql, args);
+          },
+        }),
+      ),
+  };
+  await assert.rejects(runMigrations(failing), { code: '42883' });
+  assert.deepEqual(await ownershipSnapshot(db), before);
+  assert.equal(
+    (
+      await raw.query(
+        "SELECT * FROM information_schema.columns WHERE table_name='barbers' AND column_name='company_id'",
+      )
+    ).rows.length,
+    0,
+  );
+  await assertOwnershipUpgrade(db);
+});
+
+test('17 Gradefy 2A PostgreSQL: empresa Igor ausente não é recriada por inicialização', async (t) => {
+  const { raw, url } = await makeCase(t, 'ownership_missing', { initialize: false });
+  const db = rawAdapter(raw);
+  await installOwnershipFixture(db);
+  await db.run('DELETE FROM company_members');
+  await db.run('DELETE FROM company_settings');
+  await db.run('DELETE FROM companies');
+  const before = await ownershipSnapshot(db);
+  await assert.rejects(createDatabase(url), /Gradefy 003: empresa Igor/);
+  assert.deepEqual(await ownershipSnapshot(db), before);
+  assert.equal((await db.all('SELECT * FROM companies')).length, 0);
+});
+
 test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos', async (t) => {
   const { db, raw } = await makeCase(t, 'empty');
   assert.equal(db.dialect, 'postgres');
@@ -169,7 +272,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       "SELECT table_name FROM information_schema.columns WHERE column_name='company_id' AND table_schema='public'",
     )
   ).rows)
-    assert.ok(!legacyTables.includes(row.table_name));
+    assert.ok(ownedTables.includes(row.table_name) || foundationTables.includes(row.table_name));
 });
 
 test('02 PostgreSQL legado: preserva todas as 17 tabelas, IDs, índices e contatos', async (t) => {
@@ -409,7 +512,7 @@ test('09 SQL PostgreSQL: tipos, defaults, FKs, índices parciais, timestamps tex
   assert.equal(await db.get("SELECT id FROM plans WHERE id='rollback-probe'"), undefined);
 });
 
-test('10 Evolução futura: migration 003 temporária remove a restrição sem edição manual do banco', async (t) => {
+test('10 Evolução futura: migration 004 temporária remove a restrição sem edição manual do banco', async (t) => {
   const { db, url } = await makeCase(t, 'future');
   const copy = await shadow(t);
   const manifest = join(copy.directory, 'server', 'migrations.js');
@@ -420,12 +523,12 @@ test('10 Evolução futura: migration 003 temporária remove a restrição sem e
     manifest,
     original.replace(
       anchor,
-      "\n  Object.freeze({ version: 3, name: 'test-remove-single-company', file: '003-test-only.sql' })," +
+      "\n  Object.freeze({ version: 4, name: 'test-remove-single-company', file: '004-test-only.sql' })," +
         anchor,
     ),
   );
   await writeFile(
-    join(copy.directory, 'server', 'migrations', '003-test-only.sql'),
+    join(copy.directory, 'server', 'migrations', '004-test-only.sql'),
     'ALTER TABLE companies DROP CONSTRAINT gradefy_single_company;\n',
   );
   const temporary = await copy.loadDatabase();
@@ -435,7 +538,7 @@ test('10 Evolução futura: migration 003 temporária remove a restrição sem e
       (await upgraded.all('SELECT version FROM schema_migrations ORDER BY version')).map(
         (r) => r.version,
       ),
-      [1, 2, 3],
+      [1, 2, 3, 4],
     );
     const runner = await copy.loadRunner();
     assert.deepEqual(await runner.runMigrations(upgraded), []);
@@ -443,8 +546,9 @@ test('10 Evolução futura: migration 003 temporária remove a restrição sem e
       "INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES ('test-second','test-second','Somente teste','barbershop','barber-classic','2026-01-01','2026-01-01')",
     );
     assert.equal(await count(upgraded, 'companies'), 2);
+    await assertCrossCompanyRelations(upgraded);
     // The unmodified application refuses a newer database instead of ignoring its migration.
-    await assert.rejects(runMigrations(db), /versão 3/);
+    await assert.rejects(runMigrations(db), /versão 4/);
   } finally {
     await upgraded.close();
   }
@@ -514,7 +618,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2],
+    [1, 2, 3],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -537,7 +641,7 @@ test('14 Evolução SQLite: migration futura remove só a restrição de empresa
     manifest,
     original.replace(
       '\n]);',
-      "\n  Object.freeze({version:3,name:'test-remove-single-company',file:'003-test-only.sql'}),\n]);",
+      "\n  Object.freeze({version:4,name:'test-remove-single-company',file:'004-test-only.sql'}),\n]);",
     ),
   );
   const statements = readMigration(migrations[1]).statements.filter((sql) =>
@@ -547,7 +651,7 @@ test('14 Evolução SQLite: migration futura remove só a restrição de empresa
   const restriction = ",\n  CONSTRAINT gradefy_single_company CHECK(id = 'igor-barber-club')";
   assert.ok(sql.includes(restriction));
   await writeFile(
-    join(copy.directory, 'server', 'migrations', '003-test-only.sql'),
+    join(copy.directory, 'server', 'migrations', '004-test-only.sql'),
     sql.replace(restriction, ''),
   );
   const temporary = await copy.loadDatabase();
@@ -563,6 +667,7 @@ test('14 Evolução SQLite: migration futura remove só a restrição de empresa
     );
     assert.deepEqual(await db.all('PRAGMA foreign_key_check'), []);
     assert.equal(await count(db, 'companies'), 2);
+    await assertCrossCompanyRelations(db);
     const runner = await copy.loadRunner();
     assert.deepEqual(await runner.runMigrations(db), []);
   } finally {

@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { addDays, dateInBrazil, weekday, isFuture } from './domain.js';
@@ -7,11 +8,10 @@ export const demoMode =
   !process.env.VERCEL && process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE !== 'false';
 export async function seed(db) {
   if (!(await db.get('SELECT id FROM barbers LIMIT 1'))) {
-    await db.run('INSERT INTO barbers (id,name,specialty) VALUES (?,?,?)', [
-      'igor',
-      'Igor Borges',
-      'Especialista em cortes e degradês',
-    ]);
+    await db.run(
+      `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}',?,?,?)`,
+      ['igor', 'Igor Borges', 'Especialista em cortes e degradês'],
+    );
   }
   if (!(await db.get('SELECT id FROM services LIMIT 1'))) {
     const services = [
@@ -66,7 +66,7 @@ export async function seed(db) {
     ];
     for (const service of services)
       await db.run(
-        'INSERT INTO services (id,name,description,duration,price,category) VALUES (?,?,?,?,?,?)',
+        `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?)`,
         service,
       );
   }
@@ -142,7 +142,7 @@ export async function seed(db) {
         const start = 540 + j * 100;
         const id = randomUUID();
         await tx.run(
-          'INSERT INTO appointments (id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+          `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?,?,?)`,
           [
             id,
             users[j % users.length],
@@ -156,7 +156,7 @@ export async function seed(db) {
           ],
         );
         await tx.run(
-          'INSERT INTO appointment_services (appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?)',
+          `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?)`,
           [id, service.id, service.name, service.price, service.duration],
         );
       }

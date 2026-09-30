@@ -28,7 +28,7 @@ test('Gradefy bootstrap: repeat and concurrent calls create only one company and
   assert.equal(members.length, users.filter((u) => u.role === 'admin').length);
   assert.ok(members.every((m) => m.role === 'admin'));
   await db.run(
-    "INSERT INTO barbers (id,name,specialty) VALUES ('second-professional','Outro Profissional','Teste')",
+    `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}','second-professional','Outro Profissional','Teste')`,
   );
   await seed(db);
   await bootstrapIgorCompany(db);

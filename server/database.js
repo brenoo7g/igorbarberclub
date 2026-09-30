@@ -141,9 +141,9 @@ export async function createDatabase(
           await tx.run(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
       }
       await migrateGuestBookings(tx);
-      await seedPortfolio(tx);
       await applyMigrations(tx);
       await bootstrapIgorCompany(tx);
+      await seedPortfolio(tx);
     });
     if (db.dialect === 'sqlite') await db.run('PRAGMA foreign_keys=ON');
   } catch (error) {

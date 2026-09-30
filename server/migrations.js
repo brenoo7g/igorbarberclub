@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { bootstrapIgorCompany, IGOR_COMPANY_ID } from './company-bootstrap.js';
+import { prepareDataOwnership, finishDataOwnership } from './data-ownership.js';
 
 export const migrations = Object.freeze([
   Object.freeze({ version: 1, name: 'gradefy-foundation', file: '001-gradefy-foundation.sql' }),
@@ -7,6 +9,11 @@ export const migrations = Object.freeze([
     version: 2,
     name: 'gradefy-foundation-integrity',
     file: '002-gradefy-foundation-integrity.sql',
+  }),
+  Object.freeze({
+    version: 3,
+    name: 'gradefy-data-ownership',
+    file: '003-gradefy-data-ownership.sql',
   }),
 ]);
 
@@ -96,14 +103,20 @@ export async function applyMigrations(tx) {
   }
   const installed = [];
   for (const migration of definitions.slice(applied.length)) {
+    // Only a genuinely new foundation is bootstrapped before 003. Existing foundations
+    // must already contain Igor; never silently repair a missing company during adoption.
+    if (migration.version === 3 && applied.length === 0) await bootstrapIgorCompany(tx);
+    const ownership = migration.version === 3 ? await prepareDataOwnership(tx) : null;
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx, true);
     for (const statement of migration.statements) {
       // Both dialect branches belong to the same immutable, checksummed migration file.
       const dialect = statement.match(/^-- dialect: (postgres|sqlite)\n/);
       if (dialect && dialect[1] !== tx.dialect) continue;
-      await tx.run(dialect ? statement.slice(dialect[0].length) : statement);
+      const sql = dialect ? statement.slice(dialect[0].length) : statement;
+      await tx.run(sql, sql.startsWith('-- igor-backfill\n') ? [IGOR_COMPANY_ID] : []);
     }
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx);
+    if (ownership) await finishDataOwnership(tx, ownership);
     await tx.run(
       'INSERT INTO schema_migrations (version,name,checksum,applied_at) VALUES (?,?,?,?)',
       [migration.version, migration.name, migration.checksum, new Date().toISOString()],

@@ -1,3 +1,4 @@
+import { IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const duration = 90 * 86400000;
@@ -121,7 +122,7 @@ export function installGuestSessions(app, db, { secureCookies, testGuestAccess =
         ]);
       else
         await tx.run(
-          'INSERT INTO guest_sessions (id,token_hash,name,email,phone,created_at,expires_at) VALUES (?,?,?,?,?,?,?)',
+          `INSERT INTO guest_sessions (company_id,id,token_hash,name,email,phone,created_at,expires_at) VALUES ('${IGOR_COMPANY_ID}',?,?,?,?,?,?,?)`,
           [
             id,
             hash(token),
