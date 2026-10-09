@@ -6,6 +6,8 @@ const { seed } = await import('../server/seed.js');
 const { createApp } = await import('../server/app.js');
 const db = await createDatabase('', ':memory:');
 await seed(db);
+const { installBarberClassicFixture } = await import('./helpers/barber-classic.js');
+await installBarberClassicFixture(db);
 // Isolated recovery fixture: no real email transport is started by this test server.
 const { createHash } = await import('node:crypto');
 const recoveryHash = (
@@ -41,6 +43,18 @@ await db.run(
 await db.run(
   `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}',?,?,?)`,
   ['week-qa', 'Agenda QA', 'Teste de abertura semanal'],
+);
+await db.run(
+  "INSERT INTO barber_services(company_id,barber_id,service_id,created_at) SELECT company_id,'week-qa',id,'2026' FROM services WHERE company_id=?",
+  [IGOR_COMPANY_ID],
+);
+await db.run(
+  "INSERT INTO barbers(company_id,id,name,specialty) VALUES(?,'service-qa','Somente Barba QA','Teste de associação')",
+  [IGOR_COMPANY_ID],
+);
+await db.run(
+  "INSERT INTO barber_services(company_id,barber_id,service_id,created_at) VALUES(?,'service-qa','barba','2026')",
+  [IGOR_COMPANY_ID],
 );
 createApp(db, { test: true }).listen(4173, '127.0.0.1', () =>
   console.log('Browser test server listening on 4173'),

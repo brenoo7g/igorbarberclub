@@ -15,7 +15,13 @@ export async function seedLegacyCompany(db, companyId) {
   requireCompanyId(companyId);
   if (companyId !== getLegacyCompanyId())
     throw new Error('Seed disponível somente para a empresa legada.');
-  if (!(await db.get('SELECT id FROM barbers WHERE company_id=? LIMIT 1', [companyId]))) {
+  const createdProfessional = !(await db.get('SELECT id FROM barbers WHERE company_id=? LIMIT 1', [
+    companyId,
+  ]));
+  const createdServices = !(await db.get('SELECT id FROM services WHERE company_id=? LIMIT 1', [
+    companyId,
+  ]));
+  if (createdProfessional) {
     await db.run(`INSERT INTO barbers (company_id,id,name,specialty) VALUES (?,?,?,?)`, [
       companyId,
       'igor',
@@ -23,7 +29,7 @@ export async function seedLegacyCompany(db, companyId) {
       'Especialista em cortes e degradês',
     ]);
   }
-  if (!(await db.get('SELECT id FROM services WHERE company_id=? LIMIT 1', [companyId]))) {
+  if (createdServices) {
     const services = [
       [
         'corte',
@@ -80,6 +86,12 @@ export async function seedLegacyCompany(db, companyId) {
         [companyId, ...service],
       );
   }
+  // Only initial data receives defaults. Never recreate an explicitly removed association.
+  if (createdProfessional || createdServices)
+    await db.run(
+      'INSERT INTO barber_services(company_id,barber_id,service_id,created_at) SELECT b.company_id,b.id,s.id,? FROM barbers b JOIN services s ON s.company_id=b.company_id WHERE b.company_id=? AND b.active=1 AND s.active=1 ON CONFLICT(company_id,barber_id,service_id) DO NOTHING',
+      [new Date().toISOString(), companyId],
+    );
   const email = (process.env.ADMIN_EMAIL || 'admin@igorbarberclub.com.br').toLowerCase();
   // Environment credentials bootstrap the first admin only; profile edits must survive redeploys.
   if (!(await db.get("SELECT id FROM users WHERE role='admin' LIMIT 1"))) {

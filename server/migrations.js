@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import { bootstrapIgorCompany, IGOR_COMPANY_ID } from './company-bootstrap.js';
 import { prepareDataOwnership, finishDataOwnership } from './data-ownership.js';
 import { prepareMultitenantAccess, finishMultitenantAccess } from './multitenant-migration.js';
+import {
+  prepareProfessionalsMigration,
+  finishProfessionalsMigration,
+} from './professionals-migration.js';
 
 export const migrations = Object.freeze([
   Object.freeze({ version: 1, name: 'gradefy-foundation', file: '001-gradefy-foundation.sql' }),
@@ -20,6 +24,26 @@ export const migrations = Object.freeze([
     version: 4,
     name: 'gradefy-multitenant-access',
     file: '004-gradefy-multitenant-access.sql',
+  }),
+  Object.freeze({
+    version: 5,
+    name: 'gradefy-scheduling-reliability',
+    file: '005-gradefy-scheduling-reliability.sql',
+  }),
+  Object.freeze({
+    version: 6,
+    name: 'gradefy-professionals-plans',
+    file: '006-gradefy-professionals-plans.sql',
+  }),
+  Object.freeze({
+    version: 7,
+    name: 'gradefy-professional-idempotency',
+    file: '007-gradefy-professional-idempotency.sql',
+  }),
+  Object.freeze({
+    version: 8,
+    name: 'gradefy-barber-classic',
+    file: '008-gradefy-barber-classic.sql',
   }),
 ]);
 
@@ -114,7 +138,35 @@ export async function applyMigrations(tx) {
     if (migration.version === 3 && applied.length === 0) await bootstrapIgorCompany(tx);
     const ownership = migration.version === 3 ? await prepareDataOwnership(tx) : null;
     const access = migration.version === 4 ? await prepareMultitenantAccess(tx) : null;
+    const professionals = migration.version === 6 ? await prepareProfessionalsMigration(tx) : null;
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx, true);
+    if (migration.version === 7 && tx.dialect === 'sqlite') {
+      const columns = (await tx.all('PRAGMA table_info(idempotency_keys)'))
+        .map((c) => c.name)
+        .sort();
+      const expected =
+        'company_id actor_hash operation key_hash request_hash response created_at expires_at'
+          .split(' ')
+          .sort();
+      const custom = await tx.all(
+        "SELECT name FROM sqlite_schema WHERE tbl_name='idempotency_keys' AND type IN ('index','trigger') AND sql IS NOT NULL AND name<>'idempotency_expiration'",
+      );
+      if (JSON.stringify(columns) !== JSON.stringify(expected) || custom.length)
+        throw new Error('Gradefy 007: custom idempotency schema requires an explicit migration.');
+      for (const { name } of await tx.all(
+        "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+      )) {
+        const quoted = '"' + name.replaceAll('"', '""') + '"';
+        if (
+          (await tx.all(`PRAGMA foreign_key_list(${quoted})`)).some(
+            (fk) => fk.table === 'idempotency_keys',
+          )
+        )
+          throw new Error(
+            'Gradefy 007: incoming idempotency foreign key requires an explicit migration.',
+          );
+      }
+    }
     for (const statement of migration.statements) {
       // Both dialect branches belong to the same immutable, checksummed migration file.
       const dialect = statement.match(/^-- dialect: (postgres|sqlite)\n/);
@@ -125,6 +177,7 @@ export async function applyMigrations(tx) {
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx);
     if (ownership) await finishDataOwnership(tx, ownership);
     if (access) await finishMultitenantAccess(tx, access);
+    if (professionals) await finishProfessionalsMigration(tx, professionals);
     await tx.run(
       'INSERT INTO schema_migrations (version,name,checksum,applied_at) VALUES (?,?,?,?)',
       [migration.version, migration.name, migration.checksum, new Date().toISOString()],

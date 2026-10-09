@@ -1,8 +1,9 @@
+import { SiteLink as Link } from '../site-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+
 import { ArrowRight, CalendarDays, Clock3, LogOut, Scissors, UserRound } from 'lucide-react';
 import { useApp } from '../context';
-import { api, errorMessage, formatDate, money } from '../lib';
+import { errorMessage, formatDate, money } from '../lib';
 import type { Appointment } from '../types';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
@@ -17,7 +18,7 @@ import {
 } from '../components/UI';
 
 export default function Account() {
-  const { user, visitor, loading, logout, notify } = useApp();
+  const { api, user, visitor, loading, logout, notify } = useApp();
   const identity = user || visitor;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [fetching, setFetching] = useState(false);

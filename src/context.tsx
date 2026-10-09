@@ -1,9 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Config, User, Visitor } from './types';
-import { api } from './lib';
+import { api as request } from './lib';
+import { useOptionalSite } from './site-context';
 
 interface AppContext {
+  api: typeof request;
   user: User | null;
   visitor: Visitor | null;
   setVisitor: (visitor: Visitor | null) => void;
@@ -15,6 +17,8 @@ interface AppContext {
 }
 const Context = createContext<AppContext | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
+  const site = useOptionalSite();
+  const api = site?.api || request;
   const [user, updateUser] = useState<User | null>(null);
   const [visitor, updateVisitor] = useState<Visitor | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
@@ -67,7 +71,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', refreshUser);
       window.removeEventListener('session-expired', expired);
     };
-  }, [setUser, setVisitor]);
+  }, [setUser, setVisitor, api]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(''), 5000);
@@ -82,7 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
   return (
     <Context.Provider
-      value={{ user, visitor, setVisitor, loading, config, setUser, logout, notify }}
+      value={{ api, user, visitor, setVisitor, loading, config, setUser, logout, notify }}
     >
       {children}
       {toast && (

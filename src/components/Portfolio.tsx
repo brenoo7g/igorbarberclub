@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, Instagram } from 'lucide-react';
-import { api, errorMessage } from '../lib';
+import { errorMessage } from '../lib';
+import { useApp } from '../context';
+import { useSite } from '../site-context';
 import { ErrorBox, Modal, Spinner } from './UI';
 
 export type PortfolioPhoto = {
@@ -42,6 +44,8 @@ export function PortfolioImage({
 }
 
 export function Portfolio() {
+  const { api } = useApp();
+  const { site, preview } = useSite();
   const [photos, setPhotos] = useState<PortfolioPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,7 +65,7 @@ export function Portfolio() {
       });
     return () => controller.abort();
   }, [retry]);
-  if (!loading && !error && !photos.length) return null;
+  if (!preview && !loading && !error && !photos.length) return null;
   return (
     <section
       className="section container portfolio-section"
@@ -69,7 +73,9 @@ export function Portfolio() {
       aria-labelledby="portfolio-title"
     >
       <h2 id="portfolio-title">Alguns dos nossos cortes</h2>
-      {loading ? (
+      {preview ? (
+        <div className="portfolio-missing">[Seu portfólio]</div>
+      ) : loading ? (
         <Spinner />
       ) : error ? (
         <>
@@ -85,17 +91,19 @@ export function Portfolio() {
           onSelect={setPhoto}
         />
       )}
-      <div className="portfolio-instagram">
-        <a
-          className="button primary"
-          href="https://www.instagram.com/igor_barber_club/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Instagram size={18} />
-          Veja mais no nosso instagram
-        </a>
-      </div>
+      {site.settings.instagram_url && (
+        <div className="portfolio-instagram">
+          <a
+            className="button primary"
+            href={site.settings.instagram_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Instagram size={18} />
+            Veja mais no nosso instagram
+          </a>
+        </div>
+      )}
       {photo && (
         <div className="portfolio-lightbox">
           <Modal title={photo.title} onClose={() => setPhoto(null)}>

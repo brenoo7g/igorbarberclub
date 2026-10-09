@@ -5,10 +5,10 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function api<T>(path: string, options: RequestInit = {}, base = '/api'): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, {
+    response = await fetch(`${base}${path}`, {
       credentials: 'same-origin',
       ...options,
       headers: { 'Content-Type': 'application/json', ...options.headers },

@@ -1,19 +1,39 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { SiteLink as Link, useSite } from '../site-context';
 import { ArrowUpRight, Check, LoaderCircle, Scissors, X } from 'lucide-react';
 import { statusLabels } from '../lib';
 import type { Appointment } from '../types';
 
 export function Brand({ small = false }: { small?: boolean }) {
+  const { site, preview } = useSite();
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const { logo_url, wordmark_title, wordmark_subtitle } = site.settings;
   return (
-    <Link to="/" aria-label="Igor Barber Club — início" className={`brand ${small ? 'small' : ''}`}>
+    <Link
+      to="/"
+      aria-label={`${site.company.name} — início`}
+      className={`brand ${small ? 'small' : ''}`}
+    >
       <span className="brand-mark">
-        <Scissors size={25} strokeWidth={1.6} />
+        {preview ? (
+          <span className="preview-logo">[Sua logo]</span>
+        ) : logo_url && failedLogo !== logo_url ? (
+          <img
+            className="company-logo"
+            src={logo_url}
+            alt={`Logo ${site.company.name}`}
+            onError={() => setFailedLogo(logo_url)}
+          />
+        ) : (
+          <Scissors size={25} strokeWidth={1.6} />
+        )}
         <i />
       </span>
-      <span className="brand-word">
-        IGOR<span>BARBER CLUB</span>
+      <span className={`brand-word ${wordmark_title ? '' : 'company-word'}`}>
+        {wordmark_title || site.company.name}
+        {wordmark_subtitle && <span>{wordmark_subtitle}</span>}
       </span>
     </Link>
   );

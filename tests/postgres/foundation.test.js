@@ -1,3 +1,5 @@
+import { expectProfessionalMetadata } from '../helpers/professionals-migration.js';
+import { assertUnclaimedMigration } from '../helpers/notification-migration.js';
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -126,7 +128,9 @@ async function snapshot(raw, tables) {
       for (const row of rows) {
         if ('company_id' in row) assert.equal(row.company_id, 'igor-barber-club');
         delete row.company_id;
+        if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
       }
+    if (table === 'notifications') assertUnclaimedMigration(rows);
     result[table] = rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   }
   return result;
@@ -136,7 +140,7 @@ const count = async (db, table) =>
 async function assertCatalog(db) {
   for (const table of ['companies', 'niches', 'templates', 'company_settings'])
     assert.equal(await count(db, table), 1);
-  assert.equal(await count(db, 'schema_migrations'), 4);
+  assert.equal(await count(db, 'schema_migrations'), 8);
   assert.deepEqual(
     (await db.all('SELECT id,max_professionals FROM plans ORDER BY id')).map((p) => [
       p.id,
@@ -278,7 +282,16 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
   ).rows
     .map((r) => r.table_name)
     .sort();
-  assert.deepEqual(tables, [...legacyTables, ...foundationTables].sort());
+  assert.deepEqual(
+    tables,
+    [
+      ...legacyTables,
+      ...foundationTables,
+      'idempotency_keys',
+      'barber_services',
+      'professional_users',
+    ].sort(),
+  );
   await assertCatalog(db);
   assert.equal(await count(db, 'users'), 0);
   assert.equal(await count(db, 'appointments'), 0);
@@ -288,7 +301,11 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       "SELECT table_name FROM information_schema.columns WHERE column_name='company_id' AND table_schema='public'",
     )
   ).rows)
-    assert.ok(ownedTables.includes(row.table_name) || foundationTables.includes(row.table_name));
+    assert.ok(
+      ownedTables.includes(row.table_name) ||
+        foundationTables.includes(row.table_name) ||
+        ['idempotency_keys', 'barber_services', 'professional_users'].includes(row.table_name),
+    );
 });
 
 test('02 PostgreSQL legado: preserva todas as 17 tabelas, IDs, índices e contatos', async (t) => {
@@ -598,11 +615,13 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4],
+    [1, 2, 3, 4, 5, 6, 7, 8],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
   delete before.schema_migrations;
+  expectProfessionalMetadata(before);
+  for (const row of before.barbers || []) if (row.photo_url === null) delete row.photo_url;
   assert.deepEqual(after, before);
   assert.equal(
     (await raw.query("SELECT indexname FROM pg_indexes WHERE indexname='custom_company_name'")).rows
@@ -622,4 +641,34 @@ test('14 SQLite 004: duas empresas preservam NOT NULL e FKs', async (t) => {
   await assertCrossCompanyRelations(db);
   assert.deepEqual(await db.all('PRAGMA foreign_key_check'), []);
   assert.deepEqual(await runMigrations(db), []);
+});
+
+test('20 Gradefy 4 PostgreSQL distributed scheduling and worker concurrency', async (t) => {
+  const { db, url } = await makeCase(t, 'scheduling');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertPostgresScheduling } = await import('./scheduling.js');
+  await assertPostgresScheduling(t, db, second);
+});
+
+test('21 Gradefy 5 PostgreSQL professionals, plans and concurrent capacity', async (t) => {
+  const { db, url } = await makeCase(t, 'professionals');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertPostgresProfessionals } = await import('./professionals.js');
+  await assertPostgresProfessionals(t, db, second);
+});
+
+test('22 Gradefy 5.1 PostgreSQL professional persistent idempotency', async (t) => {
+  const { db, url } = await makeCase(t, 'professional_idempotency');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertProfessionalIdempotency } = await import('../helpers/professional-idempotency.js');
+  await assertProfessionalIdempotency(t, db, second);
+});
+
+test('23 Gradefy 6 PostgreSQL Barber Classic migration and public scope', async (t) => {
+  const { db } = await makeCase(t, 'barber_classic');
+  const { assertBarberClassic } = await import('../helpers/barber-classic.js');
+  await assertBarberClassic(t, db);
 });

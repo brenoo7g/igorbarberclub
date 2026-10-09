@@ -1,9 +1,10 @@
+import { SiteLink as Link, useSite, scopedPath } from '../site-context';
 import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useApp } from '../context';
-import { api, errorMessage } from '../lib';
+import { errorMessage } from '../lib';
 import { ErrorBox, Eyebrow } from '../components/UI';
 import { PasswordRecoveryForm } from '../components/PasswordRecoveryForm';
 
@@ -13,11 +14,12 @@ export default function PasswordRecovery() {
 }
 
 function RecoveryPage() {
+  const { basePath } = useSite();
   const location = useLocation();
   const navigate = useNavigate();
-  const { setUser } = useApp();
+  const { api, setUser } = useApp();
   const token = new URLSearchParams(location.hash.slice(1)).get('token') || '';
-  const reset = location.pathname === '/redefinir-senha';
+  const reset = location.pathname.endsWith('/redefinir-senha');
   const complete = Boolean(location.state?.passwordResetComplete);
   const validToken = /^[a-f0-9]{64}$/.test(token);
   const [password, setPassword] = useState('');
@@ -49,7 +51,10 @@ function RecoveryPage() {
       setUser(null);
       setPassword('');
       setConfirmation('');
-      navigate('/redefinir-senha', { replace: true, state: { passwordResetComplete: true } });
+      navigate(String(scopedPath('/redefinir-senha', basePath)), {
+        replace: true,
+        state: { passwordResetComplete: true },
+      });
     } catch (error) {
       setError(errorMessage(error));
     } finally {

@@ -128,6 +128,10 @@ test('schedule API: permission, atomic changes, release idempotency and competin
     `INSERT INTO barbers (company_id,id,name,specialty) VALUES ('${IGOR_COMPANY_ID}',?,?,?)`,
     ['schedule-test', 'Agenda QA', 'Teste'],
   );
+  await db.run(
+    "INSERT INTO barber_services(company_id,barber_id,service_id,created_at) SELECT company_id,'schedule-test',id,'2026' FROM services WHERE company_id=?",
+    [IGOR_COMPANY_ID],
+  );
   const server = createApp(db, { test: true }).listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;

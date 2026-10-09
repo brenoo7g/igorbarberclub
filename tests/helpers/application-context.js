@@ -187,6 +187,10 @@ export async function assertApplicationContext(t, db) {
         .sort();
     return result;
   };
+  await db.run(
+    "INSERT INTO barber_services(company_id,barber_id,service_id,created_at) VALUES(?,'foreign-barber','foreign-service','2026')",
+    [otherCompany],
+  );
   const before = await foreignSnapshot();
 
   await t.test(

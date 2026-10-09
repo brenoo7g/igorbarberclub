@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from 'lucide-react';
 import { useApp } from '../context';
-import { api, errorMessage } from '../lib';
+import { errorMessage } from '../lib';
 import type { User, Visitor } from '../types';
 import { ErrorBox, Modal } from './UI';
 import { PasswordRecoveryForm } from './PasswordRecoveryForm';
@@ -28,7 +28,7 @@ export function AuthForm({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [recover, setRecover] = useState(false);
-  const { setUser, setVisitor, config } = useApp();
+  const { api, setUser, setVisitor, config } = useApp();
   const [testAccess, setTestAccess] = useState(false);
   async function enterTest(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

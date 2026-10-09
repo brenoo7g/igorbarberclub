@@ -1,4 +1,5 @@
-import { requireCompanyId } from './company-context.js';
+import { lockBarbers } from './scheduling-locks.js';
+import { requireCompanyId, publicCompanyPath } from './company-context.js';
 import { z } from 'zod';
 import { addDays, clock, dateInBrazil, isFuture, weekday } from './domain.js';
 import {
@@ -12,9 +13,7 @@ import {
   validDate,
 } from './schedule-domain.js';
 
-export const lockSchedule = async (tx) => {
-  if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789126)');
-};
+export const lockSchedule = lockBarbers;
 const fail = (status, message) => {
   throw Object.assign(new Error(message), { status });
 };
@@ -117,34 +116,38 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
       fail(404, 'Profissional não encontrado.');
   };
   app.get('/barbers/:id/schedule', async (req, res) => {
-    const result = await db.transaction(async (tx) => {
-      await lockSchedule(tx);
-      await exists(tx, req.params.id);
-      const schedule = await readSchedule(tx, companyId, req.params.id);
-      const today = dateInBrazil();
-      const dates =
-        schedule.settings.agenda_mode === 'auto'
-          ? automaticDates(schedule.days, today, schedule.settings.max_days_ahead)
-          : Array.from({ length: 731 }, (_, i) => addDays(today, i)).filter(
-              (date) => dateAccess(schedule, date, today).allowed,
-            );
-      return {
-        mode: schedule.settings.agenda_mode,
-        active_days: schedule.days.filter((d) => d.active).map((d) => d.weekday),
-        dates,
-        max_date:
-          schedule.settings.agenda_mode === 'auto' ? dates.at(-1) || today : addDays(today, 730),
-      };
-    });
+    const result = await db.transaction(
+      async (tx) => {
+        await exists(tx, req.params.id);
+        const schedule = await readSchedule(tx, companyId, req.params.id);
+        const today = dateInBrazil();
+        const dates =
+          schedule.settings.agenda_mode === 'auto'
+            ? automaticDates(schedule.days, today, schedule.settings.max_days_ahead)
+            : Array.from({ length: 731 }, (_, i) => addDays(today, i)).filter(
+                (date) => dateAccess(schedule, date, today).allowed,
+              );
+        return {
+          mode: schedule.settings.agenda_mode,
+          active_days: schedule.days.filter((d) => d.active).map((d) => d.weekday),
+          dates,
+          max_date:
+            schedule.settings.agenda_mode === 'auto' ? dates.at(-1) || today : addDays(today, 730),
+        };
+      },
+      { readOnly: true },
+    );
     res.json(result);
   });
   app.get('/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
-    const result = await db.transaction(async (tx) => {
-      await lockSchedule(tx);
-      await exists(tx, req.params.id);
-      const schedule = await readSchedule(tx, companyId, req.params.id);
-      return { ...schedule, next_week: nextWeek(schedule, dateInBrazil()) };
-    });
+    const result = await db.transaction(
+      async (tx) => {
+        await exists(tx, req.params.id);
+        const schedule = await readSchedule(tx, companyId, req.params.id);
+        return { ...schedule, next_week: nextWeek(schedule, dateInBrazil()) };
+      },
+      { readOnly: true },
+    );
     res.json(result);
   });
   app.put('/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
@@ -154,7 +157,7 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
       breaks: [...d.breaks].sort((a, b) => a.start_time.localeCompare(b.start_time)),
     }));
     await db.transaction(async (tx) => {
-      await lockSchedule(tx);
+      await lockSchedule(tx, companyId, req.params.id);
       await exists(tx, req.params.id);
       const current = await readSchedule(tx, companyId, req.params.id);
       if (current.settings.version !== data.version)
@@ -234,7 +237,7 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
       .strict()
       .parse(req.body);
     const period = await db.transaction(async (tx) => {
-      await lockSchedule(tx);
+      await lockSchedule(tx, companyId, req.params.id);
       await exists(tx, req.params.id);
       const schedule = await readSchedule(tx, companyId, req.params.id);
       if (schedule.settings.agenda_mode !== 'manual')
@@ -265,11 +268,15 @@ export function installScheduleRoutes(app, db, companyId, { authenticated, admin
       );
       return next;
     });
-    const url = new URL('/agendar', process.env.APP_URL || 'http://localhost:5173');
+    const company = req.companyContext.company;
+    const url = new URL(
+      `${publicCompanyPath(companyId, company.slug)}/agendar`,
+      process.env.APP_URL || 'http://localhost:5173',
+    );
     url.searchParams.set('semana', period.start_date);
     url.searchParams.set('profissional', req.params.id);
     const format = (date) => date.split('-').reverse().join('/');
-    const text = `Agenda aberta no Igor Barber Club! Reserve seu horário de ${format(period.start_date)} a ${format(period.end_date)}: ${url.href}`;
+    const text = `Agenda aberta no ${company.name}! Reserve seu horário de ${format(period.start_date)} a ${format(period.end_date)}: ${url.href}`;
     res.json({
       ...period,
       url: url.href,

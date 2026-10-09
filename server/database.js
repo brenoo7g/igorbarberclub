@@ -50,10 +50,12 @@ export async function createDatabase(
     });
     db = {
       ...wrap(pool),
-      async transaction(fn) {
+      async transaction(fn, { readOnly = false } = {}) {
         const client = await pool.connect();
         try {
-          await client.query('BEGIN');
+          await client.query(
+            readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN',
+          );
           const value = await fn(wrap(client));
           await client.query('COMMIT');
           return value;
@@ -96,9 +98,9 @@ export async function createDatabase(
       all: (...args) => enqueue(() => direct.all(...args)),
       get: (...args) => enqueue(() => direct.get(...args)),
       run: (...args) => enqueue(() => direct.run(...args)),
-      transaction: (fn) =>
+      transaction: (fn, { readOnly = false } = {}) =>
         enqueue(async () => {
-          sqlite.exec('BEGIN IMMEDIATE');
+          sqlite.exec(readOnly ? 'BEGIN' : 'BEGIN IMMEDIATE');
           try {
             const value = await fn(direct);
             sqlite.exec('COMMIT');

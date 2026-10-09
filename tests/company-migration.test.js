@@ -1,3 +1,4 @@
+import { assertUnclaimedMigration } from './helpers/notification-migration.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -32,10 +33,12 @@ async function snapshot(db, tables) {
   const result = {};
   for (const table of tables) {
     result[table] = plain(await db.all(`SELECT * FROM ${table}`));
+    if (table === 'notifications') assertUnclaimedMigration(result[table]);
     if (legacyTables.includes(table))
       for (const row of result[table]) {
         if ('company_id' in row) assert.equal(row.company_id, 'igor-barber-club');
         delete row.company_id;
+        if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
       }
   }
   return result;
@@ -219,7 +222,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
       0,
     );
     fail = false;
-    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4]);
+    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4, 5, 6, 7, 8]);
     assert.deepEqual(await runMigrations(db), []);
   } finally {
     sqlite.close();

@@ -1,3 +1,5 @@
+import { expectBarberClassicMetadata } from './barber-classic-migration.js';
+import { assertUnclaimedMigration } from './notification-migration.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { migrations, readMigration, runMigrations } from '../../server/migrations.js';
@@ -75,8 +77,9 @@ export async function assertOwnershipUpgrade(db) {
   assert.equal(metrics.daily, 12321);
   assert.equal(metrics.clients, 2);
   assert.equal(metrics.visits, 2);
-  assert.deepEqual(await runMigrations(db), [3, 4]);
+  assert.deepEqual(await runMigrations(db), [3, 4, 5, 6, 7, 8]);
   const after = await ownershipSnapshot(db);
+  expectBarberClassicMetadata(before);
   assert.deepEqual(after.schema_migrations.slice(0, 2), before.schema_migrations);
   delete after.schema_migrations;
   delete before.schema_migrations;
@@ -87,6 +90,7 @@ export async function assertOwnershipUpgrade(db) {
       delete row.company_id;
     }
   }
+  assertUnclaimedMigration(after.notifications);
   assert.deepEqual(after, before);
   assert.deepEqual(
     calculateMetrics(

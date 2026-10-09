@@ -1,5 +1,7 @@
 # Arquitetura, rotas e regras
 
+Barber Classic (Fase 6): `src/templates/barber-classic` compõe os componentes públicos existentes; `SiteContext` vincula dados, API e links ao slug validado pela Fase 3. `GET /api/public/:slug/site` lê apresentação de `companies`/`company_settings`, com alias legado `/api/site`. `/preview/barber-classic` usa dados locais sem gravação/API empresarial. Migration 008 acrescenta campos de apresentação/foto; migrações 001–007 preservadas. Detalhes e limites em [GRADEFY-BARBER-CLASSIC.md](GRADEFY-BARBER-CLASSIC.md).
+
 ## Gradefy (Fases 1–3)
 
 O schema operacional possui `company_id` obrigatório e FKs compostas. A inicialização aplica migrations 001–004 de `server/migrations/` e registra Igor em `companies`, com catálogos `niches`, `templates`, `plans`, metadados `company_settings` e vínculos `company_members`. `subscriptions` não recebe atribuição automática. `schema_migrations` controla versões e checksums. Veja [o histórico da migração](GRADEFY-MIGRATION.md).
@@ -73,17 +75,22 @@ erDiagram
 - `appointments`: proprietário opcional (`user_id`), contatos de visitante (`guest_name`, `guest_email`, `guest_phone`), profissional, data local ISO, minuto inicial/final, total em centavos, estado, criação.
 - `appointment_services`: snapshot de nome, preço e duração no momento da reserva. Chave composta impede repetição do mesmo serviço.
 - `blocks`: profissional, data, início/fim em minutos, motivo.
-- `notifications`: canal, evento, payload congelado, status, tentativas, erro resumido, próxima tentativa. Nenhuma credencial é armazenada no payload. Ao enviar, nome/e-mail/telefone são consultados na conta atual; data, horário e serviços continuam sendo o snapshot do evento.
+- `notifications`: canal, evento, payload congelado, status, tentativas, erro resumido, próxima tentativa, claim token e lease. Nome/e-mail/telefone são consultados na conta atual na primeira tentativa; depois o envelope é imutável para replay do provedor. Nenhuma credencial é armazenada no payload.
+- `idempotency_keys`: resultado de criação transacional por empresa, ator, operação e chave; hashes de chave/payload, resposta e expiração em 24h. Migration 005, campos obrigatórios explícitos em SQLite/PostgreSQL.
 
 Veja o esquema executável em [`server/schema.sql`](../server/schema.sql). Datas usam texto ISO para a mesma implementação funcionar nos dois bancos. As chaves estrangeiras ficam habilitadas também no SQLite.
 
 ## Disponibilidade e consistência
+
+Na Fase 5, `barbers` representa o domínio Professional sem renomeação física. `barber_services` restringe combinações futuras de serviço/profissional; `professional_users` permite vínculo opcional com membro da mesma empresa, sem conceder acesso. O novo CRUD `/api/admin/professionals` exige owner/manager. Criação/reativação usa entitlement e lock por empresa; Individual limita a um ativo, Equipe usa `NULL` para ilimitado. Catálogos registram 2299/3299 centavos mensais e trial de sete dias, sem cobrança. Igor sem assinatura conserva suas agendas existentes. A seleção pública usa `service_ids` com o mesmo layout. Consulte [GRADEFY-PROFESSIONALS-PLANS.md](GRADEFY-PROFESSIONALS-PLANS.md).
 
 O intervalo de uma reserva é semiaberto `[início, fim)`. Existe conflito quando `novoInicio < fimExistente && novoFim > inicioExistente`. Logo, terminar às 10h permite que outro atendimento comece às 10h.
 
 Cada nova reserva ou remarcação exige exatamente um ID em `services`, inclusive na consulta de disponibilidade. O servidor calcula a duração e o preço a partir do catálogo; nunca confia em um total enviado pelo cliente. `expectedTotal` e `expectedDuration` permitem interromper a confirmação se o catálogo tiver mudado após a seleção. Também valida profissional, serviços ativos, dias de funcionamento, expediente, almoço, horários já passados, duração total e abertura automática/manual. A disponibilidade e a confirmação compartilham as mesmas regras, descritas em [SCHEDULE.md](./SCHEDULE.md).
 
 Na transação, a agenda é bloqueada, a disponibilidade é recalculada e a reserva, seus snapshots e a outbox são gravados juntos. Agendamentos `confirmed` e `completed` ocupam o intervalo. Cancelamentos liberam o horário. Um bloqueio sobre reserva existente é rejeitado.
+
+Na Fase 4, esse bloqueio é por empresa/profissional, com locks ordenados para remarcações e proteção compartilhada do catálogo. Leituras de disponibilidade usam snapshot sem lock exclusivo. Criações de reservas e bloqueios aceitam `Idempotency-Key` opcional, persistida por 24h com escopo empresarial/ator/operação. A fila usa claim atômico, lease de 60s e até cinco tentativas; envio incerto pode exigir `review`. Consulte [GRADEFY-SCHEDULING-RELIABILITY.md](GRADEFY-SCHEDULING-RELIABILITY.md) para protocolo, implantação, testes e limitações dos provedores.
 
 O administrador pode finalizar somente uma reserva confirmada. Conclusão exige término do intervalo; ausência exige que o horário inicial tenha chegado. Estados finais não podem ser reabertos por esta versão. Uma remarcação mantém o ID, recalcula os serviços e gera um novo evento com payload congelado.
 

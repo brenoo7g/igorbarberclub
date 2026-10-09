@@ -291,6 +291,28 @@ svg {
   font-weight: 650;
   margin-top: 6px;
 }
+.company-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.company-word {
+  max-width: 180px;
+  letter-spacing: 1px;
+  font-size: 23px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.preview-logo {
+  font-size: 7px;
+  letter-spacing: 0;
+}
+@media (max-width: 600px) {
+  .company-word {
+    max-width: 125px;
+    font-size: 18px;
+  }
+}
 .main-nav {
   display: flex;
   align-items: center;

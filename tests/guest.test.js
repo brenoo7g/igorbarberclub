@@ -223,11 +223,13 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   assert.equal(snapshot.guest, true);
   assert.equal(snapshot.email, 'cliente@example.com');
   assert.match(
-    appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato').text,
+    appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato', getLegacyCompanyId())
+      .text,
     /entre em contato com a barbearia/,
   );
   assert.doesNotMatch(
-    appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato').text,
+    appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato', getLegacyCompanyId())
+      .text,
     /entre na sua conta/,
   );
 

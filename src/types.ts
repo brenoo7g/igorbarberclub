@@ -26,6 +26,41 @@ export interface Barber {
   id: string;
   name: string;
   specialty: string;
+  service_ids: string[];
+  photo_url?: string | null;
+}
+export interface PublicSite {
+  company: {
+    id: string;
+    name: string;
+    slug: string;
+    template: string;
+    niche: string;
+    timezone: string;
+  };
+  settings: {
+    logo_url: string | null;
+    favicon_url: string | null;
+    wordmark_title: string | null;
+    wordmark_subtitle: string | null;
+    slogan: string | null;
+    hero_image_url: string | null;
+    about_image_url: string | null;
+    description: string | null;
+    about_detail: string | null;
+    whatsapp: string | null;
+    phone: string | null;
+    instagram_url: string | null;
+    address: string | null;
+    city: string | null;
+    region: string | null;
+    location_url: string | null;
+    primary_color: string | null;
+    secondary_color: string | null;
+    featured_service_ids: string[];
+    highlight_service_id: string | null;
+  };
+  counts: { services: number; professionals: number; portfolio: number };
 }
 export interface WorkingDay {
   weekday: number;

@@ -5,6 +5,8 @@ export async function bootstrapIgorCompany(db) {
   if (typeof db.transaction === 'function') return db.transaction(bootstrapIgorCompany);
   if (db.dialect === 'postgres') await db.run('SELECT pg_advisory_xact_lock(789127)');
   const now = new Date().toISOString();
+  const pricedPlans =
+    (await db.all('SELECT version FROM schema_migrations WHERE version=6')).length > 0;
   await db.run(
     'INSERT INTO niches (id,name,created_at) VALUES (?,?,?) ON CONFLICT(id) DO NOTHING',
     ['barbershop', 'Barbearia', now],
@@ -16,11 +18,18 @@ export async function bootstrapIgorCompany(db) {
   for (const [id, name, maximum] of [
     ['individual', 'Individual', 1],
     ['team', 'Equipe', null],
-  ])
-    await db.run(
-      'INSERT INTO plans (id,name,max_professionals,created_at) VALUES (?,?,?,?) ON CONFLICT(id) DO NOTHING',
-      [id, name, maximum, now],
-    );
+  ]) {
+    if (pricedPlans)
+      await db.run(
+        'INSERT INTO plans(id,name,max_professionals,price_cents,currency,billing_interval,trial_days,created_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',
+        [id, name, maximum, id === 'individual' ? 2299 : 3299, 'BRL', 'month', 7, now],
+      );
+    else
+      await db.run(
+        'INSERT INTO plans (id,name,max_professionals,created_at) VALUES (?,?,?,?) ON CONFLICT(id) DO NOTHING',
+        [id, name, maximum, now],
+      );
+  }
   await db.run(
     'INSERT INTO companies (id,slug,name,niche_id,template_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING',
     [

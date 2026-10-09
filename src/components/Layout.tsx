@@ -1,5 +1,12 @@
+import {
+  SiteLink as Link,
+  SiteNavLink as NavLink,
+  useSite,
+  siteLocation,
+  instagramHandle,
+} from '../site-context';
 import { useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { ArrowUpRight, CalendarDays, Instagram, MapPin, Menu, UserRound, X } from 'lucide-react';
 import { Brand } from './UI';
 import { Avatar } from './Avatar';
@@ -9,6 +16,9 @@ export function Layout() {
   const [menu, setMenu] = useState(false);
   const location = useLocation();
   const { user, visitor } = useApp();
+  const { site, basePath, preview } = useSite();
+  const settings = site.settings;
+  const address = siteLocation(site);
   const identity = user || visitor;
   const close = () => setMenu(false);
   return (
@@ -17,7 +27,7 @@ export function Layout() {
         href="#main-content"
         className="skip-link"
         onClick={(event) => {
-          if (location.pathname === '/redefinir-senha') {
+          if (location.pathname.endsWith('/redefinir-senha')) {
             event.preventDefault();
             document.getElementById('main-content')?.focus();
           }
@@ -32,19 +42,28 @@ export function Layout() {
             <NavLink
               to="/"
               onClick={close}
-              className={location.pathname === '/' && !location.hash ? 'active' : ''}
+              className={location.pathname === (basePath || '/') && !location.hash ? 'active' : ''}
             >
               Início
             </NavLink>
-            <Link to="/#sobre" onClick={close}>
-              A barbearia
-            </Link>
-            <Link to="/#servicos" onClick={close}>
-              Serviços
-            </Link>
-            <Link to="/#galeria" onClick={close}>
-              Nosso trabalho
-            </Link>
+            {(preview ||
+              settings.description ||
+              settings.about_detail ||
+              settings.about_image_url) && (
+              <Link to="/#sobre" onClick={close}>
+                A barbearia
+              </Link>
+            )}
+            {(preview || site.counts.services > 0) && (
+              <Link to="/#servicos" onClick={close}>
+                Serviços
+              </Link>
+            )}
+            {(preview || site.counts.portfolio > 0) && (
+              <Link to="/#galeria" onClick={close}>
+                Nosso trabalho
+              </Link>
+            )}
             <Link to="/#contato" onClick={close}>
               Contato
             </Link>
@@ -88,47 +107,56 @@ export function Layout() {
           <div className="footer-top">
             <div>
               <Brand />
-              <p>Mais que um corte. Sua identidade.</p>
+              <p>{settings.slogan || 'Mais que um corte. Sua identidade.'}</p>
             </div>
             <div className="footer-links">
               <Link to="/#servicos">Serviços</Link>
               <Link to="/agendar">Agendamento</Link>
               <Link to="/minha-conta">Minha conta</Link>
-              <Link to="/admin">
-                Área do barbeiro
-                <ArrowUpRight size={14} />
-              </Link>
+              {!preview && (
+                <Link to="/admin">
+                  Área do barbeiro
+                  <ArrowUpRight size={14} />
+                </Link>
+              )}
             </div>
-            <a
-              className="instagram-link"
-              href="https://www.instagram.com/igor_barber_club/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Instagram size={19} />
-              <span>@igor_barber_club</span>
-              <ArrowUpRight size={16} />
-            </a>
+            {settings.instagram_url && (
+              <a
+                className="instagram-link"
+                href={settings.instagram_url!}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Instagram size={19} />
+                <span>{instagramHandle(settings.instagram_url!)}</span>
+                <ArrowUpRight size={16} />
+              </a>
+            )}
           </div>
           <div className="footer-bottom">
             <span>
-              © {new Date().getFullYear()} Igor Barber Club. Todos os direitos reservados.
+              © {new Date().getFullYear()} {site.company.name}. Todos os direitos reservados.
             </span>
-            <span>
-              <MapPin size={13} />
-              Campo Grande, Rio de Janeiro
-              <span className="barber-stripes" />
-            </span>
+            {address && (
+              <span>
+                <MapPin size={13} />
+                {address}
+                <span className="barber-stripes" />
+              </span>
+            )}
           </div>
         </div>
       </footer>
-      {!['/esqueci-senha', '/redefinir-senha'].includes(location.pathname) && (
-        <Link to="/agendar" className="mobile-book">
-          <CalendarDays size={18} />
-          Agendar meu horário
-          <ArrowUpRight size={18} />
-        </Link>
-      )}
+      {!preview &&
+        !['/esqueci-senha', '/redefinir-senha'].some((path) =>
+          location.pathname.endsWith(path),
+        ) && (
+          <Link to="/agendar" className="mobile-book">
+            <CalendarDays size={18} />
+            Agendar meu horário
+            <ArrowUpRight size={18} />
+          </Link>
+        )}
     </>
   );
 }

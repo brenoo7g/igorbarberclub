@@ -1,3 +1,5 @@
+import { expectProfessionalMetadata } from './professionals-migration.js';
+import { assertUnclaimedMigration } from './notification-migration.js';
 import assert from 'node:assert/strict';
 import { installOwnershipFixture } from './data-ownership.js';
 import {
@@ -79,7 +81,7 @@ export async function assertAccessMigration(t, db) {
   await assert.rejects(runMigrations(failing), /simulated 004 failure/);
   assert.deepEqual(await snapshot(), before);
   await assert.rejects(db.run(addCompany));
-  assert.deepEqual(await runMigrations(db), [4]);
+  assert.deepEqual(await runMigrations(db), [4, 5, 6, 7, 8]);
   const after = await snapshot();
   assert.deepEqual(after.schema_migrations.slice(0, 3), before.schema_migrations);
   delete after.schema_migrations;
@@ -88,6 +90,8 @@ export async function assertAccessMigration(t, db) {
     ...row,
     role: row.role === 'admin' ? 'manager' : row.role,
   }));
+  assertUnclaimedMigration(after.notifications);
+  expectProfessionalMetadata(before);
   assert.deepEqual(after, before);
   assert.deepEqual(await runMigrations(db), []);
   await bootstrapIgorCompany(db);

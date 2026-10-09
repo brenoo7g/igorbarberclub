@@ -1,5 +1,6 @@
+import { SiteLink as Link, useSite, siteLocation } from '../site-context';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -15,22 +16,15 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useApp } from '../context';
-import {
-  addDays,
-  api,
-  ApiError,
-  bookingWeek,
-  errorMessage,
-  formatDate,
-  money,
-  today,
-} from '../lib';
+import { addDays, ApiError, bookingWeek, errorMessage, formatDate, money, today } from '../lib';
 import type { Appointment, Barber, Service, PublicSchedule, Visitor } from '../types';
 import { EmptyState, ErrorBox, Eyebrow, Spinner } from '../components/UI';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
 
 export default function Booking() {
+  const { site } = useSite();
+  const location = site.settings.address || siteLocation(site);
   const [params] = useSearchParams();
   const reschedule = params.get('remarcar');
   const [step, setStep] = useState(0);
@@ -65,7 +59,7 @@ export default function Booking() {
     phone: string;
   } | null>(null);
   const submitting = useRef(false);
-  const { user, visitor, setVisitor, loading: identityLoading, config } = useApp();
+  const { api, user, visitor, setVisitor, loading: identityLoading, config } = useApp();
   const hydratedVisitor = useRef<string | null>(null);
   useEffect(() => {
     const visitorId = visitor?.id || null;
@@ -147,6 +141,15 @@ export default function Booking() {
     return () => controller.abort();
   }, [barber, reload]);
   const selectedKey = selected;
+  const eligibleBarbers = barbers.filter((b) => !selected || b.service_ids.includes(selected));
+  useEffect(() => {
+    if (!selected) return;
+    const eligible = barbers.filter((b) => b.service_ids.includes(selected));
+    if (!eligible.some((b) => b.id === barber)) {
+      setBarber(eligible[0]?.id || '');
+      setTime('');
+    }
+  }, [barbers, selected, barber]);
   useEffect(() => {
     setTime('');
     setSlots([]);
@@ -259,10 +262,12 @@ export default function Booking() {
               <UserRound size={18} />
               {confirmed.barber_name}
             </span>
-            <span>
-              <MapPin size={18} />
-              Campo Grande, Rio de Janeiro
-            </span>
+            {location && (
+              <span>
+                <MapPin size={18} />
+                {location}
+              </span>
+            )}
           </div>
           <div className="summary-total">
             <span>Pagamento na barbearia</span>
@@ -372,7 +377,7 @@ export default function Booking() {
               </div>
               <h3 className="field-title">Escolha o profissional</h3>
               <div className="barber-options">
-                {barbers.map((b) => (
+                {eligibleBarbers.map((b) => (
                   <button
                     key={b.id}
                     className={`barber-option ${barber === b.id ? 'selected' : ''}`}
@@ -380,7 +385,11 @@ export default function Booking() {
                     aria-pressed={barber === b.id}
                   >
                     <span className="barber-avatar">
-                      <Scissors size={24} />
+                      {b.photo_url ? (
+                        <Avatar name={b.name} avatar={b.photo_url} />
+                      ) : (
+                        <Scissors size={24} />
+                      )}
                     </span>
                     <span>
                       <strong>{b.name}</strong>

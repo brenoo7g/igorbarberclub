@@ -1,9 +1,10 @@
+import { SiteLink as Link } from '../site-context';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+
 import { ArrowLeft, Camera, LockKeyhole, Save, UserRound } from 'lucide-react';
 import { useApp } from '../context';
-import { api, ApiError, errorMessage } from '../lib';
+import { ApiError, errorMessage } from '../lib';
 import { prepareProfileImage } from '../profile-image';
 import type { User } from '../types';
 import { Avatar } from '../components/Avatar';
@@ -19,7 +20,7 @@ const draftOf = (user: User) => ({
 });
 
 export function ProfileSettings({ user }: { user: User }) {
-  const { setUser, notify } = useApp();
+  const { api, setUser, notify } = useApp();
   const [draft, setDraft] = useState(() => draftOf(user));
   const [saved, setSaved] = useState(() => draftOf(user));
   const [emailPassword, setEmailPassword] = useState('');

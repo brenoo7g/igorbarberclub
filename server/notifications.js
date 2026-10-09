@@ -1,5 +1,6 @@
-import { requireCompanyId } from './company-context.js';
+import { requireCompanyId, publicCompanyPath } from './company-context.js';
 import { randomUUID } from 'node:crypto';
+import { cleanIdempotency } from './idempotency.js';
 import { clock } from './domain.js';
 
 export async function enqueueNotification(db, companyId, appointmentId, event) {
@@ -9,11 +10,16 @@ export async function enqueueNotification(db, companyId, appointmentId, event) {
     [companyId, appointmentId],
   );
   if (!appointment) throw Object.assign(new Error('Agendamento não encontrado.'), { status: 404 });
+  const brand = await db.get(
+    'SELECT c.name,c.slug,s.city,s.region FROM companies c LEFT JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
+    [companyId],
+  );
   const services = await db.all(
     'SELECT name FROM appointment_services WHERE company_id=? AND appointment_id=?',
     [companyId, appointmentId],
   );
   const payload = JSON.stringify({
+    brand,
     name: appointment.name,
     email: appointment.email,
     phone: appointment.phone,
@@ -41,16 +47,18 @@ export async function enqueueNotification(db, companyId, appointmentId, event) {
   }
 }
 
-export function appointmentEmail(payload, event, url) {
+export function appointmentEmail(payload, event, url, companyId) {
+  requireCompanyId(companyId);
+  const brand = payload.brand || { name: 'Barbearia' };
   const label =
     { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[event] ||
     'atualizado';
   const introduction =
     {
-      confirmed: 'Seu agendamento na Igor Barber Club foi realizado com sucesso!',
-      cancelled: 'Seu agendamento na Igor Barber Club foi cancelado.',
-      rescheduled: 'Seu agendamento na Igor Barber Club foi remarcado com sucesso!',
-    }[event] || 'Seu agendamento na Igor Barber Club foi atualizado.';
+      confirmed: `Seu agendamento na ${brand.name} foi realizado com sucesso!`,
+      cancelled: `Seu agendamento na ${brand.name} foi cancelado.`,
+      rescheduled: `Seu agendamento na ${brand.name} foi remarcado com sucesso!`,
+    }[event] || `Seu agendamento na ${brand.name} foi atualizado.`;
   const lines = [
     `Olá, ${payload.name}!`,
     '',
@@ -79,18 +87,131 @@ export function appointmentEmail(payload, event, url) {
         : 'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
     url,
     '',
-    'Igor Barber Club · Campo Grande, RJ',
+    [brand.name, [brand.city, brand.region].filter(Boolean).join(', ')].filter(Boolean).join(' · '),
   );
-  return { subject: `Agendamento ${label} — Igor Barber Club`, text: lines.join('\n') };
+  return { subject: `Agendamento ${label} — ${brand.name}`, text: lines.join('\n') };
+}
+
+export const NOTIFICATION_MAX_ATTEMPTS = 5;
+export const NOTIFICATION_LEASE_MS = 60000;
+// Below Resend's 24h retention, leaving a safety margin for clock/network delays.
+const REPLAY_WINDOW_MS = 23 * 3600000;
+
+async function deliveryEnvelope(tx, companyId, row) {
+  if (row.delivery_payload) return row.delivery_payload;
+  const p = JSON.parse(row.payload);
+  const recipient = await tx.get(
+    'SELECT COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.company_id=? AND a.id=?',
+    [companyId, row.appointment_id],
+  );
+  if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');
+  Object.assign(p, recipient);
+  const company = await tx.get(
+    'SELECT c.name,c.slug,s.city,s.region FROM companies c LEFT JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
+    [companyId],
+  );
+  if (!company) throw new Error('Empresa do evento não encontrada.');
+  p.brand ||= company;
+  const url = new URL(
+    `${publicCompanyPath(companyId, company.slug)}/${p.guest && !p.guestSession ? '#contato' : 'minha-conta'}`,
+    process.env.APP_URL || 'http://localhost:5173',
+  ).href;
+  if (row.channel === 'email')
+    return JSON.stringify({
+      from: process.env.EMAIL_FROM,
+      to: [p.email],
+      ...appointmentEmail(p, row.event, url, companyId),
+    });
+  const phone = p.phone.replace(/\D/g, '');
+  const event =
+    { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[row.event] ||
+    row.event;
+  return JSON.stringify({
+    From: process.env.TWILIO_WHATSAPP_FROM,
+    To: `whatsapp:+${phone.length <= 11 ? '55' + phone : phone}`,
+    ContentSid: process.env.TWILIO_CONTENT_SID,
+    ContentVariables: JSON.stringify({
+      1: p.name,
+      2: event,
+      3: `${p.date.split('-').reverse().join('/')} às ${p.time}`,
+      4: url,
+    }),
+  });
+}
+
+// One lease per imminent send, never a batch of leases expiring while waiting in memory.
+export async function claimNotification(db, companyId, channels) {
+  requireCompanyId(companyId);
+  if (!channels.length) return null;
+  return db.transaction(async (tx) => {
+    // PostgreSQL is the clock authority across instances; clock skew cannot steal a live lease.
+    const nowMs =
+      tx.dialect === 'postgres'
+        ? new Date((await tx.get('SELECT clock_timestamp() AS now')).now).getTime()
+        : Date.now();
+    const now = new Date(nowMs).toISOString();
+    const row = await tx.get(
+      `SELECT n.* FROM notifications n JOIN companies c ON c.id=n.company_id WHERE n.company_id=? AND c.status='active' AND ((n.status='pending' AND n.next_attempt_at<=?) OR (n.status='sending' AND (n.lease_expires_at IS NULL OR n.lease_expires_at<=?))) AND n.channel IN (${channels.map(() => '?').join(',')}) ORDER BY n.created_at,n.id LIMIT 1${tx.dialect === 'postgres' ? ' FOR UPDATE OF n SKIP LOCKED' : ''}`,
+      [companyId, now, now, ...channels],
+    );
+    if (!row) return null;
+    const abandoned = row.status === 'sending';
+    const unsafeReplay =
+      row.attempts > 0 &&
+      (!Number.isFinite(Date.parse(row.first_attempt_at)) ||
+        !row.delivery_payload ||
+        nowMs - Date.parse(row.first_attempt_at) >= REPLAY_WINDOW_MS);
+    if (
+      (abandoned && row.channel === 'whatsapp') ||
+      unsafeReplay ||
+      row.attempts >= NOTIFICATION_MAX_ATTEMPTS
+    ) {
+      await tx.run(
+        'UPDATE notifications SET status=?,error=?,claim_token=NULL,lease_expires_at=NULL WHERE company_id=? AND id=?',
+        [
+          abandoned || unsafeReplay ? 'review' : 'failed',
+          'Tentativa anterior exige revisão ou atingiu o limite de tentativas.',
+          companyId,
+          row.id,
+        ],
+      );
+      return { skipped: true };
+    }
+    let envelope;
+    try {
+      envelope = await deliveryEnvelope(tx, companyId, row);
+    } catch {
+      await tx.run(
+        "UPDATE notifications SET status='failed',error='Dados da mensagem inválidos.' WHERE company_id=? AND id=?",
+        [companyId, row.id],
+      );
+      return { skipped: true };
+    }
+    const token = randomUUID();
+    await tx.run(
+      "UPDATE notifications SET status='sending',attempts=attempts+1,claim_token=?,claimed_at=?,lease_expires_at=?,first_attempt_at=COALESCE(first_attempt_at,?),delivery_payload=? WHERE company_id=? AND id=?",
+      [
+        token,
+        now,
+        new Date(nowMs + NOTIFICATION_LEASE_MS).toISOString(),
+        now,
+        envelope,
+        companyId,
+        row.id,
+      ],
+    );
+    return { ...row, attempts: row.attempts + 1, claim_token: token, delivery_payload: envelope };
+  });
 }
 
 export function createNotificationProcessor(db, companyId, { batchSize = 20 } = {}) {
   requireCompanyId(companyId);
   let busy = false;
-  const tick = async () => {
+  return async () => {
     if (busy) return;
     busy = true;
     try {
+      await cleanIdempotency(db, companyId);
       const channels = [];
       if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) channels.push('email');
       if (
@@ -100,36 +221,13 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
         process.env.TWILIO_CONTENT_SID
       )
         channels.push('whatsapp');
-      if (!channels.length) return;
-      const rows = await db.transaction(async (tx) => {
-        // Advisory transaction lock also coordinates independent PostgreSQL workers.
-        if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789125)');
-        const jobs = await tx.all(
-          `SELECT * FROM notifications WHERE company_id=? AND status='pending' AND attempts<5 AND next_attempt_at<=? AND channel IN (${channels.map(() => '?').join(',')}) ORDER BY created_at LIMIT ?`,
-          [companyId, new Date().toISOString(), ...channels, batchSize],
-        );
-        for (const job of jobs)
-          await tx.run(
-            "UPDATE notifications SET status='sending',attempts=attempts+1 WHERE company_id=? AND id=?",
-            [companyId, job.id],
-          );
-        return jobs;
-      });
-      for (const row of rows) {
+      for (let index = 0; index < batchSize; index++) {
+        const row = await claimNotification(db, companyId, channels);
+        if (!row) break;
+        if (row.skipped) continue;
+        let status = 'sent',
+          error = null;
         try {
-          const p = JSON.parse(row.payload);
-          // Keep the event snapshot, but deliver to the account's current contact details.
-          const recipient = await db.get(
-            'SELECT COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.company_id=? AND a.id=?',
-            [companyId, row.appointment_id],
-          );
-          if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');
-          Object.assign(p, recipient);
-          const event =
-            { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[
-              row.event
-            ] || row.event;
-          const url = `${process.env.APP_URL || 'http://localhost:5173'}/${p.guest && !p.guestSession ? '#contato' : 'minha-conta'}`;
           let response;
           if (row.channel === 'email') {
             response = await fetch('https://api.resend.com/emails', {
@@ -140,66 +238,56 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
                 'Content-Type': 'application/json',
                 'Idempotency-Key': row.id,
               },
-              body: JSON.stringify({
-                from: process.env.EMAIL_FROM,
-                to: [p.email],
-                ...appointmentEmail(p, row.event, url),
-              }),
+              body: row.delivery_payload,
             });
           } else {
-            const phone = p.phone.replace(/\D/g, '');
-            const to = phone.length <= 11 ? `55${phone}` : phone;
             response = await fetch(
               `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
               {
                 method: 'POST',
                 signal: AbortSignal.timeout(15000),
                 headers: {
-                  Authorization: `Basic ${Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64')}`,
+                  Authorization: `Basic ${Buffer.from(process.env.TWILIO_ACCOUNT_SID + ':' + process.env.TWILIO_AUTH_TOKEN).toString('base64')}`,
                   'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: new URLSearchParams({
-                  From: process.env.TWILIO_WHATSAPP_FROM,
-                  To: `whatsapp:+${to}`,
-                  ContentSid: process.env.TWILIO_CONTENT_SID,
-                  ContentVariables: JSON.stringify({
-                    1: p.name,
-                    2: event,
-                    3: `${p.date.split('-').reverse().join('/')} às ${p.time}`,
-                    4: url,
-                  }),
-                }),
+                body: new URLSearchParams(JSON.parse(row.delivery_payload)),
               },
             );
           }
-          if (!response.ok) throw new Error(`O provedor retornou HTTP ${response.status}`);
-          await db.run(
-            "UPDATE notifications SET status='sent',error=NULL WHERE company_id=? AND id=?",
-            [companyId, row.id],
-          );
+          if (!response.ok)
+            throw Object.assign(new Error(`O provedor retornou HTTP ${response.status}`), {
+              uncertain: row.channel === 'whatsapp' && response.status >= 500,
+            });
         } catch (e) {
-          // WhatsApp timeouts are marked for manual review to avoid blind duplicate delivery.
           const uncertain =
-            row.channel === 'whatsapp' && (e.name === 'TimeoutError' || e.name === 'TypeError');
-          await db.run(
-            'UPDATE notifications SET status=?,error=?,next_attempt_at=? WHERE company_id=? AND id=?',
-            [
-              uncertain ? 'review' : row.attempts >= 4 ? 'failed' : 'pending',
-              e.message,
-              new Date(Date.now() + 60_000 * 2 ** row.attempts).toISOString(),
-              companyId,
-              row.id,
-            ],
-          );
+            row.channel === 'whatsapp' &&
+            (e.uncertain || ['TimeoutError', 'TypeError', 'AbortError'].includes(e.name));
+          status = uncertain
+            ? 'review'
+            : row.attempts >= NOTIFICATION_MAX_ATTEMPTS
+              ? 'failed'
+              : 'pending';
+          error = e.message;
         }
+        // A late worker cannot acknowledge/fail a lease now owned by another worker.
+        await db.run(
+          "UPDATE notifications SET status=?,error=?,next_attempt_at=?,claim_token=NULL,lease_expires_at=NULL WHERE company_id=? AND id=? AND status='sending' AND claim_token=?",
+          [
+            status,
+            error,
+            new Date(Date.now() + 60000 * 2 ** (row.attempts - 1)).toISOString(),
+            companyId,
+            row.id,
+            row.claim_token,
+          ],
+        );
       }
     } catch (e) {
-      console.error('Falha no processamento de notificações:', e.message);
+      console.error('Falha no processamento de notificações:', e.code || e.name);
     } finally {
       busy = false;
     }
   };
-  return tick;
 }
 
 export function startNotifications(db, companyId) {
@@ -219,12 +307,24 @@ export function createCompanyNotificationDispatcher(db, options = {}) {
     if (busy) return;
     busy = true;
     try {
-      const companies = await db.all(
-        "SELECT n.company_id FROM notifications n JOIN companies c ON c.id=n.company_id WHERE c.status='active' AND n.status='pending' AND n.attempts<5 AND n.next_attempt_at<=? GROUP BY n.company_id ORDER BY MIN(n.created_at)",
+      // Cleanup also runs for companies without pending messages, including suspended ones.
+      const expired = await db.all(
+        'SELECT DISTINCT company_id FROM idempotency_keys WHERE expires_at<=?',
         [new Date().toISOString()],
       );
-      for (const { company_id } of companies)
-        await createNotificationProcessor(db, company_id, options)();
+      for (const row of expired) await cleanIdempotency(db, row.company_id);
+      const companies = await db.all(
+        "SELECT n.company_id FROM notifications n JOIN companies c ON c.id=n.company_id WHERE c.status='active' AND ((n.status='pending' AND n.next_attempt_at<=?) OR (n.status='sending' AND (n.lease_expires_at IS NULL OR n.lease_expires_at<=?))) GROUP BY n.company_id ORDER BY MIN(n.created_at)",
+        [new Date().toISOString(), new Date().toISOString()],
+      );
+      // Independent company queues progress concurrently, with bounded provider load.
+      const pending = companies[Symbol.iterator]();
+      await Promise.all(
+        Array.from({ length: Math.min(4, companies.length) }, async () => {
+          for (const { company_id } of pending)
+            await createNotificationProcessor(db, company_id, options)();
+        }),
+      );
     } finally {
       busy = false;
     }
