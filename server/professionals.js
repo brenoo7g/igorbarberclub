@@ -48,7 +48,7 @@ export async function publicProfessionals(db, companyId, serviceId) {
     .filter((row) => serviceId === undefined || row.service_ids.includes(serviceId));
 }
 
-async function professional(db, companyId, id) {
+export async function professional(db, companyId, id) {
   const row = await db.get(
     'SELECT b.*,u.user_id FROM barbers b LEFT JOIN professional_users u ON u.company_id=b.company_id AND u.barber_id=b.id WHERE b.company_id=? AND b.id=?',
     [companyId, id],
@@ -114,7 +114,12 @@ async function replaceRelations(tx, companyId, id, data) {
   }
 }
 
-export function installProfessionalRoutes(app, db, companyId) {
+export function installProfessionalRoutes(
+  app,
+  db,
+  companyId,
+  { requireCapacity = requireProfessionalCapacity } = {},
+) {
   requireCompanyId(companyId);
   // Installed only after the router's authenticated owner/manager middleware.
   app.get('/admin/professionals', async (_req, res) => {
@@ -133,7 +138,7 @@ export function installProfessionalRoutes(app, db, companyId) {
       idempotent(tx, companyId, 'professional-create', key, data, async () => {
         const id = randomUUID();
         await lockEntitlements(tx, companyId);
-        await requireProfessionalCapacity(tx, companyId, data.active ? 1 : 0);
+        await requireCapacity(tx, companyId, data.active ? 1 : 0);
         await lockCatalog(tx, companyId, true);
         await tx.run('INSERT INTO barbers(company_id,id,name,specialty,active) VALUES(?,?,?,?,?)', [
           companyId,
@@ -184,7 +189,7 @@ export function installProfessionalRoutes(app, db, companyId) {
       await lockEntitlements(tx, companyId);
       await lockBarbers(tx, companyId, id);
       const before = await professional(tx, companyId, id);
-      if (active && before.active !== 1) await requireProfessionalCapacity(tx, companyId, 1);
+      if (active && before.active !== 1) await requireCapacity(tx, companyId, 1);
       await tx.run('UPDATE barbers SET active=? WHERE company_id=? AND id=?', [
         active ? 1 : 0,
         companyId,

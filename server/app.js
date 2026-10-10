@@ -1,3 +1,9 @@
+import { installServiceRoutes } from './services.js';
+import { createSiteStorage } from './site-storage.js';
+import { installCompanySite } from './company-site.js';
+import { installDashboard } from './dashboard.js';
+import { installSiteAssetRoutes } from './site-assets.js';
+import { installOperationalOnboarding } from './operational-onboarding.js';
 import {
   resolveCompanyContext,
   resolvePublicCompany,
@@ -28,9 +34,20 @@ import {
 import { getCompanyMetrics } from './company-metrics.js';
 import { enqueueNotification } from './notifications.js';
 import { demoMode } from './seed.js';
-import { installProfileRoutes, passwordSchema, publicUser } from './profile.js';
+import { installProfileRoutes, publicUser } from './profile.js';
+import { parseRegistration } from './registration.js';
+import {
+  getAvailablePlan,
+  getPlanCatalog,
+  publicPlan,
+  domainError,
+  getCompanyEntitlements,
+} from './entitlements.js';
+import { lockPublication } from './site-publication.js';
 import { installPortfolioRoutes } from './portfolio.js';
 import { getPublicSite } from './public-site.js';
+import { installOnboardingCatalog } from './onboarding-catalog.js';
+import { installCompanyOnboarding } from './company-onboarding.js';
 import { lockBarbers, lockAppointment, lockCatalog, lockResource } from './scheduling-locks.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { installScheduleRoutes, readSchedule } from './schedule.js';
@@ -59,13 +76,6 @@ const emailSchema = z
   .email()
   .max(200)
   .transform((s) => s.toLowerCase());
-const serviceSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  description: z.string().trim().max(250),
-  duration: z.number().int().min(10).max(480),
-  price: z.number().int().min(0).max(1000000),
-  category: z.string().trim().min(2).max(40),
-});
 const singleServiceSchema = z
   .array(z.string().min(1))
   .length(1, 'Escolha apenas um serviço por agendamento.');
@@ -109,6 +119,7 @@ export function createApp(
   {
     secret = process.env.JWT_SECRET || randomBytes(48).toString('hex'),
     test = false,
+    siteStorage = createSiteStorage(),
     serveStatic = true,
     testGuestAccess = false,
   } = {},
@@ -228,6 +239,43 @@ export function createApp(
   app.get('/api/companies', authenticated, async (req, res) =>
     res.json(await listUserCompanies(db, req.user.id)),
   );
+  app.get('/api/plans', authenticated, async (_req, res) => res.json(await getPlanCatalog(db)));
+  installOnboardingCatalog(app, db, authenticated);
+  installCompanyOnboarding(app, db, authenticated);
+  installOperationalOnboarding(app, db, authenticated);
+  installCompanySite(app, db, { authenticated, storage: siteStorage });
+  installDashboard(app, db, authenticated);
+  app.post('/api/onboarding/plan-selection', authenticated, async (req, res) => {
+    const { planCode } = z
+      .object({ planCode: z.enum(['individual', 'team']) })
+      .strict()
+      .parse(req.body);
+    if ((await listUserCompanies(db, req.user.id)).length)
+      domainError(
+        409,
+        'COMPANY_ALREADY_CONFIGURED',
+        'Você já tem um estabelecimento. Acesse sua conta empresarial.',
+      );
+    // Validation only. A draft choice must never create a company/subscription or start a trial.
+    const selected = await getAvailablePlan(db, planCode);
+    res.json({ plan: publicPlan(selected) });
+  });
+  // Same authentication, independent of any public company/visitor context.
+  // Requests without this explicit scope still use the legacy company router.
+  app.get('/api/auth/me', (req, res, next) => {
+    if (req.query.scope !== 'gradefy') return next();
+    res.json({ user: publicUser(req.user), visitor: null });
+  });
+  app.post('/api/auth/logout', (req, res, next) => {
+    if (req.query.scope !== 'gradefy') return next();
+    res.clearCookie('session', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: secureCookies,
+    });
+    res.json({ ok: true });
+  });
   const dummyHash = bcrypt.hashSync(randomBytes(24).toString('hex'), 12);
   app.get('/api/health', (_req, res) => res.json({ ok: true, database: db.dialect }));
   app.get('/api/config', (_req, res) =>
@@ -249,22 +297,7 @@ export function createApp(
     }),
   );
   app.post('/api/auth/register', authLimiter, async (req, res) => {
-    const data = z
-      .object({
-        name: z
-          .string()
-          .trim()
-          .min(3)
-          .max(100)
-          .refine((n) => n.split(/\s+/).length >= 2, 'Informe nome e sobrenome.'),
-        email: emailSchema,
-        phone: z
-          .string()
-          .transform((p) => p.replace(/\D/g, ''))
-          .refine((p) => /^\d{10,13}$/.test(p), 'Telefone inválido.'),
-        password: passwordSchema(),
-      })
-      .parse(req.body);
+    const data = parseRegistration(req.body);
     const user = { id: randomUUID(), ...data, role: 'client' };
     const hash = await bcrypt.hash(data.password, 12);
     try {
@@ -309,7 +342,11 @@ export function createApp(
     return router(req, res, next);
   };
   app.use('/api/public/:companySlug', async (req, res, next) => {
-    req.companyContext = await resolvePublicCompany(db, req.params.companySlug);
+    const reservations =
+      (req.method === 'GET' && ['/appointments', '/auth/me'].includes(req.path)) ||
+      (req.method === 'PATCH' && /^\/appointments\/[^/]+\/cancel$/.test(req.path)) ||
+      (req.method === 'POST' && req.path === '/auth/logout');
+    req.companyContext = await resolvePublicCompany(db, req.params.companySlug, { reservations });
     if (/^\/admin(?:\/|$)/i.test(req.path))
       return res.status(404).json({ error: 'Rota não encontrada.' });
     return dispatch(req, res, next);
@@ -360,7 +397,13 @@ export function createApp(
       });
       res.json({ ok: true });
     });
-    installPortfolioRoutes(app, db, companyId, { authenticated, admin, authLimiter });
+    installPortfolioRoutes(app, db, companyId, {
+      authenticated,
+      admin,
+      authLimiter,
+      storage: siteStorage,
+    });
+    installSiteAssetRoutes(app, db, companyId, siteStorage);
     installScheduleRoutes(app, db, companyId, { authenticated, admin });
     app.get('/services', async (_req, res) =>
       res.json(
@@ -492,112 +535,152 @@ export function createApp(
       const key = reschedule ? null : requestKey(req, asGuest);
       const id = reschedule ? String(req.params.id) : randomUUID();
       let guestSession;
-      const result = await db.transaction(async (tx) =>
-        idempotent(tx, companyId, asGuest ? 'guest-booking' : 'booking', key, data, async () => {
-          verifyDate(data.date);
-          if (
-            !(await tx.get("SELECT id FROM companies WHERE id=? AND status='active'", [companyId]))
-          )
-            fail(404, 'Empresa não encontrada.');
-          if (asGuest && req.visitorToken)
-            await lockResource(tx, companyId, 'visitor', req.visitorToken);
-          await lockCatalog(tx, companyId, true);
-          if (reschedule) await lockAppointment(tx, companyId, id);
-          if (
-            !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
-              companyId,
-              data.barberId,
-            ]))
-          )
-            fail(404, 'Profissional não encontrado.');
-          let current;
-          if (reschedule) {
-            current = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
-              companyId,
-              id,
-            ]);
-            if (!current || !(await ownsAppointment(tx, companyId, req, current)))
-              fail(404, 'Agendamento não encontrado.');
-            if (current.status !== 'confirmed' || !isFuture(current.date, current.start_minute))
-              fail(400, 'Este agendamento não pode mais ser remarcado.');
-          }
-          await lockBarbers(tx, companyId, data.barberId, ...(current ? [current.barber_id] : []));
-          if (current && !(await ownsAppointment(tx, companyId, req, current, true)))
-            fail(404, 'Agendamento não encontrado.');
-          const services = await getServices(tx, companyId, data.services);
-          if (!(await performsServices(tx, companyId, data.barberId, data.services)))
-            fail(409, 'Este profissional não está disponível para o serviço selecionado.');
-          const duration = services.reduce((sum, s) => sum + s.duration, 0);
-          const total = services.reduce((sum, s) => sum + s.price, 0);
-          if (
-            (data.expectedTotal !== undefined && data.expectedTotal !== total) ||
-            (data.expectedDuration !== undefined && data.expectedDuration !== duration)
-          )
-            fail(
-              412,
-              'O preço ou a duração mudou. Atualize a página para revisar os serviços antes de confirmar.',
+      const result = await db.transaction(async (tx) => {
+        await lockPublication(tx, companyId, true);
+        if (
+          !(await tx.get(
+            "SELECT id FROM companies WHERE id=? AND status='active' AND site_published=1",
+            [companyId],
+          ))
+        )
+          fail(404, 'Estabelecimento indisponível para novos agendamentos.');
+        // Existing legacy companies retain their established policy without an automatic plan.
+        if (
+          await tx.get('SELECT company_id FROM company_onboarding WHERE company_id=?', [companyId])
+        ) {
+          const entitlement = await getCompanyEntitlements(tx, companyId);
+          if (!entitlement.valid)
+            domainError(
+              409,
+              entitlement.reason,
+              'O agendamento deste estabelecimento está indisponível.',
             );
-          const schedule = await readSchedule(tx, companyId, data.barberId);
-          const access = dateAccess(schedule, data.date, dateInBrazil());
-          if (!access.allowed) fail(409, access.message);
-          const slots = availableSlots({
-            date: data.date,
-            duration,
-            occupied: await occupied(tx, companyId, data.barberId, data.date, reschedule ? id : ''),
-            workingDay: schedule.days.find((d) => d.weekday === weekday(data.date)),
-          });
-          if (!slots.includes(data.time))
-            fail(409, 'Esse horário acabou de ficar indisponível. Escolha outro horário.');
-          const start = minuteOf(data.time);
-          if (reschedule) {
-            await tx.run(
-              'UPDATE appointments SET barber_id=?,date=?,start_minute=?,end_minute=?,total=? WHERE company_id=? AND id=?',
-              [data.barberId, data.date, start, start + duration, total, companyId, id],
-            );
-            await tx.run(
-              'DELETE FROM appointment_services WHERE company_id=? AND appointment_id=?',
-              [companyId, id],
-            );
-          } else
-            await tx.run(
-              `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-              [
+        }
+        return idempotent(
+          tx,
+          companyId,
+          asGuest ? 'guest-booking' : 'booking',
+          key,
+          data,
+          async () => {
+            verifyDate(data.date);
+            if (
+              !(await tx.get("SELECT id FROM companies WHERE id=? AND status='active'", [
+                companyId,
+              ]))
+            )
+              fail(404, 'Empresa não encontrada.');
+            if (asGuest && req.visitorToken)
+              await lockResource(tx, companyId, 'visitor', req.visitorToken);
+            await lockCatalog(tx, companyId, true);
+            if (reschedule) await lockAppointment(tx, companyId, id);
+            if (
+              !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
+                companyId,
+                data.barberId,
+              ]))
+            )
+              fail(404, 'Profissional não encontrado.');
+            let current;
+            if (reschedule) {
+              current = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
                 companyId,
                 id,
-                asGuest ? null : req.user.id,
+              ]);
+              if (!current || !(await ownsAppointment(tx, companyId, req, current)))
+                fail(404, 'Agendamento não encontrado.');
+              if (current.status !== 'confirmed' || !isFuture(current.date, current.start_minute))
+                fail(400, 'Este agendamento não pode mais ser remarcado.');
+            }
+            await lockBarbers(
+              tx,
+              companyId,
+              data.barberId,
+              ...(current ? [current.barber_id] : []),
+            );
+            if (current && !(await ownsAppointment(tx, companyId, req, current, true)))
+              fail(404, 'Agendamento não encontrado.');
+            const services = await getServices(tx, companyId, data.services);
+            if (!(await performsServices(tx, companyId, data.barberId, data.services)))
+              fail(409, 'Este profissional não está disponível para o serviço selecionado.');
+            const duration = services.reduce((sum, s) => sum + s.duration, 0);
+            const total = services.reduce((sum, s) => sum + s.price, 0);
+            if (
+              (data.expectedTotal !== undefined && data.expectedTotal !== total) ||
+              (data.expectedDuration !== undefined && data.expectedDuration !== duration)
+            )
+              fail(
+                412,
+                'O preço ou a duração mudou. Atualize a página para revisar os serviços antes de confirmar.',
+              );
+            const schedule = await readSchedule(tx, companyId, data.barberId);
+            const access = dateAccess(schedule, data.date, dateInBrazil());
+            if (!access.allowed) fail(409, access.message);
+            const slots = availableSlots({
+              date: data.date,
+              duration,
+              occupied: await occupied(
+                tx,
+                companyId,
                 data.barberId,
                 data.date,
-                start,
-                start + duration,
-                total,
-                'confirmed',
-                new Date().toISOString(),
-                asGuest ? data.guest.name : null,
-                asGuest ? data.guest.email : null,
-                asGuest ? data.guest.phone : null,
-              ],
-            );
-          for (const s of services)
-            await tx.run(
-              `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?,?)`,
-              [companyId, id, s.id, s.name, s.price, s.duration],
-            );
-          if (asGuest) {
-            guestSession = await visitors.save(tx, req, data.guest);
-            if (key && guestSession.token !== req.visitorToken)
-              fail(428, 'Renove a sessão de visitante antes de repetir esta reserva.');
-            await tx.run(
-              `INSERT INTO guest_appointments (company_id,appointment_id,visitor_id) VALUES (?,?,?)`,
-              [companyId, id, guestSession.visitor.id],
-            );
-          }
-          await enqueueNotification(tx, companyId, id, reschedule ? 'rescheduled' : 'confirmed');
-          return {
-            ...(await appointmentList(companyId, 'a.id=?', [id], tx))[0],
-            ...(guestSession ? { visitor: publicVisitor(guestSession.visitor) } : {}),
-          };
-        }),
-      );
+                reschedule ? id : '',
+              ),
+              workingDay: schedule.days.find((d) => d.weekday === weekday(data.date)),
+            });
+            if (!slots.includes(data.time))
+              fail(409, 'Esse horário acabou de ficar indisponível. Escolha outro horário.');
+            const start = minuteOf(data.time);
+            if (reschedule) {
+              await tx.run(
+                'UPDATE appointments SET barber_id=?,date=?,start_minute=?,end_minute=?,total=? WHERE company_id=? AND id=?',
+                [data.barberId, data.date, start, start + duration, total, companyId, id],
+              );
+              await tx.run(
+                'DELETE FROM appointment_services WHERE company_id=? AND appointment_id=?',
+                [companyId, id],
+              );
+            } else
+              await tx.run(
+                `INSERT INTO appointments (company_id,id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at,guest_name,guest_email,guest_phone) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [
+                  companyId,
+                  id,
+                  asGuest ? null : req.user.id,
+                  data.barberId,
+                  data.date,
+                  start,
+                  start + duration,
+                  total,
+                  'confirmed',
+                  new Date().toISOString(),
+                  asGuest ? data.guest.name : null,
+                  asGuest ? data.guest.email : null,
+                  asGuest ? data.guest.phone : null,
+                ],
+              );
+            for (const s of services)
+              await tx.run(
+                `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?,?)`,
+                [companyId, id, s.id, s.name, s.price, s.duration],
+              );
+            if (asGuest) {
+              guestSession = await visitors.save(tx, req, data.guest);
+              if (key && guestSession.token !== req.visitorToken)
+                fail(428, 'Renove a sessão de visitante antes de repetir esta reserva.');
+              await tx.run(
+                `INSERT INTO guest_appointments (company_id,appointment_id,visitor_id) VALUES (?,?,?)`,
+                [companyId, id, guestSession.visitor.id],
+              );
+            }
+            await enqueueNotification(tx, companyId, id, reschedule ? 'rescheduled' : 'confirmed');
+            return {
+              ...(await appointmentList(companyId, 'a.id=?', [id], tx))[0],
+              ...(guestSession ? { visitor: publicVisitor(guestSession.visitor) } : {}),
+            };
+          },
+        );
+      });
       if (guestSession) visitors.setCookie(res, guestSession.token);
       res.status(reschedule ? 200 : 201).json(result);
     }
@@ -670,82 +753,7 @@ export function createApp(
       });
       res.json({ ok: true });
     });
-    app.post('/admin/services', async (req, res) => {
-      const { professionalIds, ...data } = serviceSchema
-          .extend({
-            professionalIds: z
-              .array(z.string().min(1))
-              .max(100)
-              .refine((ids) => new Set(ids).size === ids.length)
-              .optional(),
-          })
-          .parse(req.body),
-        id = randomUUID();
-      await db.transaction(async (tx) => {
-        await lockCatalog(tx, companyId);
-        const professionals =
-          professionalIds ??
-          (companyId === getLegacyCompanyId()
-            ? (
-                await tx.all('SELECT id FROM barbers WHERE company_id=? AND active=1', [companyId])
-              ).map((b) => b.id)
-            : []);
-        for (const professionalId of professionals)
-          if (
-            !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=?', [
-              companyId,
-              professionalId,
-            ]))
-          )
-            fail(400, 'Profissional não pertence à empresa.');
-        await tx.run(
-          `INSERT INTO services (company_id,id,name,description,duration,price,category) VALUES (?,?,?,?,?,?,?)`,
-          [companyId, id, data.name, data.description, data.duration, data.price, data.category],
-        );
-        for (const professionalId of professionals)
-          await tx.run(
-            'INSERT INTO barber_services(company_id,barber_id,service_id,created_at) VALUES(?,?,?,?)',
-            [companyId, professionalId, id, new Date().toISOString()],
-          );
-      });
-      res.status(201).json({ id, ...data, active: 1 });
-    });
-    app.put('/admin/services/:id', async (req, res) => {
-      const data = serviceSchema.parse(req.body),
-        id = String(req.params.id);
-      await db.transaction(async (tx) => {
-        await lockCatalog(tx, companyId);
-        if (
-          !(await tx.get('SELECT id FROM services WHERE company_id=? AND id=? AND active=1', [
-            companyId,
-            id,
-          ]))
-        )
-          fail(404, 'Serviço não encontrado.');
-        await tx.run(
-          'UPDATE services SET name=?,description=?,duration=?,price=?,category=? WHERE company_id=? AND id=?',
-          [data.name, data.description, data.duration, data.price, data.category, companyId, id],
-        );
-      });
-      res.json({ id, ...data, active: 1 });
-    });
-    app.delete('/admin/services/:id', async (req, res) => {
-      await db.transaction(async (tx) => {
-        await lockCatalog(tx, companyId);
-        if (
-          !(await tx.get('SELECT id FROM services WHERE company_id=? AND id=? AND active=1', [
-            companyId,
-            String(req.params.id),
-          ]))
-        )
-          fail(404, 'Serviço não encontrado.');
-        await tx.run('UPDATE services SET active=0 WHERE company_id=? AND id=?', [
-          companyId,
-          String(req.params.id),
-        ]);
-      });
-      res.json({ ok: true });
-    });
+    installServiceRoutes(app, db, companyId);
     app.get('/admin/blocks', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),
         to = dateSchema.parse(req.query.to || from);

@@ -1,10 +1,17 @@
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  details: { field: string; message: string }[];
+  constructor(message: string, status: number, details: { field: string; message: string }[] = []) {
     super(message);
     this.status = status;
+    this.details = details;
   }
 }
+export const newIdempotencyKey = () =>
+  crypto.randomUUID?.() ??
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 export async function api<T>(path: string, options: RequestInit = {}, base = '/api'): Promise<T> {
   let response: Response;
   try {
@@ -37,7 +44,14 @@ export async function api<T>(path: string, options: RequestInit = {}, base = '/a
       data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error
         : unavailable;
-    throw new ApiError(message, response.status);
+    const details =
+      data && typeof data === 'object' && 'details' in data && Array.isArray(data.details)
+        ? data.details.filter(
+            (item): item is { field: string; message: string } =>
+              item && typeof item.field === 'string' && typeof item.message === 'string',
+          )
+        : [];
+    throw new ApiError(message, response.status, details);
   }
   return data as T;
 }

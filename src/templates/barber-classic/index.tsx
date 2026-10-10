@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { AppProvider } from '../../context';
-import { api, errorMessage } from '../../lib';
-import type { PublicSite } from '../../types';
+import { api, ApiError, errorMessage } from '../../lib';
+import type { PublicSite, Service, Barber } from '../../types';
+import type { PortfolioPhoto } from '../../components/Portfolio';
 import { SiteContext } from '../../site-context';
 import { Layout } from '../../components/Layout';
 import Home from '../../pages/Home';
@@ -17,21 +18,24 @@ export function TemplateHome() {
 export function SiteShell({
   preview = false,
   admin = false,
+  privatePreview = false,
   children,
 }: {
   preview?: boolean;
   admin?: boolean;
+  privatePreview?: boolean;
   children?: ReactNode;
 }) {
-  const { companySlug } = useParams();
+  const { companySlug, previewCompanyId } = useParams();
   // The legacy root uses the existing backend alias. Unknown slugs never use this alias.
   const slug = admin ? undefined : companySlug;
   return (
     <ResolvedSite
-      key={preview ? 'preview' : slug || 'legacy'}
+      key={privatePreview ? previewCompanyId : preview ? 'preview' : slug || 'legacy'}
       slug={slug}
       preview={preview}
       admin={admin}
+      privateCompany={privatePreview ? previewCompanyId : undefined}
       children={children}
     />
   );
@@ -41,44 +45,137 @@ function ResolvedSite({
   preview,
   admin,
   children,
+  privateCompany,
 }: {
   slug?: string;
   preview: boolean;
   admin: boolean;
   children?: ReactNode;
+  privateCompany?: string;
 }) {
+  const location = useLocation();
+  const isPreview = preview || !!privateCompany;
+  const [previewData, setPreviewData] = useState<{
+    site: PublicSite;
+    services: Service[];
+    professionals: Barber[];
+    portfolio: PortfolioPhoto[];
+  } | null>(null);
+  const [reservationsOnly, setReservationsOnly] = useState(false);
   const [site, setSite] = useState<PublicSite | null>(preview ? previewSite : null);
   const [error, setError] = useState('');
+  const [missing, setMissing] = useState(false);
   const [retry, setRetry] = useState(0);
   const apiBase = slug ? `/api/public/${encodeURIComponent(slug)}` : '/api';
-  const basePath = preview ? '/preview/barber-classic' : slug ? `/${encodeURIComponent(slug)}` : '';
+  const basePath = privateCompany
+    ? `/preview/site/${encodeURIComponent(privateCompany)}`
+    : preview
+      ? '/preview/barber-classic'
+      : slug
+        ? `/${encodeURIComponent(slug)}`
+        : '';
   const siteApi = useMemo<typeof api>(
     () =>
-      preview
-        ? previewApi
-        : <T,>(path: string, options: RequestInit = {}) =>
-            api<T>(
-              path,
-              options,
-              /^\/auth\/(?:login|register|profile|password|forgot-password|reset-password)$/.test(
+      privateCompany
+        ? async <T,>(path: string, options: RequestInit = {}) => {
+            if (options.method && options.method !== 'GET')
+              throw new ApiError('A prévia não realiza agendamentos.', 403);
+            if (path === '/auth/me') return { user: null, visitor: null } as T;
+            const data: Record<string, unknown> = {
+              '/services': previewData?.services,
+              '/barbers': previewData?.professionals,
+              '/portfolio': previewData?.portfolio,
+            };
+            if (!(path in data)) throw new ApiError('Operação indisponível na prévia.', 403);
+            return structuredClone(data[path]) as T;
+          }
+        : preview
+          ? previewApi
+          : <T,>(path: string, options: RequestInit = {}) =>
+              api<T>(
                 path,
-              ) || path === '/config'
-                ? '/api'
-                : apiBase,
-            ),
-    [apiBase, preview],
+                options,
+                /^\/auth\/(?:login|register|profile|password|forgot-password|reset-password)$/.test(
+                  path,
+                ) || path === '/config'
+                  ? '/api'
+                  : apiBase,
+              ),
+    [apiBase, preview, privateCompany, previewData],
   );
   useEffect(() => {
     if (preview) return;
     const controller = new AbortController();
     setError('');
-    api<PublicSite>('/site', { signal: controller.signal }, apiBase)
-      .then(setSite)
+    setMissing(false);
+    setReservationsOnly(false);
+    const load = privateCompany
+      ? api<NonNullable<typeof previewData>>('/company-site/preview', {
+          signal: controller.signal,
+          headers: { 'X-Gradefy-Company-Id': privateCompany },
+        }).then((data) => {
+          if (!controller.signal.aborted) setPreviewData(data);
+          return data.site;
+        })
+      : api<PublicSite>('/site', { signal: controller.signal }, apiBase).catch(async (e) => {
+          if (
+            e instanceof ApiError &&
+            e.status === 404 &&
+            slug &&
+            location.pathname === `/${slug}/minha-conta`
+          ) {
+            // Unknown slugs must stay 404, even on the reservation path.
+            await api('/auth/me', { signal: controller.signal }, apiBase);
+            setReservationsOnly(true);
+            // Neutral shell exposes no unpublished business content. Reservation APIs still authorize ownership.
+            return {
+              ...previewSite,
+              company: { ...previewSite.company, name: 'Minhas reservas', slug },
+              settings: {
+                ...previewSite.settings,
+                description: null,
+                address: null,
+                sections: { about: false, gallery: false },
+              },
+              counts: { services: 0, professionals: 0, portfolio: 0 },
+            };
+          }
+          throw e;
+        });
+    load
+      .then((result) => {
+        if (!controller.signal.aborted) setSite(result);
+      })
       .catch((e) => {
-        if (!controller.signal.aborted) setError(errorMessage(e));
+        if (!controller.signal.aborted) {
+          setSite(null);
+          setPreviewData(null);
+          setMissing(e instanceof ApiError && e.status === 404);
+          setError(errorMessage(e));
+        }
       });
-    return () => controller.abort();
-  }, [apiBase, preview, retry]);
+    const expire = () => {
+      setSite(null);
+      setPreviewData(null);
+      setError('Sua sessão expirou. Entre novamente para visualizar a prévia.');
+    };
+    const refresh = () => setRetry((n) => n + 1);
+    const accountChannel =
+      privateCompany && typeof BroadcastChannel !== 'undefined'
+        ? new BroadcastChannel('igor-account')
+        : null;
+    if (accountChannel) accountChannel.onmessage = refresh;
+    if (privateCompany) {
+      window.addEventListener('session-expired', expire);
+      window.addEventListener('focus', refresh);
+    }
+    return () => {
+      controller.abort();
+      accountChannel?.close();
+      window.removeEventListener('session-expired', expire);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [apiBase, preview, privateCompany, retry, location.pathname]);
   useEffect(() => {
     document.title = site
       ? `${site.company.name} — Seu estilo. Sua identidade.`
@@ -95,11 +192,16 @@ function ResolvedSite({
   if (error)
     return (
       <main className="container not-found">
-        <h1>Estabelecimento indisponível</h1>
+        <h1>{missing ? 'Página não encontrada' : 'Estabelecimento indisponível'}</h1>
         <p role="alert">{error}</p>
         <button className="button primary" onClick={() => setRetry((n) => n + 1)}>
           Tentar novamente
         </button>
+        {privateCompany && (
+          <Link className="button ghost" to="/app/meu-site">
+            Voltar ao Meu Site ou entrar na sua conta
+          </Link>
+        )}
       </main>
     );
   if (!site)
@@ -120,9 +222,34 @@ function ResolvedSite({
   } as CSSProperties;
   const Template = templates['barber-classic'];
   return (
-    <SiteContext.Provider value={{ site, preview, basePath, api: siteApi }}>
-      <div style={style} className="barber-classic">
-        <AppProvider>{admin ? children : <Template.Layout />}</AppProvider>
+    <SiteContext.Provider
+      value={{
+        site,
+        preview: isPreview,
+        privatePreview: !!privateCompany,
+        reservationsOnly,
+        basePath,
+        api: siteApi,
+      }}
+    >
+      <div
+        style={style}
+        className={`barber-classic ${site.company.id !== 'igor-barber-club' && site.company.id !== 'preview' ? 'company-site' : ''}`}
+      >
+        {privateCompany && (
+          <div className="site-preview-notice">
+            <strong>Prévia privada · Agendamentos desativados</strong>
+            <Link to={`/app/meu-site?empresa=${encodeURIComponent(privateCompany)}`}>
+              Voltar ao Meu Site
+            </Link>
+          </div>
+        )}
+        {reservationsOnly && (
+          <p className="site-preview-notice">
+            Site fora do ar. Você ainda pode consultar e cancelar suas reservas anteriores.
+          </p>
+        )}
+        <AppProvider loadConfig={!isPreview}>{admin ? children : <Template.Layout />}</AppProvider>
       </div>
     </SiteContext.Provider>
   );

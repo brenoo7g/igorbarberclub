@@ -8,13 +8,14 @@
   },
   "scripts": {
     "dev": "concurrently -k -n API,WEB -c blue,magenta \"node --watch server/index.js\" \"vite --host 0.0.0.0\"",
-    "dev:test-access": "concurrently -k -n API,WEB -c blue,magenta \"node server/index.js --guest-test-mode\" \"vite --host 0.0.0.0\"",
+    "dev:test-access": "concurrently -k -n API,WEB -c blue,magenta \"node --watch server/index.js --guest-test-mode\" \"vite --host 0.0.0.0\"",
     "build": "tsc -b && npm run check:schedule && vite build",
     "check:schedule": "tsc --allowJs --checkJs --noEmit --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck server/schedule.js",
     "start": "node server/index.js",
     "db:migrate": "node server/migrate.js",
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
+    "test:e2e:dev": "playwright test --config playwright.dev.config.js",
     "check": "npm run build && npm test",
     "format": "prettier --write api src server tests docs README.md *.json *.ts *.js index.html",
     "format:check": "prettier --check api src server tests docs README.md *.json *.ts *.js index.html"

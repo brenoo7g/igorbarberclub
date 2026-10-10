@@ -23,8 +23,9 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
     message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
   });
   app.post('/api/auth/forgot-password', limiter, async (req, res) => {
-    const { email } = z
+    const { email, scope } = z
       .object({
+        scope: z.literal('gradefy').optional(),
         email: z
           .string()
           .trim()
@@ -72,7 +73,8 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
       if (!allowed) return;
       const user = await tx.get('SELECT * FROM users WHERE email=?', [email]);
       if (!user) return;
-      const id = randomUUID();
+      // Persist only a trusted presentation namespace; no caller-provided return URL.
+      const id = `${scope === 'gradefy' ? 'gradefy-' : ''}${randomUUID()}`;
       await tx.run(
         'INSERT INTO password_recovery (id,user_id,email,session_version,token_hash,event,created_at,expires_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?,?)',
         [
@@ -138,7 +140,7 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
       await tx.run(
         'INSERT INTO password_recovery (id,user_id,email,session_version,event,created_at,expires_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?)',
         [
-          randomUUID(),
+          `${row.id.startsWith('gradefy-') ? 'gradefy-' : ''}${randomUUID()}`,
           user.id,
           user.email,
           user.session_version + 1,
@@ -198,7 +200,12 @@ export function createPasswordEmailProcessor(db, secret) {
           );
           return;
         }
-        const url = new URL('/redefinir-senha', process.env.APP_URL || 'http://localhost:5173');
+        const gradefy = job.id.startsWith('gradefy-');
+        const brand = gradefy ? 'Gradefy' : 'Igor Barber Club';
+        const url = new URL(
+          gradefy ? '/app/redefinir-senha' : '/redefinir-senha',
+          process.env.APP_URL || 'http://localhost:5173',
+        );
         // Fragment keeps the token out of HTTP access logs and referrer headers.
         url.hash = `token=${tokenFor(secret, job.id)}`;
         const reset = job.event === 'reset';
@@ -213,12 +220,10 @@ export function createPasswordEmailProcessor(db, secret) {
           body: JSON.stringify({
             from: process.env.EMAIL_FROM,
             to: [job.email],
-            subject: reset
-              ? 'Redefina sua senha — Igor Barber Club'
-              : 'Sua senha foi alterada — Igor Barber Club',
+            subject: reset ? `Redefina sua senha — ${brand}` : `Sua senha foi alterada — ${brand}`,
             text: reset
-              ? `Recebemos uma solicitação para redefinir sua senha na Igor Barber Club.\n\nAbra o link e escolha uma nova senha:\n${url.href}\n\nEste link é de uso único e expira em 30 minutos após a solicitação. Se você não pediu essa alteração, ignore este e-mail. Sua senha permanece a mesma.\n\nIgor Barber Club`
-              : 'Sua senha na Igor Barber Club foi redefinida com sucesso. As sessões anteriores foram encerradas.\n\nSe você não realizou esta alteração, solicite uma nova recuperação no site e entre em contato com a barbearia.\n\nIgor Barber Club',
+              ? `Recebemos uma solicitação para redefinir sua senha ${gradefy ? 'no Gradefy' : 'na Igor Barber Club'}.\n\nAbra o link e escolha uma nova senha:\n${url.href}\n\nEste link é de uso único e expira em 30 minutos após a solicitação. Se você não pediu essa alteração, ignore este e-mail. Sua senha permanece a mesma.\n\n${brand}`
+              : `Sua senha ${gradefy ? 'no Gradefy' : 'na Igor Barber Club'} foi redefinida com sucesso. As sessões anteriores foram encerradas.\n\nSe você não realizou esta alteração, solicite uma nova recuperação no site${gradefy ? '' : ' e entre em contato com a barbearia'}.\n\n${brand}`,
           }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);

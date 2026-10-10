@@ -25,10 +25,10 @@ const external = (value, host) => {
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 const color = (value) => (/^#[a-fA-F0-9]{6}$/.test(value || '') ? value : null);
 
-export async function getPublicSite(db, companyId) {
+export async function getPublicSite(db, companyId, { preview = false } = {}) {
   requireCompanyId(companyId);
   const company = await db.get(
-    "SELECT c.id,c.name,c.slug,c.timezone,c.niche_id AS niche,c.template_id AS template FROM companies c JOIN templates t ON t.id=c.template_id AND t.niche_id=c.niche_id AND t.active=1 WHERE c.id=? AND c.status='active'",
+    `SELECT c.id,c.name,c.slug,c.timezone,c.niche_id AS niche,c.template_id AS template FROM companies c JOIN templates t ON t.id=c.template_id AND t.niche_id=c.niche_id AND t.active=1 WHERE c.id=? AND c.status='active'${preview ? '' : ' AND c.site_published=1'}`,
     [companyId],
   );
   if (!company || !company.name.trim())
@@ -66,6 +66,29 @@ export async function getPublicSite(db, companyId) {
     featured_service_ids: featured,
     highlight_service_id: text(row.highlight_service_id),
   };
+  for (const [field, purpose] of [
+    ['logo_url', 'logo'],
+    ['hero_image_url', 'banner'],
+  ]) {
+    if (row[field]?.startsWith('asset:')) {
+      const id = row[field].slice(6);
+      if (
+        await db.get(
+          "SELECT id FROM company_site_assets WHERE company_id=? AND id=? AND purpose=? AND status='ready'",
+          [companyId, id, purpose],
+        )
+      )
+        settings[field] = preview
+          ? `/api/company-site/assets/${encodeURIComponent(id)}/image?company=${encodeURIComponent(companyId)}`
+          : `${company.id === 'igor-barber-club' ? '/api' : `/api/public/${encodeURIComponent(company.slug)}`}/site-assets/${encodeURIComponent(id)}/image`;
+    }
+  }
+  if (row.sections_json) {
+    try {
+      const flags = JSON.parse(row.sections_json);
+      settings.sections = { about: flags.about !== false, gallery: flags.gallery !== false };
+    } catch {}
+  }
   const counts = {};
   for (const [key, table, filter] of [
     ['services', 'services', ' AND active=1'],

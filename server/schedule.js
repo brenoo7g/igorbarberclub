@@ -26,7 +26,7 @@ const daySchema = interval
     breaks: z.array(interval).max(4),
   })
   .strict();
-const settingsSchema = z
+export const settingsSchema = z
   .object({
     agenda_mode: z.enum(['auto', 'manual']),
     max_days_ahead: z.number().int().min(1).max(90),
@@ -104,14 +104,19 @@ export async function readSchedule(db, companyId, barberId) {
   };
 }
 
-export function installScheduleRoutes(app, db, companyId, { authenticated, admin }) {
+export function installScheduleRoutes(
+  app,
+  db,
+  companyId,
+  { authenticated, admin, includeInactive = false },
+) {
   requireCompanyId(companyId);
   const exists = async (tx, barberId) => {
     if (
-      !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
-        companyId,
-        barberId,
-      ]))
+      !(await tx.get(
+        `SELECT id FROM barbers WHERE company_id=? AND id=?${includeInactive ? '' : ' AND active=1'}`,
+        [companyId, barberId],
+      ))
     )
       fail(404, 'Profissional não encontrado.');
   };

@@ -39,6 +39,7 @@ export interface PublicSite {
     timezone: string;
   };
   settings: {
+    sections?: { about: boolean; gallery: boolean };
     logo_url: string | null;
     favicon_url: string | null;
     wordmark_title: string | null;

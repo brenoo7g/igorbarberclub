@@ -70,6 +70,37 @@ const resetBody = (token, password = 'NovaSenhaCliente123!') => ({
   confirmPassword: password,
 });
 
+test('Gradefy recovery uses the existing single-use flow with a trusted Gradefy link and brand', async (t) => {
+  const f = await fixture(t);
+  const body = { email: 'cliente@example.com', scope: 'gradefy' };
+  const existing = await f.request('/auth/login', {
+    email: body.email,
+    password: 'ClienteDemo2026!',
+  });
+  assert.equal(
+    (await f.request('/auth/forgot-password', { ...body, returnUrl: 'https://attacker.example' }))
+      .status,
+    400,
+  );
+  assert.equal((await f.request('/auth/forgot-password', body)).status, 202);
+  await f.app.locals.processPasswordEmails();
+  const mail = f.mails.at(-1);
+  assert.match(mail.subject, /Gradefy/);
+  assert.ok(!mail.text.includes('Igor'));
+  const url = new URL(mail.text.match(/https:\/\/\S+/)[0]);
+  assert.equal(url.origin, 'https://barber.example');
+  assert.equal(url.pathname, '/app/redefinir-senha');
+  const token = new URLSearchParams(url.hash.slice(1)).get('token');
+  assert.equal((await f.request('/auth/reset-password', resetBody(token))).status, 200);
+  assert.equal(
+    (await f.request('/auth/me?scope=gradefy', undefined, existing.cookie)).data.user,
+    null,
+  );
+  assert.equal((await f.request('/auth/reset-password', resetBody(token))).status, 400);
+  await f.app.locals.processPasswordEmails();
+  assert.match(f.mails.at(-1).subject, /Gradefy/);
+});
+
 test('recovery: private response, trusted link, no plaintext token, atomic single use and session revocation', async (t) => {
   const f = await fixture(t);
   const login = await f.request('/auth/login', {

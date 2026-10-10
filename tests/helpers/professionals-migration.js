@@ -98,7 +98,7 @@ export async function assertProfessionalsMigration(t, db) {
   await assert.rejects(runMigrations(failing), /injected 006 failure/);
   assert.deepEqual(await snapshot(), before);
   await assert.rejects(db.all('SELECT * FROM barber_services'));
-  assert.deepEqual(await runMigrations(db), [6, 7, 8]);
+  assert.deepEqual(await runMigrations(db), [6, 7, 8, 9, 10, 11]);
   const after = await snapshot();
   expectProfessionalMetadata(before);
   assert.deepEqual(after.history.slice(0, 5), before.history);

@@ -22,10 +22,12 @@ import { errorMessage, money } from '../lib';
 import type { Service } from '../types';
 import { CheckItem, ErrorBox, Eyebrow } from '../components/UI';
 import { Portfolio } from '../components/Portfolio';
+import { Professionals } from '../templates/barber-classic/Professionals';
 
 export default function Home() {
   const { api } = useApp();
-  const { site, preview } = useSite();
+  const { site, preview: demonstration, privatePreview } = useSite();
+  const preview = demonstration && !privatePreview;
   const settings = site.settings;
   const location = siteLocation(site);
   const [services, setServices] = useState<Service[]>([]);
@@ -41,7 +43,7 @@ export default function Home() {
         if (e.name !== 'AbortError') setError(errorMessage(e));
       });
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, api]);
   const featured = settings.featured_service_ids
     .map((id) => services.find((s) => s.id === id))
     .filter((s): s is Service => !!s);
@@ -219,57 +221,61 @@ export default function Home() {
           )}
         </section>
       )}
-      {(preview || settings.description || settings.about_detail || settings.about_image_url) && (
-        <section className="about-section" id="sobre">
-          <div className="container about-grid">
-            <div className="about-image">
-              {settings.about_image_url && (
-                <img
-                  src={settings.about_image_url!}
-                  alt="Imagem conceitual de um ambiente de barbearia contemporâneo"
-                  loading="lazy"
-                />
-              )}
-              <div className="about-image-label">
-                <span className="barber-stripes" />
-                <span>
-                  O SEU LUGAR.
+      {settings.sections?.about !== false &&
+        (preview || settings.description || settings.about_detail || settings.about_image_url) && (
+          <section className="about-section" id="sobre">
+            <div className="container about-grid">
+              <div className="about-image">
+                {settings.about_image_url && (
+                  <img
+                    src={settings.about_image_url!}
+                    alt="Imagem conceitual de um ambiente de barbearia contemporâneo"
+                    loading="lazy"
+                  />
+                )}
+                <div className="about-image-label">
+                  <span className="barber-stripes" />
+                  <span>
+                    O SEU LUGAR.
+                    <br />
+                    <strong>O SEU ESTILO.</strong>
+                  </span>
+                  <Scissors size={32} />
+                </div>
+              </div>
+              <div className="about-copy">
+                <Eyebrow>MUITO ALÉM DA CADEIRA</Eyebrow>
+                <h2>
+                  BARBEARIA DE VERDADE.
                   <br />
-                  <strong>O SEU ESTILO.</strong>
-                </span>
-                <Scissors size={32} />
+                  <span>FEITA PRA VOCÊ.</span>
+                </h2>
+                {settings.description && <p>{settings.description}</p>}
+                {settings.about_detail && <p>{settings.about_detail}</p>}
+                <div className="about-checks">
+                  <CheckItem>Atendimento com hora marcada</CheckItem>
+                  <CheckItem>Cuidado em cada detalhe</CheckItem>
+                  <CheckItem>Seu estilo em primeiro lugar</CheckItem>
+                </div>
+                {settings.instagram_url && (
+                  <a
+                    href={settings.instagram_url!}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-link"
+                  >
+                    Conheça a gente no Instagram
+                    <ArrowUpRight size={17} />
+                  </a>
+                )}
               </div>
             </div>
-            <div className="about-copy">
-              <Eyebrow>MUITO ALÉM DA CADEIRA</Eyebrow>
-              <h2>
-                BARBEARIA DE VERDADE.
-                <br />
-                <span>FEITA PRA VOCÊ.</span>
-              </h2>
-              {settings.description && <p>{settings.description}</p>}
-              {settings.about_detail && <p>{settings.about_detail}</p>}
-              <div className="about-checks">
-                <CheckItem>Atendimento com hora marcada</CheckItem>
-                <CheckItem>Cuidado em cada detalhe</CheckItem>
-                <CheckItem>Seu estilo em primeiro lugar</CheckItem>
-              </div>
-              {settings.instagram_url && (
-                <a
-                  href={settings.instagram_url!}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-link"
-                >
-                  Conheça a gente no Instagram
-                  <ArrowUpRight size={17} />
-                </a>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-      <Portfolio />
+          </section>
+        )}
+      {(privatePreview ||
+        (site.company.id !== 'igor-barber-club' && site.company.id !== 'preview')) &&
+        site.counts.professionals > 0 && <Professionals />}
+      {settings.sections?.gallery !== false && <Portfolio />}
       <section className="contact-section container" id="contato">
         <div className="contact-banner">
           <div>

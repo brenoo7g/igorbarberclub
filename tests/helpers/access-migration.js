@@ -60,7 +60,10 @@ export async function assertAccessMigration(t, db) {
       'users',
     ])
       result[table] = JSON.parse(JSON.stringify(await db.all(`SELECT * FROM ${table}`))).sort(
-        (a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)),
+        (a, b) =>
+          table === 'schema_migrations'
+            ? a.version - b.version
+            : JSON.stringify(a).localeCompare(JSON.stringify(b)),
       );
     return result;
   };
@@ -81,7 +84,7 @@ export async function assertAccessMigration(t, db) {
   await assert.rejects(runMigrations(failing), /simulated 004 failure/);
   assert.deepEqual(await snapshot(), before);
   await assert.rejects(db.run(addCompany));
-  assert.deepEqual(await runMigrations(db), [4, 5, 6, 7, 8]);
+  assert.deepEqual(await runMigrations(db), [4, 5, 6, 7, 8, 9, 10, 11]);
   const after = await snapshot();
   assert.deepEqual(after.schema_migrations.slice(0, 3), before.schema_migrations);
   delete after.schema_migrations;

@@ -1,4 +1,5 @@
 import { getLegacyCompanyId } from './company-context.js';
+import { companySlugSchema } from './company-slugs.js';
 
 const fail = (status, code, message) => {
   throw Object.assign(new Error(message), { status, code });
@@ -63,15 +64,22 @@ export async function canManageCompany(db, userId, companyId) {
   return managementRoles.has(row?.role);
 }
 
-export async function resolvePublicCompany(db, slug) {
+export async function resolvePublicCompany(db, slug, { reservations = false } = {}) {
+  if (
+    slug !== undefined &&
+    (!companySlugSchema.safeParse(slug).success || companySlugSchema.parse(slug) !== slug)
+  )
+    fail(404, 'COMPANY_NOT_FOUND', 'Estabelecimento não encontrado.');
   const company =
     slug === undefined
-      ? await db.get("SELECT id,name,slug,status FROM companies WHERE id=? AND status='active'", [
-          getLegacyCompanyId(),
-        ])
-      : await db.get("SELECT id,name,slug,status FROM companies WHERE slug=? AND status='active'", [
-          slug,
-        ]);
+      ? await db.get(
+          "SELECT id,name,slug,status FROM companies WHERE id=? AND status='active' AND site_published=1",
+          [getLegacyCompanyId()],
+        )
+      : await db.get(
+          `SELECT id,name,slug,status FROM companies WHERE slug=? AND status='active'${reservations ? '' : ' AND site_published=1'}`,
+          [slug],
+        );
   if (!company) fail(404, 'COMPANY_NOT_FOUND', 'Estabelecimento não encontrado.');
   return Object.freeze({ companyId: company.id, company, kind: 'public' });
 }

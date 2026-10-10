@@ -129,9 +129,14 @@ async function snapshot(raw, tables) {
         if ('company_id' in row) assert.equal(row.company_id, 'igor-barber-club');
         delete row.company_id;
         if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
+        if (table === 'portfolio' && row.sort_order === 0) delete row.sort_order;
       }
     if (table === 'notifications') assertUnclaimedMigration(rows);
-    result[table] = rows.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    result[table] = rows.sort((a, b) =>
+      table === 'schema_migrations'
+        ? a.version - b.version
+        : JSON.stringify(a).localeCompare(JSON.stringify(b)),
+    );
   }
   return result;
 }
@@ -140,7 +145,7 @@ const count = async (db, table) =>
 async function assertCatalog(db) {
   for (const table of ['companies', 'niches', 'templates', 'company_settings'])
     assert.equal(await count(db, table), 1);
-  assert.equal(await count(db, 'schema_migrations'), 8);
+  assert.equal(await count(db, 'schema_migrations'), migrations.length);
   assert.deepEqual(
     (await db.all('SELECT id,max_professionals FROM plans ORDER BY id')).map((p) => [
       p.id,
@@ -288,8 +293,11 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       ...legacyTables,
       ...foundationTables,
       'idempotency_keys',
+      'company_site_assets',
+      'portfolio_assets',
       'barber_services',
       'professional_users',
+      'company_onboarding',
     ].sort(),
   );
   await assertCatalog(db);
@@ -304,7 +312,14 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
     assert.ok(
       ownedTables.includes(row.table_name) ||
         foundationTables.includes(row.table_name) ||
-        ['idempotency_keys', 'barber_services', 'professional_users'].includes(row.table_name),
+        [
+          'company_site_assets',
+          'portfolio_assets',
+          'idempotency_keys',
+          'barber_services',
+          'professional_users',
+          'company_onboarding',
+        ].includes(row.table_name),
     );
 });
 
@@ -615,13 +630,14 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
   delete before.schema_migrations;
   expectProfessionalMetadata(before);
   for (const row of before.barbers || []) if (row.photo_url === null) delete row.photo_url;
+  for (const row of before.portfolio || []) if (row.sort_order === 0) delete row.sort_order;
   assert.deepEqual(after, before);
   assert.equal(
     (await raw.query("SELECT indexname FROM pg_indexes WHERE indexname='custom_company_name'")).rows
@@ -671,4 +687,62 @@ test('23 Gradefy 6 PostgreSQL Barber Classic migration and public scope', async 
   const { db } = await makeCase(t, 'barber_classic');
   const { assertBarberClassic } = await import('../helpers/barber-classic.js');
   await assertBarberClassic(t, db);
+});
+
+test('24 Gradefy 7C PostgreSQL real onboarding catalog and inactive templates', async (t) => {
+  const { db } = await makeCase(t, 'onboarding_catalog');
+  const { getOnboardingCatalog } = await import('../../server/onboarding-catalog.js');
+  const catalog = await getOnboardingCatalog(db);
+  assert.deepEqual(
+    catalog.niches.map((item) => item.code),
+    ['barbershop'],
+  );
+  assert.deepEqual(catalog.templates, [
+    { code: 'barber-classic', name: 'Barber Classic', nicheCode: 'barbershop' },
+  ]);
+  assert.equal((await db.get('SELECT COUNT(*) AS n FROM subscriptions')).n, '0');
+  await db.run("UPDATE templates SET active=0 WHERE id='barber-classic'");
+  assert.deepEqual(await getOnboardingCatalog(db), { niches: [], templates: [] });
+});
+
+test('25 Gradefy 7D.1 PostgreSQL company creation, idempotency and cross-connection concurrency', async (t) => {
+  const { db, url } = await makeCase(t, 'company_onboarding');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertCompanyOnboarding, assertOnboardingMigration } =
+    await import('../helpers/company-onboarding.js');
+  await assertOnboardingMigration(t, db);
+  await assertCompanyOnboarding(t, db, second);
+});
+
+test('26 Gradefy 7D.2 PostgreSQL operational setup, concurrency and atomic private activation', async (t) => {
+  const { db, url } = await makeCase(t, 'operational_onboarding');
+  const { assertOperationalOnboarding, assertOperationalMigration } =
+    await import('../helpers/operational-onboarding.js');
+  await assertOperationalMigration(db);
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  await assertOperationalOnboarding(t, db, second);
+});
+
+test('27 Gradefy 7E.1 PostgreSQL editor, private images and concurrency', async (t) => {
+  const { db, url } = await makeCase(t, 'site_editor');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertSiteEditor } = await import('../helpers/site-editor.js');
+  await assertSiteEditor(t, db, second);
+});
+
+test('28 Gradefy 7E.2 PostgreSQL private preview, atomic publication and concurrent withdrawal', async (t) => {
+  const { db, url } = await makeCase(t, 'site_publication');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertSitePublication } = await import('../helpers/site-publication.js');
+  await assertSitePublication(t, db, second);
+});
+
+test('29 Gradefy 7F.1 PostgreSQL scoped dashboard, integer totals and company timezone', async (t) => {
+  const { db } = await makeCase(t, 'dashboard');
+  const { assertDashboard } = await import('../helpers/dashboard.js');
+  await assertDashboard(t, db);
 });

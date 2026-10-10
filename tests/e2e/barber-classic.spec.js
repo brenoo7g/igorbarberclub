@@ -68,7 +68,7 @@ test('company identity, media, contacts and catalogue switch without crossing sc
     await expect(page.locator('.barber-options')).not.toContainText('Igor');
   }
   await page.goto('/not-a-company');
-  await expect(page.getByRole('heading', { name: 'Estabelecimento indisponível' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible();
   await expect(page.locator('.brand,.service-card,.portfolio-card')).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('Igor');
   expect(errors).toEqual([]);

@@ -45,7 +45,8 @@ export function PortfolioImage({
 
 export function Portfolio() {
   const { api } = useApp();
-  const { site, preview } = useSite();
+  const { site, preview: demonstration, privatePreview } = useSite();
+  const preview = demonstration && !privatePreview;
   const [photos, setPhotos] = useState<PortfolioPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,7 +65,7 @@ export function Portfolio() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [retry]);
+  }, [retry, api]);
   if (!preview && !loading && !error && !photos.length) return null;
   return (
     <section

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Config, User, Visitor } from './types';
-import { api as request } from './lib';
+import { api as request, errorMessage } from './lib';
 import { useOptionalSite } from './site-context';
 
 interface AppContext {
@@ -16,9 +16,17 @@ interface AppContext {
   notify: (text: string) => void;
 }
 const Context = createContext<AppContext | null>(null);
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({
+  children,
+  api: override,
+  loadConfig = true,
+}: {
+  children: ReactNode;
+  api?: typeof request;
+  loadConfig?: boolean;
+}) {
   const site = useOptionalSite();
-  const api = site?.api || request;
+  const api = override || site?.api || request;
   const [user, updateUser] = useState<User | null>(null);
   const [visitor, updateVisitor] = useState<Visitor | null>(null);
   const channel = useRef<BroadcastChannel | null>(null);
@@ -46,11 +54,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
           updateUser(result.user);
           updateVisitor(result.visitor || null);
         }
-      } catch {
+      } catch (error) {
         /* Preserve the current view during a temporary network failure. */
+        if (!loadConfig && active && requestRevision === revision.current)
+          setToast(errorMessage(error));
       }
     }
-    Promise.allSettled([refreshUser(), api<Config>('/config').then(setConfig)]).finally(() => {
+    Promise.allSettled([
+      refreshUser(),
+      ...(loadConfig ? [api<Config>('/config').then(setConfig)] : []),
+    ]).finally(() => {
       if (active) setLoading(false);
     });
     if (typeof BroadcastChannel !== 'undefined') {
@@ -71,7 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', refreshUser);
       window.removeEventListener('session-expired', expired);
     };
-  }, [setUser, setVisitor, api]);
+  }, [setUser, setVisitor, api, loadConfig]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(''), 5000);

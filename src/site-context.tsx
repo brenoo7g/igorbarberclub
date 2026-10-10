@@ -7,6 +7,8 @@ import { api } from './lib';
 export interface SiteContext {
   site: PublicSite;
   preview: boolean;
+  privatePreview?: boolean;
+  reservationsOnly?: boolean;
   basePath: string;
   api: typeof api;
 }
@@ -29,6 +31,24 @@ export function scopedPath(path: LinkProps['to'], base: string) {
 // These wrappers reuse React Router and preserve the active site's path for all CTAs.
 export function SiteLink(props: LinkProps) {
   const context = useOptionalSite();
+  if (
+    (context?.privatePreview || context?.reservationsOnly) &&
+    typeof props.to === 'string' &&
+    /^\/(agendar|minha-conta|admin)(?:[/?]|$)/.test(props.to)
+  )
+    return (
+      <span
+        className={props.className}
+        aria-disabled="true"
+        title={
+          context.preview
+            ? 'Demonstração: agendamentos desativados.'
+            : 'Site fora do ar: novos agendamentos indisponíveis.'
+        }
+      >
+        {props.children}
+      </span>
+    );
   return <RouterLink {...props} to={scopedPath(props.to, context?.basePath || '')} />;
 }
 export function SiteNavLink(props: NavLinkProps) {

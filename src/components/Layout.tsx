@@ -16,7 +16,8 @@ export function Layout() {
   const [menu, setMenu] = useState(false);
   const location = useLocation();
   const { user, visitor } = useApp();
-  const { site, basePath, preview } = useSite();
+  const { site, basePath, preview, privatePreview } = useSite();
+  const demo = preview && !privatePreview;
   const settings = site.settings;
   const address = siteLocation(site);
   const identity = user || visitor;
@@ -46,20 +47,21 @@ export function Layout() {
             >
               Início
             </NavLink>
-            {(preview ||
-              settings.description ||
-              settings.about_detail ||
-              settings.about_image_url) && (
-              <Link to="/#sobre" onClick={close}>
-                A barbearia
-              </Link>
-            )}
-            {(preview || site.counts.services > 0) && (
+            {settings.sections?.about !== false &&
+              (demo ||
+                settings.description ||
+                settings.about_detail ||
+                settings.about_image_url) && (
+                <Link to="/#sobre" onClick={close}>
+                  A barbearia
+                </Link>
+              )}
+            {(demo || site.counts.services > 0) && (
               <Link to="/#servicos" onClick={close}>
                 Serviços
               </Link>
             )}
-            {(preview || site.counts.portfolio > 0) && (
+            {settings.sections?.gallery !== false && (demo || site.counts.portfolio > 0) && (
               <Link to="/#galeria" onClick={close}>
                 Nosso trabalho
               </Link>

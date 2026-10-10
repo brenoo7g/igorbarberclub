@@ -1,7 +1,7 @@
 import { SiteLink as Link } from './site-context';
 import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { SiteShell, TemplateHome } from './templates/barber-classic';
 
 import { ScrollToTop, Spinner } from './components/UI';
@@ -12,6 +12,38 @@ const Account = lazy(() => import('./pages/Account'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Profile = lazy(() => import('./pages/Profile'));
 const PasswordRecovery = lazy(() => import('./pages/PasswordRecovery'));
+const GradefyShell = lazy(() => import('./gradefy/Shell'));
+const GradefyWelcome = lazy(() =>
+  import('./gradefy/pages').then((module) => ({ default: module.Welcome })),
+);
+const GradefyAccountForm = lazy(() =>
+  import('./gradefy/pages').then((module) => ({ default: module.AccountForm })),
+);
+const GradefyAccountReady = lazy(() =>
+  import('./gradefy/pages').then((module) => ({ default: module.AccountReady })),
+);
+const GradefyRecovery = lazy(() =>
+  import('./gradefy/pages').then((module) => ({ default: module.PasswordRecovery })),
+);
+const GradefyMissing = lazy(() =>
+  import('./gradefy/pages').then((module) => ({ default: module.MissingPage })),
+);
+const OnboardingGate = lazy(() =>
+  import('./gradefy/plans').then((module) => ({ default: module.OnboardingGate })),
+);
+const GradefyPlans = lazy(() =>
+  import('./gradefy/plans').then((module) => ({ default: module.PlanSelection })),
+);
+const GradefyCatalog = lazy(() =>
+  import('./gradefy/catalog').then((module) => ({ default: module.CatalogSelection })),
+);
+const GradefyBusinessSetup = lazy(() => import('./gradefy/business-setup'));
+const GradefyOperations = lazy(() => import('./gradefy/operations'));
+const GradefySiteEditor = lazy(() => import('./gradefy/site-editor'));
+const GradefyDashboard = lazy(() => import('./gradefy/dashboard'));
+const GradefyCompleted = lazy(() =>
+  import('./gradefy/operations').then((m) => ({ default: m.Completed })),
+);
 const publicPages = (
   <>
     <Route index element={<TemplateHome />} />
@@ -40,10 +72,39 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <ScrollToTop />
       <Suspense fallback={<Spinner />}>
         <Routes>
+          <Route path="app" element={<GradefyShell />}>
+            <Route index element={<GradefyWelcome />} />
+            <Route path="login" element={<GradefyAccountForm key="login" />} />
+            <Route path="cadastro" element={<GradefyAccountForm key="register" register />} />
+            <Route path="conta" element={<GradefyAccountReady />} />
+            <Route path="dashboard" element={<GradefyDashboard />} />
+            <Route path="meu-site" element={<GradefySiteEditor />} />
+            <Route path="onboarding" element={<OnboardingGate />}>
+              <Route path="plan" element={<GradefyPlans />} />
+              <Route path="next" element={<Navigate to="/app/onboarding/niche" replace />} />
+              <Route path="niche" element={<GradefyCatalog key="niche" step="niche" />} />
+              <Route path="template" element={<GradefyCatalog key="template" step="template" />} />
+              <Route path="setup" element={<GradefyBusinessSetup />} />
+              <Route path="operations" element={<GradefyOperations />} />
+              <Route path="complete" element={<GradefyCompleted />} />
+              <Route path="site" element={<Navigate to="/app/meu-site" replace />} />
+              <Route index element={<GradefyPlans />} />
+            </Route>
+            <Route path="esqueci-senha" element={<GradefyRecovery key="forgot" />} />
+            <Route path="redefinir-senha" element={<GradefyRecovery key="reset" reset />} />
+            <Route path="*" element={<GradefyMissing />} />
+          </Route>
           <Route element={<SiteShell />}>{publicPages}</Route>
           <Route path="preview/barber-classic" element={<SiteShell preview />}>
             <Route index element={<TemplateHome />} />
             <Route path="*" element={<p className="container not-found">Preview</p>} />
+          </Route>
+          <Route path="preview/site/:previewCompanyId" element={<SiteShell privatePreview />}>
+            <Route index element={<TemplateHome />} />
+            <Route
+              path="*"
+              element={<p className="container not-found">Operação indisponível na prévia.</p>}
+            />
           </Route>
           <Route
             path="admin/*"

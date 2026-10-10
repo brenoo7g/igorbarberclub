@@ -2,6 +2,7 @@ import { requireCompanyId } from './company-context.js';
 import { getLegacyCompanyId } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { portfolioImage, cleanupAssets, verifyPublicImage } from './site-assets.js';
 
 const details = z.object({
   title: z.string().trim().min(2).max(80),
@@ -40,25 +41,27 @@ async function normalizeImage(value) {
   }
 }
 
-export function installPortfolioRoutes(app, db, companyId, { authenticated, admin, authLimiter }) {
+export function installPortfolioRoutes(
+  app,
+  db,
+  companyId,
+  { authenticated, admin, authLimiter, storage = null },
+) {
   requireCompanyId(companyId);
   app.get('/portfolio', async (req, res) => {
     res.json(
       (
         await db.all(
-          'SELECT id,title,category,version FROM portfolio WHERE company_id=? ORDER BY created_at DESC,id DESC',
+          'SELECT id,title,category,version FROM portfolio WHERE company_id=? ORDER BY sort_order,created_at DESC,id DESC',
           [companyId],
         )
       ).map((row) => metadata(row, req.companyContext.company)),
     );
   });
   app.get('/portfolio/:id/image', async (req, res) => {
-    const row = await db.get('SELECT image FROM portfolio WHERE company_id=? AND id=?', [
-      companyId,
-      req.params.id,
-    ]);
-    if (!row) fail(404, 'Foto não encontrada.');
-    res.type('image/webp').send(Buffer.from(row.image, 'base64'));
+    const image = await portfolioImage(db, storage, companyId, String(req.params.id));
+    await verifyPublicImage(db, companyId, req);
+    res.set('Cache-Control', 'no-store').type('image/webp').send(image);
   });
   app.post('/admin/portfolio', authenticated, admin, authLimiter, async (req, res) => {
     const data = details.extend({ image: imageSchema }).strict().parse(req.body);
@@ -96,6 +99,22 @@ export function installPortfolioRoutes(app, db, companyId, { authenticated, admi
         'UPDATE portfolio SET title=?,category=?,image=COALESCE(?,image),version=version+1 WHERE company_id=? AND id=?',
         [data.title, data.category, image, companyId, row.id],
       );
+      if (image) {
+        const linked = await tx.get(
+          'SELECT asset_id FROM portfolio_assets WHERE company_id=? AND portfolio_id=?',
+          [companyId, row.id],
+        );
+        if (linked) {
+          await tx.run('DELETE FROM portfolio_assets WHERE company_id=? AND portfolio_id=?', [
+            companyId,
+            row.id,
+          ]);
+          await tx.run(
+            "UPDATE company_site_assets SET status='deleting' WHERE company_id=? AND id=?",
+            [companyId, linked.asset_id],
+          );
+        }
+      }
       return metadata(
         {
           ...row,
@@ -106,10 +125,23 @@ export function installPortfolioRoutes(app, db, companyId, { authenticated, admi
         req.companyContext.company,
       );
     });
+    await cleanupAssets(db, storage, companyId);
     res.json(result);
   });
   app.delete('/admin/portfolio/:id', authenticated, admin, async (req, res) => {
-    await db.run('DELETE FROM portfolio WHERE company_id=? AND id=?', [companyId, req.params.id]);
+    await db.transaction(async (tx) => {
+      const linked = await tx.get(
+        'SELECT asset_id FROM portfolio_assets WHERE company_id=? AND portfolio_id=?',
+        [companyId, req.params.id],
+      );
+      await tx.run('DELETE FROM portfolio WHERE company_id=? AND id=?', [companyId, req.params.id]);
+      if (linked)
+        await tx.run(
+          "UPDATE company_site_assets SET status='deleting' WHERE company_id=? AND id=?",
+          [companyId, linked.asset_id],
+        );
+    });
+    await cleanupAssets(db, storage, companyId);
     res.json({ ok: true });
   });
 }

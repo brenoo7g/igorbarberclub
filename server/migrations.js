@@ -45,6 +45,17 @@ export const migrations = Object.freeze([
     name: 'gradefy-barber-classic',
     file: '008-gradefy-barber-classic.sql',
   }),
+  Object.freeze({
+    version: 9,
+    name: 'gradefy-company-onboarding',
+    file: '009-gradefy-company-onboarding.sql',
+  }),
+  Object.freeze({
+    version: 10,
+    name: 'gradefy-operational-onboarding',
+    file: '010-gradefy-operational-onboarding.sql',
+  }),
+  Object.freeze({ version: 11, name: 'gradefy-site-editor', file: '011-gradefy-site-editor.sql' }),
 ]);
 
 const foundationTables = [
@@ -140,7 +151,7 @@ export async function applyMigrations(tx) {
     const access = migration.version === 4 ? await prepareMultitenantAccess(tx) : null;
     const professionals = migration.version === 6 ? await prepareProfessionalsMigration(tx) : null;
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx, true);
-    if (migration.version === 7 && tx.dialect === 'sqlite') {
+    if ([7, 9, 10].includes(migration.version) && tx.dialect === 'sqlite') {
       const columns = (await tx.all('PRAGMA table_info(idempotency_keys)'))
         .map((c) => c.name)
         .sort();

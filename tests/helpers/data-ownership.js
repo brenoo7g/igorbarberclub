@@ -67,7 +67,10 @@ export async function ownershipSnapshot(db) {
   const result = {};
   for (const table of [...legacyTables, 'schema_migrations'])
     result[table] = JSON.parse(JSON.stringify(await db.all(`SELECT * FROM ${table}`))).sort(
-      (a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)),
+      (a, b) =>
+        table === 'schema_migrations'
+          ? a.version - b.version
+          : JSON.stringify(a).localeCompare(JSON.stringify(b)),
     );
   return result;
 }
@@ -77,7 +80,7 @@ export async function assertOwnershipUpgrade(db) {
   assert.equal(metrics.daily, 12321);
   assert.equal(metrics.clients, 2);
   assert.equal(metrics.visits, 2);
-  assert.deepEqual(await runMigrations(db), [3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(await runMigrations(db), [3, 4, 5, 6, 7, 8, 9, 10, 11]);
   const after = await ownershipSnapshot(db);
   expectBarberClassicMetadata(before);
   assert.deepEqual(after.schema_migrations.slice(0, 2), before.schema_migrations);

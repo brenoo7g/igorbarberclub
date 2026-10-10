@@ -7,7 +7,7 @@ import { statusLabels } from '../lib';
 import type { Appointment } from '../types';
 
 export function Brand({ small = false }: { small?: boolean }) {
-  const { site, preview } = useSite();
+  const { site, preview, privatePreview } = useSite();
   const [failedLogo, setFailedLogo] = useState<string | null>(null);
   const { logo_url, wordmark_title, wordmark_subtitle } = site.settings;
   return (
@@ -17,7 +17,7 @@ export function Brand({ small = false }: { small?: boolean }) {
       className={`brand ${small ? 'small' : ''}`}
     >
       <span className="brand-mark">
-        {preview ? (
+        {preview && !privatePreview ? (
           <span className="preview-logo">[Sua logo]</span>
         ) : logo_url && failedLogo !== logo_url ? (
           <img

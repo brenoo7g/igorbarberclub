@@ -22,7 +22,7 @@ const currentSubscription = (db, companyId) =>
     "SELECT * FROM subscriptions WHERE company_id=? AND status IN ('pending','active','trialing')",
     [companyId],
   );
-const currentTime = async (db) =>
+export const currentTime = async (db) =>
   db.dialect === 'postgres'
     ? new Date((await db.get('SELECT clock_timestamp() AS now')).now)
     : new Date();
@@ -31,11 +31,29 @@ async function company(db, companyId) {
   if (!(await db.get("SELECT id FROM companies WHERE id=? AND status='active'", [companyId])))
     domainError(404, 'COMPANY_NOT_FOUND', 'Empresa não encontrada.');
 }
-async function plan(db, code) {
+export async function getAvailablePlan(db, code) {
   const row = await db.get('SELECT * FROM plans WHERE id=? AND active=1', [code]);
   if (!row || !Number.isInteger(row.price_cents))
     domainError(409, 'PLAN_UNAVAILABLE', 'Plano indisponível.');
   return row;
+}
+export const publicPlan = (row) => ({
+  code: row.id,
+  name: row.name,
+  priceCents: row.price_cents,
+  currency: row.currency,
+  billingInterval: row.billing_interval,
+  trialDays: row.trial_days,
+  maxProfessionals: row.max_professionals,
+});
+// Only these product codes are publicable; never expose subscriptions or raw rows.
+export async function getPlanCatalog(db) {
+  const rows = await db.all(
+    "SELECT id,name,price_cents,currency,billing_interval,trial_days,max_professionals FROM plans WHERE active=1 AND id IN ('individual','team') ORDER BY id",
+  );
+  return rows
+    .filter((row) => Number.isInteger(row.price_cents) && row.price_cents >= 0)
+    .map(publicPlan);
 }
 export async function getCompanyEntitlements(db, companyId) {
   await company(db, companyId);
@@ -101,38 +119,40 @@ async function fitsPlan(tx, companyId, selected) {
 }
 // Trusted domain operation only; no public onboarding/billing endpoint.
 export async function startTrial(db, companyId, planCode) {
-  return db.transaction(async (tx) => {
-    await lockEntitlements(tx, companyId);
-    await company(tx, companyId);
-    const selected = await plan(tx, planCode);
-    if (await tx.get('SELECT id FROM subscriptions WHERE company_id=? LIMIT 1', [companyId]))
-      domainError(409, 'TRIAL_UNAVAILABLE', 'O trial é exclusivo do ciclo inicial da empresa.');
-    await fitsPlan(tx, companyId, selected);
-    const now = await currentTime(tx),
-      end = new Date(now.getTime() + selected.trial_days * 86400000);
-    const id = randomUUID();
-    await tx.run(
-      "INSERT INTO subscriptions(id,company_id,plan_id,status,source,starts_at,ends_at,trial_started_at,trial_ends_at,created_at,updated_at) VALUES(?,?,?,'trialing','manual',?,?,?,?,?,?)",
-      [
-        id,
-        companyId,
-        selected.id,
-        now.toISOString(),
-        end.toISOString(),
-        now.toISOString(),
-        end.toISOString(),
-        now.toISOString(),
-        now.toISOString(),
-      ],
-    );
-    return tx.get('SELECT * FROM subscriptions WHERE company_id=? AND id=?', [companyId, id]);
-  });
+  return db.transaction((tx) => startTrialInTransaction(tx, companyId, planCode));
+}
+// Existing trial rules, callable by another atomic business transaction.
+export async function startTrialInTransaction(tx, companyId, planCode) {
+  await lockEntitlements(tx, companyId);
+  await company(tx, companyId);
+  const selected = await getAvailablePlan(tx, planCode);
+  if (await tx.get('SELECT id FROM subscriptions WHERE company_id=? LIMIT 1', [companyId]))
+    domainError(409, 'TRIAL_UNAVAILABLE', 'O trial é exclusivo do ciclo inicial da empresa.');
+  await fitsPlan(tx, companyId, selected);
+  const now = await currentTime(tx),
+    end = new Date(now.getTime() + selected.trial_days * 86400000);
+  const id = randomUUID();
+  await tx.run(
+    "INSERT INTO subscriptions(id,company_id,plan_id,status,source,starts_at,ends_at,trial_started_at,trial_ends_at,created_at,updated_at) VALUES(?,?,?,'trialing','manual',?,?,?,?,?,?)",
+    [
+      id,
+      companyId,
+      selected.id,
+      now.toISOString(),
+      end.toISOString(),
+      now.toISOString(),
+      end.toISOString(),
+      now.toISOString(),
+      now.toISOString(),
+    ],
+  );
+  return tx.get('SELECT * FROM subscriptions WHERE company_id=? AND id=?', [companyId, id]);
 }
 export async function changeCompanyPlan(db, companyId, planCode) {
   return db.transaction(async (tx) => {
     await lockEntitlements(tx, companyId);
     await company(tx, companyId);
-    const selected = await plan(tx, planCode),
+    const selected = await getAvailablePlan(tx, planCode),
       entitlement = await getCompanyEntitlements(tx, companyId);
     if (!entitlement.valid)
       domainError(409, entitlement.reason, 'Não há assinatura vigente para trocar o plano.');

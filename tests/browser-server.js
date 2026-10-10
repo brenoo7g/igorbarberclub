@@ -56,6 +56,9 @@ await db.run(
   "INSERT INTO barber_services(company_id,barber_id,service_id,created_at) VALUES(?,'service-qa','barba','2026')",
   [IGOR_COMPANY_ID],
 );
-createApp(db, { test: true }).listen(4173, '127.0.0.1', () =>
+const { testSiteStorage } = await import('./helpers/site-storage.js');
+const { installDashboardBrowserFixture } = await import('./helpers/dashboard-browser.js');
+await installDashboardBrowserFixture(db, recoveryHash);
+createApp(db, { test: true, siteStorage: testSiteStorage() }).listen(4173, '127.0.0.1', () =>
   console.log('Browser test server listening on 4173'),
 );
