@@ -108,13 +108,13 @@ export function installScheduleRoutes(
   app,
   db,
   companyId,
-  { authenticated, admin, includeInactive = false },
+  { authenticated, admin, includeInactive = false, authorize = async (_tx, _req, _write) => {} },
 ) {
   requireCompanyId(companyId);
-  const exists = async (tx, barberId) => {
+  const exists = async (tx, barberId, internal = false) => {
     if (
       !(await tx.get(
-        `SELECT id FROM barbers WHERE company_id=? AND id=?${includeInactive ? '' : ' AND active=1'}`,
+        `SELECT id FROM barbers WHERE company_id=? AND id=?${includeInactive || internal ? '' : ' AND active=1'}`,
         [companyId, barberId],
       ))
     )
@@ -147,7 +147,8 @@ export function installScheduleRoutes(
   app.get('/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
     const result = await db.transaction(
       async (tx) => {
-        await exists(tx, req.params.id);
+        await authorize(tx, req, false);
+        await exists(tx, req.params.id, true);
         const schedule = await readSchedule(tx, companyId, req.params.id);
         return { ...schedule, next_week: nextWeek(schedule, dateInBrazil()) };
       },
@@ -162,8 +163,9 @@ export function installScheduleRoutes(
       breaks: [...d.breaks].sort((a, b) => a.start_time.localeCompare(b.start_time)),
     }));
     await db.transaction(async (tx) => {
+      await authorize(tx, req, true);
       await lockSchedule(tx, companyId, req.params.id);
-      await exists(tx, req.params.id);
+      await exists(tx, req.params.id, true);
       const current = await readSchedule(tx, companyId, req.params.id);
       if (current.settings.version !== data.version)
         fail(409, 'A agenda foi alterada em outra aba. Atualize as configurações antes de salvar.');
@@ -242,6 +244,7 @@ export function installScheduleRoutes(
       .strict()
       .parse(req.body);
     const period = await db.transaction(async (tx) => {
+      await authorize(tx, req, true);
       await lockSchedule(tx, companyId, req.params.id);
       await exists(tx, req.params.id);
       const schedule = await readSchedule(tx, companyId, req.params.id);

@@ -41,6 +41,16 @@ const GradefyBusinessSetup = lazy(() => import('./gradefy/business-setup'));
 const GradefyOperations = lazy(() => import('./gradefy/operations'));
 const GradefySiteEditor = lazy(() => import('./gradefy/site-editor'));
 const GradefyDashboard = lazy(() => import('./gradefy/dashboard'));
+const GradefyAgenda = lazy(() => import('./gradefy/agenda'));
+const GradefyClients = lazy(() =>
+  import('./gradefy/business-management').then((m) => ({ default: m.Clients })),
+);
+const GradefyServices = lazy(() =>
+  import('./gradefy/business-management').then((m) => ({ default: m.Services })),
+);
+const GradefyProfessionals = lazy(() =>
+  import('./gradefy/business-management').then((m) => ({ default: m.Professionals })),
+);
 const GradefyCompleted = lazy(() =>
   import('./gradefy/operations').then((m) => ({ default: m.Completed })),
 );
@@ -78,6 +88,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="cadastro" element={<GradefyAccountForm key="register" register />} />
             <Route path="conta" element={<GradefyAccountReady />} />
             <Route path="dashboard" element={<GradefyDashboard />} />
+            <Route path="agenda" element={<GradefyAgenda />} />
+            <Route path="clientes" element={<GradefyClients />} />
+            <Route path="servicos" element={<GradefyServices />} />
+            <Route path="profissionais" element={<GradefyProfessionals />} />
             <Route path="meu-site" element={<GradefySiteEditor />} />
             <Route path="onboarding" element={<OnboardingGate />}>
               <Route path="plan" element={<GradefyPlans />} />

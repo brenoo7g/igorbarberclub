@@ -13,6 +13,8 @@ const { createHash } = await import('node:crypto');
 const recoveryHash = (
   await db.get("SELECT password_hash FROM users WHERE email='cliente@example.com'")
 ).password_hash;
+const { installBusinessBrowserFixture } = await import('./helpers/business-browser.js');
+await installBusinessBrowserFixture(db, recoveryHash);
 await db.run(
   'INSERT INTO users (id,name,email,phone,password_hash,role,created_at) VALUES (?,?,?,?,?,?,?)',
   [
@@ -59,6 +61,8 @@ await db.run(
 const { testSiteStorage } = await import('./helpers/site-storage.js');
 const { installDashboardBrowserFixture } = await import('./helpers/dashboard-browser.js');
 await installDashboardBrowserFixture(db, recoveryHash);
+const { installAgendaBrowserFixture } = await import('./helpers/agenda-browser.js');
+await installAgendaBrowserFixture(db, recoveryHash);
 createApp(db, { test: true, siteStorage: testSiteStorage() }).listen(4173, '127.0.0.1', () =>
   console.log('Browser test server listening on 4173'),
 );

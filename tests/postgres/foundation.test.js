@@ -130,6 +130,7 @@ async function snapshot(raw, tables) {
         delete row.company_id;
         if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
         if (table === 'portfolio' && row.sort_order === 0) delete row.sort_order;
+        if (table === 'appointments' && row.notes === '') delete row.notes;
       }
     if (table === 'notifications') assertUnclaimedMigration(rows);
     result[table] = rows.sort((a, b) =>
@@ -298,6 +299,8 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'barber_services',
       'professional_users',
       'company_onboarding',
+      'company_clients',
+      'client_appointments',
     ].sort(),
   );
   await assertCatalog(db);
@@ -319,6 +322,8 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'barber_services',
           'professional_users',
           'company_onboarding',
+          'company_clients',
+          'client_appointments',
         ].includes(row.table_name),
     );
 });
@@ -630,12 +635,13 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
   delete before.schema_migrations;
   expectProfessionalMetadata(before);
+  for (const row of before.appointments || []) if (row.notes === '') delete row.notes;
   for (const row of before.barbers || []) if (row.photo_url === null) delete row.photo_url;
   for (const row of before.portfolio || []) if (row.sort_order === 0) delete row.sort_order;
   assert.deepEqual(after, before);
@@ -745,4 +751,21 @@ test('29 Gradefy 7F.1 PostgreSQL scoped dashboard, integer totals and company ti
   const { db } = await makeCase(t, 'dashboard');
   const { assertDashboard } = await import('../helpers/dashboard.js');
   await assertDashboard(t, db);
+});
+test('30 Gradefy 7F.2A PostgreSQL real managed agenda, migration and cross-connection races', async (t) => {
+  const { db, url } = await makeCase(t, 'agenda');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertAgenda, assertAgendaMigration } = await import('../helpers/agenda.js');
+  await assertAgendaMigration(t, db);
+  await assertAgenda(t, db, second);
+});
+test('31 Gradefy 7F.2B PostgreSQL clients, services, professionals and atomic relationships', async (t) => {
+  const { db, url } = await makeCase(t, 'business_management'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertBusinessManagement, assertClientMigration } =
+    await import('../helpers/business-management.js');
+  await assertClientMigration(t, db);
+  await assertBusinessManagement(t, db, second);
 });

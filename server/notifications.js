@@ -6,7 +6,7 @@ import { clock } from './domain.js';
 export async function enqueueNotification(db, companyId, appointmentId, event) {
   requireCompanyId(companyId);
   const appointment = await db.get(
-    'SELECT a.*,COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id AND b.company_id=a.company_id WHERE a.company_id=? AND a.id=?',
+    'SELECT a.*,COALESCE(a.guest_name,u.name) AS name,COALESCE(a.guest_email,u.email) AS email,COALESCE(a.guest_phone,u.phone) AS phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id AND b.company_id=a.company_id WHERE a.company_id=? AND a.id=?',
     [companyId, appointmentId],
   );
   if (!appointment) throw Object.assign(new Error('Agendamento não encontrado.'), { status: 404 });
@@ -39,6 +39,7 @@ export async function enqueueNotification(db, companyId, appointmentId, event) {
     ),
   });
   for (const channel of ['email', 'whatsapp']) {
+    if (channel === 'email' && !appointment.email) continue;
     const now = new Date().toISOString();
     await db.run(
       `INSERT INTO notifications (company_id,id,appointment_id,channel,event,payload,created_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?)`,
@@ -101,7 +102,7 @@ async function deliveryEnvelope(tx, companyId, row) {
   if (row.delivery_payload) return row.delivery_payload;
   const p = JSON.parse(row.payload);
   const recipient = await tx.get(
-    'SELECT COALESCE(u.name,a.guest_name) AS name,COALESCE(u.email,a.guest_email) AS email,COALESCE(u.phone,a.guest_phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.company_id=? AND a.id=?',
+    'SELECT COALESCE(a.guest_name,u.name) AS name,COALESCE(a.guest_email,u.email) AS email,COALESCE(a.guest_phone,u.phone) AS phone FROM appointments a LEFT JOIN users u ON a.user_id=u.id WHERE a.company_id=? AND a.id=?',
     [companyId, row.appointment_id],
   );
   if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');

@@ -16,6 +16,10 @@ export async function assertMultitenantAccess(t, db) {
     B = otherCompany;
   const secret = 'multitenant-identity-test-secret-32-characters';
   const password = 'TestingAccess123!';
+  await db.run(
+    "INSERT INTO subscriptions(id,company_id,plan_id,status,source,created_at,updated_at) VALUES('isolation-active-plan',?,'team','active','manual','2026','2026')",
+    [B],
+  );
   const hash = await bcrypt.hash(password, 4);
   const cookies = {};
   for (const [id, role] of [

@@ -56,6 +56,16 @@ export const migrations = Object.freeze([
     file: '010-gradefy-operational-onboarding.sql',
   }),
   Object.freeze({ version: 11, name: 'gradefy-site-editor', file: '011-gradefy-site-editor.sql' }),
+  Object.freeze({
+    version: 12,
+    name: 'gradefy-managed-agenda',
+    file: '012-gradefy-managed-agenda.sql',
+  }),
+  Object.freeze({
+    version: 13,
+    name: 'gradefy-business-clients',
+    file: '013-gradefy-business-clients.sql',
+  }),
 ]);
 
 const foundationTables = [

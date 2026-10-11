@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireCompanyId } from './company-context.js';
 import { lockBarbers, lockCatalog } from './scheduling-locks.js';
-import { domainError, lockEntitlements, requireProfessionalCapacity } from './entitlements.js';
+import {
+  currentTime,
+  domainError,
+  lockEntitlements,
+  requireProfessionalCapacity,
+} from './entitlements.js';
+import { dateInTimezone, isFuture } from './domain.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { publicAsset } from './public-site.js';
 
@@ -10,6 +16,15 @@ const details = z
   .object({
     name: z.string().trim().min(2).max(100),
     specialty: z.string().trim().max(200).default(''),
+    photo_url: z
+      .union([
+        z.literal(''),
+        z
+          .string()
+          .max(2048)
+          .refine((value) => Boolean(publicAsset(value)), 'Use uma URL HTTPS válida para a foto.'),
+      ])
+      .optional(),
     services: z
       .array(z.string().min(1).max(200))
       .max(100)
@@ -56,6 +71,7 @@ export async function professional(db, companyId, id) {
   if (!row) domainError(404, 'PROFESSIONAL_NOT_FOUND', 'Profissional não encontrado.');
   return {
     ...row,
+    upcoming_appointments: await upcomingAppointments(db, companyId, id),
     services: (
       await db.all(
         'SELECT service_id FROM barber_services WHERE company_id=? AND barber_id=? ORDER BY service_id',
@@ -63,6 +79,16 @@ export async function professional(db, companyId, id) {
       )
     ).map((s) => s.service_id),
   };
+}
+
+async function upcomingAppointments(db, companyId, id) {
+  const { timezone } = await db.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+  const now = await currentTime(db);
+  const rows = await db.all(
+    "SELECT date,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND status='confirmed' AND date>=?",
+    [companyId, id, dateInTimezone(now, timezone)],
+  );
+  return rows.filter((row) => isFuture(row.date, row.end_minute, now, timezone)).length;
 }
 
 async function replaceRelations(tx, companyId, id, data) {
@@ -118,24 +144,44 @@ export function installProfessionalRoutes(
   app,
   db,
   companyId,
-  { requireCapacity = requireProfessionalCapacity } = {},
+  { requireCapacity = requireProfessionalCapacity, authorize = async () => {} } = {},
 ) {
   requireCompanyId(companyId);
   // Installed only after the router's authenticated owner/manager middleware.
-  app.get('/admin/professionals', async (_req, res) => {
-    const rows = await db.all('SELECT id FROM barbers WHERE company_id=? ORDER BY name,id', [
-      companyId,
-    ]);
-    res.json(await Promise.all(rows.map((row) => professional(db, companyId, row.id))));
+  app.get('/admin/professionals', async (req, res) => {
+    res.json(
+      await db.transaction(
+        async (tx) => {
+          await authorize(tx, req, false);
+          const rows = await tx.all('SELECT id FROM barbers WHERE company_id=? ORDER BY name,id', [
+            companyId,
+          ]);
+          const result = [];
+          for (const row of rows) result.push(await professional(tx, companyId, row.id));
+          return result;
+        },
+        { readOnly: true },
+      ),
+    );
   });
   app.get('/admin/professionals/:id', async (req, res) =>
-    res.json(await professional(db, companyId, String(req.params.id))),
+    res.json(
+      await db.transaction(
+        async (tx) => {
+          await authorize(tx, req, false);
+          return professional(tx, companyId, String(req.params.id));
+        },
+        { readOnly: true },
+      ),
+    ),
   );
   app.post('/admin/professionals', async (req, res) => {
     const data = creation.parse(req.body),
       key = requestKey(req);
-    const result = await db.transaction((tx) =>
-      idempotent(tx, companyId, 'professional-create', key, data, async () => {
+    const result = await db.transaction(async (tx) => {
+      await authorize(tx, req, false);
+      return idempotent(tx, companyId, 'professional-create', key, data, async () => {
+        await authorize(tx, req, true);
         const id = randomUUID();
         await lockEntitlements(tx, companyId);
         await requireCapacity(tx, companyId, data.active ? 1 : 0);
@@ -148,6 +194,12 @@ export function installProfessionalRoutes(
           data.active ? 1 : 0,
         ]);
         await replaceRelations(tx, companyId, id, data);
+        if (data.photo_url !== undefined)
+          await tx.run('UPDATE barbers SET photo_url=? WHERE company_id=? AND id=?', [
+            publicAsset(data.photo_url),
+            companyId,
+            id,
+          ]);
         // Explicitly closed, even though legacy professionals retain their historical defaults.
         await tx.run(
           "INSERT INTO barber_settings(company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES(?,?,'manual',90,0)",
@@ -159,19 +211,26 @@ export function installProfessionalRoutes(
             [companyId, id, weekday],
           );
         return professional(tx, companyId, id);
-      }),
-    );
+      });
+    });
     res.status(201).json(result);
   });
   app.put('/admin/professionals/:id', async (req, res) => {
     const data = details.parse(req.body),
       id = String(req.params.id);
     const result = await db.transaction(async (tx) => {
+      await authorize(tx, req, true);
       await lockEntitlements(tx, companyId); // Serializes optional member links as well as mutations.
       await lockCatalog(tx, companyId, true);
       await lockBarbers(tx, companyId, id);
       await professional(tx, companyId, id);
       await replaceRelations(tx, companyId, id, data);
+      if (data.photo_url !== undefined)
+        await tx.run('UPDATE barbers SET photo_url=? WHERE company_id=? AND id=?', [
+          publicAsset(data.photo_url),
+          companyId,
+          id,
+        ]);
       await tx.run('UPDATE barbers SET name=?,specialty=? WHERE company_id=? AND id=?', [
         data.name,
         data.specialty,
@@ -183,12 +242,32 @@ export function installProfessionalRoutes(
     res.json(result);
   });
   app.patch('/admin/professionals/:id/status', async (req, res) => {
-    const { active } = z.object({ active: z.boolean() }).strict().parse(req.body),
+    const { active, expectedUpcoming } = z
+        .object({
+          active: z.boolean(),
+          expectedUpcoming: z.number().int().nonnegative().optional(),
+        })
+        .strict()
+        .parse(req.body),
       id = String(req.params.id);
     const result = await db.transaction(async (tx) => {
+      await authorize(tx, req, true);
       await lockEntitlements(tx, companyId);
       await lockBarbers(tx, companyId, id);
       const before = await professional(tx, companyId, id);
+      // The management confirmation includes the count it displayed. The same lock is
+      // used by bookings; a new/cancelled reservation invalidates a stale confirmation.
+      // Legacy requests without the count retain their existing non-destructive behavior.
+      if (
+        !active &&
+        expectedUpcoming !== undefined &&
+        expectedUpcoming !== before.upcoming_appointments
+      )
+        domainError(
+          409,
+          'PROFESSIONAL_APPOINTMENTS_CHANGED',
+          'As reservas deste profissional mudaram. Atualize os cadastros e confirme novamente.',
+        );
       if (active && before.active !== 1) await requireCapacity(tx, companyId, 1);
       await tx.run('UPDATE barbers SET active=? WHERE company_id=? AND id=?', [
         active ? 1 : 0,

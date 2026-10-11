@@ -40,6 +40,7 @@ async function snapshot(db, tables) {
         delete row.company_id;
         if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
         if (table === 'portfolio' && row.sort_order === 0) delete row.sort_order;
+        if (table === 'appointments' && row.notes === '') delete row.notes;
       }
   }
   return result;
@@ -223,7 +224,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
       0,
     );
     fail = false;
-    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
     assert.deepEqual(await runMigrations(db), []);
   } finally {
     sqlite.close();

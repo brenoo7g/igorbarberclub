@@ -27,7 +27,13 @@ const variables = {
   ),
 } as CSSProperties;
 export default function GradefyShell() {
-  const management = useLocation().pathname === '/app/dashboard';
+  const management = [
+    '/app/dashboard',
+    '/app/agenda',
+    '/app/clientes',
+    '/app/servicos',
+    '/app/profissionais',
+  ].includes(useLocation().pathname);
   useEffect(() => {
     const title = document.title;
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');

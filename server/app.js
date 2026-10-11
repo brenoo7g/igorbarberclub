@@ -2,6 +2,8 @@ import { installServiceRoutes } from './services.js';
 import { createSiteStorage } from './site-storage.js';
 import { installCompanySite } from './company-site.js';
 import { installDashboard } from './dashboard.js';
+import { installAgendaRoutes, agendaAccess, checkExpected, reservationExpected } from './agenda.js';
+import { installClientRoutes, findClient, linkAppointmentClient } from './clients.js';
 import { installSiteAssetRoutes } from './site-assets.js';
 import { installOperationalOnboarding } from './operational-onboarding.js';
 import {
@@ -27,6 +29,7 @@ import {
   addDays,
   clock,
   dateInBrazil,
+  dateInTimezone,
   isFuture,
   overlaps,
   weekday,
@@ -42,6 +45,7 @@ import {
   publicPlan,
   domainError,
   getCompanyEntitlements,
+  currentTime,
 } from './entitlements.js';
 import { lockPublication } from './site-publication.js';
 import { installPortfolioRoutes } from './portfolio.js';
@@ -404,7 +408,11 @@ export function createApp(
       storage: siteStorage,
     });
     installSiteAssetRoutes(app, db, companyId, siteStorage);
-    installScheduleRoutes(app, db, companyId, { authenticated, admin });
+    installScheduleRoutes(app, db, companyId, {
+      authenticated,
+      admin,
+      authorize: (tx, req, write) => agendaAccess(tx, companyId, req.user.id, write),
+    });
     app.get('/services', async (_req, res) =>
       res.json(
         await db.all('SELECT * FROM services WHERE company_id=? AND active=1 ORDER BY price', [
@@ -440,15 +448,29 @@ export function createApp(
         [companyId, barber, date],
       )),
     ];
-    const verifyDate = (date) => {
-      if (date < dateInBrazil() || date > addDays(dateInBrazil(), 730))
+    const verifyDate = (date, today = dateInBrazil()) => {
+      if (date < today || date > addDays(today, 730))
         fail(400, 'Escolha uma data entre hoje e os próximos dois anos.');
     };
-    app.get('/availability', async (req, res) => {
+    async function availability(req, internal = false) {
+      if (internal)
+        z.object({
+          date: dateSchema,
+          barberId: z.string().min(1),
+          services: z.string().min(1),
+          except: z.string().min(1).optional(),
+        })
+          .strict()
+          .parse(req.query);
       const date = dateSchema.parse(req.query.date);
-      verifyDate(date);
       const result = await db.transaction(
         async (tx) => {
+          const company = internal
+            ? (await agendaAccess(tx, companyId, req.user.id, true)).company
+            : await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+          const now = await currentTime(tx),
+            today = dateInTimezone(now, company.timezone);
+          verifyDate(date, today);
           const barberId = z.string().parse(req.query.barberId);
           if (
             !(await tx.get('SELECT id FROM barbers WHERE company_id=? AND id=? AND active=1', [
@@ -457,8 +479,12 @@ export function createApp(
             ]))
           )
             fail(404, 'Profissional não encontrado.');
-          const ids = singleServiceSchema.parse(String(req.query.services || '').split(','));
-          const services = await getServices(tx, companyId, ids);
+          const ids = (
+            internal && req.query.except
+              ? z.array(z.string().min(1)).min(1).max(100)
+              : singleServiceSchema
+          ).parse(String(req.query.services || '').split(','));
+          let services = await getServices(tx, companyId, ids);
           let except = '';
           if (req.query.except) {
             const existing = await tx.get(
@@ -471,6 +497,23 @@ export function createApp(
                 (await ownsAppointment(tx, companyId, req, existing)))
             )
               except = existing.id;
+            if (internal) {
+              if (
+                !existing ||
+                existing.status !== 'confirmed' ||
+                !isFuture(existing.date, existing.start_minute, now, company.timezone)
+              )
+                fail(400, 'Este agendamento não pode mais ser remarcado.');
+              const stored = await tx.all(
+                'SELECT service_id AS id,name,price,duration FROM appointment_services WHERE company_id=? AND appointment_id=? ORDER BY service_id',
+                [companyId, existing.id],
+              );
+              if (
+                JSON.stringify(stored.map((s) => s.id).sort()) !== JSON.stringify([...ids].sort())
+              )
+                fail(400, 'Preserve os serviços da reserva ao reagendar.');
+              services = stored;
+            }
           }
           const duration = services.reduce((sum, s) => sum + s.duration, 0);
           if (!(await performsServices(tx, companyId, barberId, ids)))
@@ -481,7 +524,7 @@ export function createApp(
               message: 'Este profissional não realiza o serviço selecionado.',
             };
           const schedule = await readSchedule(tx, companyId, barberId);
-          const access = dateAccess(schedule, date, dateInBrazil());
+          const access = dateAccess(schedule, date, today);
           return {
             slots: access.allowed
               ? availableSlots({
@@ -489,6 +532,8 @@ export function createApp(
                   duration,
                   occupied: await occupied(tx, companyId, barberId, date, except),
                   workingDay: schedule.days.find((d) => d.weekday === weekday(date)),
+                  now,
+                  timezone: company.timezone,
                 })
               : [],
             reason: access.reason,
@@ -498,13 +543,14 @@ export function createApp(
         },
         { readOnly: true },
       );
-      res.json(result);
-    });
-    const appointmentList = async (companyId, where, args, source = db) => {
+      return result;
+    }
+    app.get('/availability', async (req, res) => res.json(await availability(req)));
+    const appointmentList = async (companyId, where, args, source = db, pagination = null) => {
       requireCompanyId(companyId);
       const rows = await source.all(
-        `SELECT a.*,COALESCE(u.name,a.guest_name) AS client_name,COALESCE(u.email,a.guest_email) AS client_email,COALESCE(u.phone,a.guest_phone) AS client_phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id JOIN barbers b ON b.id=a.barber_id AND b.company_id=a.company_id WHERE a.company_id=? AND (${where}) ORDER BY a.date,a.start_minute`,
-        [companyId, ...args],
+        `SELECT a.*,ca.client_id,COALESCE(a.guest_name,u.name) AS client_name,COALESCE(a.guest_email,u.email) AS client_email,COALESCE(a.guest_phone,u.phone) AS client_phone,b.name AS barber_name FROM appointments a LEFT JOIN users u ON u.id=a.user_id LEFT JOIN client_appointments ca ON ca.company_id=a.company_id AND ca.appointment_id=a.id JOIN barbers b ON b.id=a.barber_id AND b.company_id=a.company_id WHERE a.company_id=? AND (${where}) ORDER BY a.date,a.start_minute,a.barber_id,a.id${pagination ? ' LIMIT ? OFFSET ?' : ''}`,
+        [companyId, ...args, ...(pagination ? [pagination.limit, pagination.offset] : [])],
       );
       if (!rows.length) return [];
       const items = await source.all(
@@ -528,16 +574,56 @@ export function createApp(
         ),
       ),
     );
-    async function book(companyId, req, res, reschedule = false, asGuest = false) {
+    async function book(
+      companyId,
+      req,
+      res,
+      reschedule = false,
+      asGuest = false,
+      internal = false,
+    ) {
+      const internalSchema = bookingSchema
+        .extend({
+          services: reschedule ? z.array(z.string().min(1)).min(1).max(100) : singleServiceSchema,
+          guest: guestSchema.optional(),
+          userId: z.string().min(1).max(200).optional(),
+          clientId: z.string().min(1).max(200).optional(),
+          notes: z.string().trim().max(1000).optional(),
+          expected: reservationExpected.optional(),
+        })
+        .strict()
+        .superRefine((data, ctx) => {
+          if (!reschedule && [data.guest, data.userId, data.clientId].filter(Boolean).length !== 1)
+            ctx.addIssue({
+              code: 'custom',
+              path: ['guest'],
+              message: 'Informe os contatos do cliente ou selecione um cliente existente.',
+            });
+          if (reschedule && (data.guest || data.userId || data.clientId))
+            ctx.addIssue({
+              code: 'custom',
+              message: 'A identidade do cliente não pode ser alterada no reagendamento.',
+            });
+        });
       const data = (
-        asGuest ? bookingSchema.extend({ guest: guestSchema }).strict() : bookingSchema
+        internal
+          ? internalSchema
+          : asGuest
+            ? bookingSchema.extend({ guest: guestSchema }).strict()
+            : bookingSchema
       ).parse(req.body);
-      const key = reschedule ? null : requestKey(req, asGuest);
+      const key = reschedule && !internal ? null : requestKey(req, asGuest);
       const id = reschedule ? String(req.params.id) : randomUUID();
       let guestSession;
       const result = await db.transaction(async (tx) => {
         await lockPublication(tx, companyId, true);
+        const company = internal
+          ? (await agendaAccess(tx, companyId, req.user.id, true)).company
+          : await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+        const now = await currentTime(tx),
+          today = dateInTimezone(now, company.timezone);
         if (
+          !internal &&
           !(await tx.get(
             "SELECT id FROM companies WHERE id=? AND status='active' AND site_published=1",
             [companyId],
@@ -559,11 +645,17 @@ export function createApp(
         return idempotent(
           tx,
           companyId,
-          asGuest ? 'guest-booking' : 'booking',
+          internal
+            ? reschedule
+              ? 'managed-reschedule'
+              : 'manual-booking'
+            : asGuest
+              ? 'guest-booking'
+              : 'booking',
           key,
-          data,
+          internal && reschedule ? { id, ...data } : data,
           async () => {
-            verifyDate(data.date);
+            verifyDate(data.date, today);
             if (
               !(await tx.get("SELECT id FROM companies WHERE id=? AND status='active'", [
                 companyId,
@@ -587,9 +679,12 @@ export function createApp(
                 companyId,
                 id,
               ]);
-              if (!current || !(await ownsAppointment(tx, companyId, req, current)))
+              if (!current || (!internal && !(await ownsAppointment(tx, companyId, req, current))))
                 fail(404, 'Agendamento não encontrado.');
-              if (current.status !== 'confirmed' || !isFuture(current.date, current.start_minute))
+              if (
+                current.status !== 'confirmed' ||
+                !isFuture(current.date, current.start_minute, now, company.timezone)
+              )
                 fail(400, 'Este agendamento não pode mais ser remarcado.');
             }
             await lockBarbers(
@@ -598,9 +693,31 @@ export function createApp(
               data.barberId,
               ...(current ? [current.barber_id] : []),
             );
-            if (current && !(await ownsAppointment(tx, companyId, req, current, true)))
+            if (current && !internal && !(await ownsAppointment(tx, companyId, req, current, true)))
               fail(404, 'Agendamento não encontrado.');
-            const services = await getServices(tx, companyId, data.services);
+            if (current && internal) checkExpected(current, data.expected);
+            let services = await getServices(tx, companyId, data.services);
+            if (current && internal) {
+              const stored = await tx.all(
+                'SELECT service_id AS id,name,price,duration FROM appointment_services WHERE company_id=? AND appointment_id=? ORDER BY service_id',
+                [companyId, id],
+              );
+              if (
+                JSON.stringify(stored.map((s) => s.id).sort()) !==
+                JSON.stringify([...data.services].sort())
+              )
+                fail(400, 'Preserve os serviços da reserva ao reagendar.');
+              services = stored;
+            }
+            if (
+              internal &&
+              data.userId &&
+              !(await tx.get(
+                'SELECT id FROM appointments WHERE company_id=? AND user_id=? LIMIT 1',
+                [companyId, data.userId],
+              ))
+            )
+              fail(404, 'Cliente não encontrado nesta empresa.');
             if (!(await performsServices(tx, companyId, data.barberId, data.services)))
               fail(409, 'Este profissional não está disponível para o serviço selecionado.');
             const duration = services.reduce((sum, s) => sum + s.duration, 0);
@@ -614,7 +731,7 @@ export function createApp(
                 'O preço ou a duração mudou. Atualize a página para revisar os serviços antes de confirmar.',
               );
             const schedule = await readSchedule(tx, companyId, data.barberId);
-            const access = dateAccess(schedule, data.date, dateInBrazil());
+            const access = dateAccess(schedule, data.date, today);
             if (!access.allowed) fail(409, access.message);
             const slots = availableSlots({
               date: data.date,
@@ -627,10 +744,28 @@ export function createApp(
                 reschedule ? id : '',
               ),
               workingDay: schedule.days.find((d) => d.weekday === weekday(data.date)),
+              now,
+              timezone: company.timezone,
             });
             if (!slots.includes(data.time))
               fail(409, 'Esse horário acabou de ficar indisponível. Escolha outro horário.');
             const start = minuteOf(data.time);
+            const selectedClient =
+              internal && data.clientId ? await findClient(tx, companyId, data.clientId) : null;
+            const accountId =
+              selectedClient?.source_kind === 'user'
+                ? selectedClient.source_id
+                : internal
+                  ? data.userId || null
+                  : asGuest
+                    ? null
+                    : req.user?.id || null;
+            const contact =
+              selectedClient ||
+              data.guest ||
+              (accountId
+                ? await tx.get('SELECT name,email,phone FROM users WHERE id=?', [accountId])
+                : null);
             if (reschedule) {
               await tx.run(
                 'UPDATE appointments SET barber_id=?,date=?,start_minute=?,end_minute=?,total=? WHERE company_id=? AND id=?',
@@ -646,7 +781,7 @@ export function createApp(
                 [
                   companyId,
                   id,
-                  asGuest ? null : req.user.id,
+                  accountId,
                   data.barberId,
                   data.date,
                   start,
@@ -654,11 +789,17 @@ export function createApp(
                   total,
                   'confirmed',
                   new Date().toISOString(),
-                  asGuest ? data.guest.name : null,
-                  asGuest ? data.guest.email : null,
-                  asGuest ? data.guest.phone : null,
+                  selectedClient?.name || data.guest?.name || null,
+                  selectedClient ? selectedClient.email || '' : data.guest?.email || null,
+                  selectedClient?.phone || data.guest?.phone || null,
                 ],
               );
+            if (internal)
+              await tx.run('UPDATE appointments SET notes=? WHERE company_id=? AND id=?', [
+                data.notes ?? current?.notes ?? '',
+                companyId,
+                id,
+              ]);
             for (const s of services)
               await tx.run(
                 `INSERT INTO appointment_services (company_id,appointment_id,service_id,name,price,duration) VALUES (?,?,?,?,?,?)`,
@@ -673,6 +814,13 @@ export function createApp(
                 [companyId, id, guestSession.visitor.id],
               );
             }
+            if (!reschedule)
+              await linkAppointmentClient(tx, companyId, id, {
+                clientId: data.clientId,
+                userId: accountId,
+                visitorId: guestSession?.visitor.id,
+                contact,
+              });
             await enqueueNotification(tx, companyId, id, reschedule ? 'rescheduled' : 'confirmed');
             return {
               ...(await appointmentList(companyId, 'a.id=?', [id], tx))[0],
@@ -718,42 +866,80 @@ export function createApp(
     });
 
     app.use('/admin', authenticated, admin);
-    installProfessionalRoutes(app, db, companyId);
+    const authorizeManagement = (tx, req, write) => agendaAccess(tx, companyId, req.user.id, write);
+    installProfessionalRoutes(app, db, companyId, { authorize: authorizeManagement });
     app.get('/admin/appointments', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),
         to = dateSchema.parse(req.query.to || from);
       if (to < from || to > addDays(from, 366)) fail(400, 'Intervalo inválido.');
       res.json(await appointmentList(companyId, 'a.date>=? AND a.date<=?', [from, to]));
     });
-    app.patch('/admin/appointments/:id/status', async (req, res) => {
-      const status = z.enum(['completed', 'cancelled', 'no-show']).parse(req.body.status);
-      await db.transaction(async (tx) => {
-        await lockAppointment(tx, companyId, String(req.params.id));
-        const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
-          companyId,
-          String(req.params.id),
-        ]);
-        if (!a) fail(404, 'Agendamento não encontrado.');
-        await lockBarbers(tx, companyId, a.barber_id);
-        const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
-          companyId,
-          a.id,
-        ]);
-        if (fresh.status !== 'confirmed') fail(400, 'Este agendamento já foi finalizado.');
-        if (status === 'completed' && isFuture(fresh.date, fresh.end_minute))
-          fail(400, 'Aguarde o fim do horário para concluir o atendimento.');
-        if (status === 'no-show' && isFuture(fresh.date, fresh.start_minute))
-          fail(400, 'Aguarde o horário do atendimento para marcar ausência.');
-        await tx.run('UPDATE appointments SET status=? WHERE company_id=? AND id=?', [
-          status,
-          companyId,
-          a.id,
-        ]);
-        if (status === 'cancelled') await enqueueNotification(tx, companyId, a.id, 'cancelled');
+    async function updateStatus(req, internal = false) {
+      const data = internal
+        ? z
+            .object({
+              status: z.enum(['completed', 'cancelled']),
+              expected: reservationExpected.optional(),
+            })
+            .strict()
+            .parse(req.body)
+        : { status: z.enum(['completed', 'cancelled', 'no-show']).parse(req.body.status) };
+      const status = data.status,
+        id = String(req.params.id),
+        key = internal ? requestKey(req) : null;
+      return db.transaction(async (tx) => {
+        const company = internal
+          ? (await agendaAccess(tx, companyId, req.user.id, true)).company
+          : await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+        return idempotent(tx, companyId, 'managed-status', key, { id, ...data }, async () => {
+          await lockAppointment(tx, companyId, String(req.params.id));
+          const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+            companyId,
+            String(req.params.id),
+          ]);
+          if (!a) fail(404, 'Agendamento não encontrado.');
+          await lockBarbers(tx, companyId, a.barber_id);
+          const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+            companyId,
+            a.id,
+          ]);
+          // Without a key, repeated terminal status is still a no-op, never another outbox event.
+          if (internal && fresh.status === status) return { ok: true };
+          if (internal) checkExpected(fresh, data.expected);
+          if (fresh.status !== 'confirmed') fail(400, 'Este agendamento já foi finalizado.');
+          const now = await currentTime(tx);
+          if (
+            status === 'completed' &&
+            isFuture(fresh.date, fresh.end_minute, now, company.timezone)
+          )
+            fail(400, 'Aguarde o fim do horário para concluir o atendimento.');
+          if (
+            status === 'no-show' &&
+            isFuture(fresh.date, fresh.start_minute, now, company.timezone)
+          )
+            fail(400, 'Aguarde o horário do atendimento para marcar ausência.');
+          await tx.run('UPDATE appointments SET status=? WHERE company_id=? AND id=?', [
+            status,
+            companyId,
+            a.id,
+          ]);
+          if (status === 'cancelled') await enqueueNotification(tx, companyId, a.id, 'cancelled');
+          return { ok: true };
+        });
       });
+    }
+    app.patch('/admin/appointments/:id/status', async (req, res) => {
+      await updateStatus(req);
       res.json({ ok: true });
     });
-    installServiceRoutes(app, db, companyId);
+    installAgendaRoutes(app, db, companyId, {
+      appointmentList,
+      availability,
+      updateStatus,
+      book: (req, res, reschedule) => book(companyId, req, res, reschedule, false, true),
+    });
+    installClientRoutes(app, db, companyId, { appointmentList });
+    installServiceRoutes(app, db, companyId, { authorize: authorizeManagement });
     app.get('/admin/blocks', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),
         to = dateSchema.parse(req.query.to || from);

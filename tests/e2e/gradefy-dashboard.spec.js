@@ -67,9 +67,9 @@ test('real dashboard selects companies explicitly, shows scoped appointments/tri
       });
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole('button', { name: 'Clientes Em breve', exact: true }).click();
+  await page.getByRole('button', { name: 'Financeiro Em breve', exact: true }).click();
   await expect(page.locator('.gf-dashboard-info')).toContainText(
-    'A gestão de clientes será disponibilizada',
+    'A gestão financeira completa será disponibilizada',
   );
   await page.getByRole('button', { name: 'Fechar informação', exact: true }).click();
   await page.getByRole('link', { name: 'Personalizar site', exact: true }).click();

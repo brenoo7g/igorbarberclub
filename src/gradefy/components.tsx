@@ -125,11 +125,11 @@ export function Feedback({
     </div>
   ) : null;
 }
-export function Loading() {
+export function Loading({ label = 'Carregando sua conta…' }: { label?: string } = {}) {
   return (
     <div className="gf-loading" role="status">
       <LoaderCircle className="gf-spin" size={26} />
-      <span>Carregando sua conta…</span>
+      <span>{label}</span>
     </div>
   );
 }

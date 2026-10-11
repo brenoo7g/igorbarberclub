@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight,
   Building2,
@@ -11,20 +11,20 @@ import {
   CreditCard,
   Globe,
   LayoutDashboard,
+  Plus,
   RefreshCw,
-  Scissors,
   Settings2,
-  UsersRound,
   UserRound,
   Wallet,
   X,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { errorMessage, money, statusLabels } from '../lib';
-import { useCompanies } from './company-access';
+import { CompanySelector, ManagementAccess } from './management';
 import type { Company } from './company-access';
 import { Button, ButtonLink, Card, Feedback, Loading } from './components';
 import type { DashboardState } from './dashboard-types';
+import { businessLinks, BusinessNav } from './business-nav';
 import './dashboard.css';
 
 const briefDate = (date: string) =>
@@ -35,27 +35,6 @@ const briefDate = (date: string) =>
     timeZone: 'UTC',
   }).format(new Date(date + 'T12:00:00Z'));
 const pending = [
-  {
-    key: 'services',
-    label: 'Serviços',
-    icon: Scissors,
-    description:
-      'A gestão de serviços neste painel será disponibilizada em uma próxima etapa. Os atendimentos continuam usando os serviços já cadastrados.',
-  },
-  {
-    key: 'professionals',
-    label: 'Profissionais',
-    icon: UsersRound,
-    description:
-      'A gestão da equipe neste painel será disponibilizada em uma próxima etapa. Você pode consultar os profissionais na agenda e no filtro abaixo.',
-  },
-  {
-    key: 'clients',
-    label: 'Clientes',
-    icon: UserRound,
-    description:
-      'A gestão de clientes será disponibilizada em uma próxima etapa. Os nomes exibidos na agenda vêm das reservas reais da sua empresa.',
-  },
   {
     key: 'finance',
     label: 'Financeiro',
@@ -72,94 +51,7 @@ const pending = [
   },
 ];
 export default function Dashboard() {
-  const { user, loading } = useApp();
-  const { companies, business, error, retry } = useCompanies();
-  const [query, setQuery] = useSearchParams();
-  if (loading) return <Loading />;
-  if (!user) return <Navigate to="/app/login" replace state={{ sessionRequired: true }} />;
-  if (error)
-    return (
-      <div className="gf-ready">
-        <Card>
-          <Feedback>{error}</Feedback>
-          <Button onClick={retry}>Tentar novamente</Button>
-          <ButtonLink to="/app/conta" variant="secondary">
-            Minha conta
-          </ButtonLink>
-        </Card>
-      </div>
-    );
-  if (!companies) return <Loading />;
-  if (!companies.length)
-    return (
-      <Navigate
-        to={
-          business?.onboardingStatus === 'pending'
-            ? '/app/onboarding/operations'
-            : '/app/onboarding/plan'
-        }
-        replace
-      />
-    );
-  const allowed = companies.filter((c) => ['owner', 'manager'].includes(c.role));
-  if (!allowed.length)
-    return (
-      <div className="gf-ready">
-        <Card>
-          <h1>Acesso à gestão</h1>
-          <p>
-            Seu vínculo não permite visualizar o painel empresarial. Solicite acesso ao proprietário
-            ou gestor.
-          </p>
-          <ButtonLink to="/app/conta">Minha conta</ButtonLink>
-        </Card>
-      </div>
-    );
-  const selected = query.get('empresa') || (allowed.length === 1 ? allowed[0].id : '');
-  const choose = (id: string) => setQuery(id ? { empresa: id } : {});
-  if (!allowed.some((c) => c.id === selected))
-    return (
-      <div className="gf-ready">
-        <Card>
-          <div className="gf-kicker">SEU PAINEL EMPRESARIAL</div>
-          <h1>Escolha sua empresa</h1>
-          <p>Selecione o estabelecimento que deseja administrar.</p>
-          {selected && <Feedback>Sem acesso à empresa selecionada.</Feedback>}
-          <CompanySelector companies={allowed} value="" choose={choose} />
-          <ButtonLink to="/app/conta" variant="secondary">
-            Minha conta
-          </ButtonLink>
-        </Card>
-      </div>
-    );
-  return (
-    <DashboardContent key={selected} companyId={selected} companies={allowed} choose={choose} />
-  );
-}
-function CompanySelector({
-  companies,
-  value,
-  choose,
-}: {
-  companies: Company[];
-  value: string;
-  choose: (id: string) => void;
-}) {
-  return (
-    <div className="gf-field">
-      <label htmlFor="dashboard-company">Empresa</label>
-      <select id="dashboard-company" value={value} onChange={(e) => choose(e.target.value)}>
-        <option value="" disabled>
-          Selecione uma empresa
-        </option>
-        {companies.map((c) => (
-          <option value={c.id} key={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
+  return <ManagementAccess>{(props) => <DashboardContent {...props} />}</ManagementAccess>;
 }
 function DashboardContent({
   companyId,
@@ -171,6 +63,7 @@ function DashboardContent({
   choose: (id: string) => void;
 }) {
   const { api, user } = useApp();
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardState | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(true);
@@ -210,16 +103,16 @@ function DashboardContent({
     const refresh = () => setRevision((v) => v + 1);
     const timer = window.setInterval(refresh, 60000);
     window.addEventListener('focus', refresh);
+    window.addEventListener('gradefy-agenda-changed', refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener('focus', refresh);
+      window.removeEventListener('gradefy-agenda-changed', refresh);
     };
   }, []);
   const editor = '/app/meu-site?empresa=' + encodeURIComponent(companyId);
   function agenda() {
-    setInfo(null);
-    document.getElementById('dashboard-agenda')?.scrollIntoView({ block: 'start' });
-    document.getElementById('dashboard-agenda')?.focus({ preventScroll: true });
+    navigate('/app/agenda?empresa=' + encodeURIComponent(companyId));
   }
   const plan = data?.subscription;
   const subscriptionText = !plan
@@ -259,18 +152,17 @@ function DashboardContent({
             <CalendarDays size={19} />
             Minha agenda
           </button>
-          {pending.slice(0, 3).map((p) => (
-            <button key={p.key} onClick={() => setInfo(p.key)} aria-expanded={info === p.key}>
+          {businessLinks.slice(2, 5).map((p) => (
+            <Link key={p.path} to={p.path + '?empresa=' + encodeURIComponent(companyId)}>
               <p.icon size={19} />
               {p.label}
-              <span>Em breve</span>
-            </button>
+            </Link>
           ))}
           <Link to={editor}>
             <Globe size={19} />
             Meu Site
           </Link>
-          {pending.slice(3).map((p) => (
+          {pending.map((p) => (
             <button key={p.key} onClick={() => setInfo(p.key)} aria-expanded={info === p.key}>
               <p.icon size={19} />
               {p.label}
@@ -431,9 +323,18 @@ function DashboardContent({
               >
                 {data.nextAppointment && (
                   <p>
-                    {data.nextAppointment.services.join(' + ')}
-                    <br />
-                    {data.nextAppointment.professionalName}
+                    <Link
+                      to={
+                        '/app/agenda?empresa=' +
+                        encodeURIComponent(companyId) +
+                        '&atendimento=' +
+                        encodeURIComponent(data.nextAppointment.id)
+                      }
+                    >
+                      {data.nextAppointment.services.join(' + ')}
+                      <br />
+                      {data.nextAppointment.professionalName}
+                    </Link>
                   </p>
                 )}
               </Metric>
@@ -651,6 +552,13 @@ function DashboardContent({
             <section className="gf-dashboard-quick" aria-labelledby="quick-title">
               <h2 id="quick-title">Ações rápidas</h2>
               <div>
+                <Link to={'/app/agenda?empresa=' + encodeURIComponent(companyId) + '&novo=1'}>
+                  <Plus />
+                  <span>
+                    Novo agendamento<small>Registrar atendimento</small>
+                  </span>
+                  <ChevronRight size={17} />
+                </Link>
                 <button onClick={agenda}>
                   <CalendarDays />
                   <span>
@@ -658,6 +566,16 @@ function DashboardContent({
                   </span>
                   <ChevronRight size={17} />
                 </button>
+                {businessLinks.slice(2, 5).map((p) => (
+                  <Link key={p.path} to={p.path + '?empresa=' + encodeURIComponent(companyId)}>
+                    <p.icon />
+                    <span>
+                      {p.label}
+                      <small>Abrir gestão</small>
+                    </span>
+                    <ChevronRight size={17} />
+                  </Link>
+                ))}
                 {pending.map((p) => (
                   <button
                     key={p.key}
@@ -686,29 +604,7 @@ function DashboardContent({
           </>
         )}
       </div>
-      <nav className="gf-dashboard-mobile-nav" aria-label="Navegação móvel">
-        <button
-          onClick={() => {
-            setInfo(null);
-            window.scrollTo({ top: 0 });
-          }}
-        >
-          <LayoutDashboard size={20} />
-          Início
-        </button>
-        <button onClick={agenda}>
-          <CalendarDays size={20} />
-          Agenda
-        </button>
-        <Link to={editor}>
-          <Globe size={20} />
-          Meu Site
-        </Link>
-        <Link to="/app/conta">
-          <UserRound size={20} />
-          Conta
-        </Link>
-      </nav>
+      <BusinessNav companyId={companyId} mobile />
     </div>
   );
 }

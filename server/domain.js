@@ -1,11 +1,12 @@
 export const TZ = 'America/Sao_Paulo';
-export const dateInBrazil = (now = new Date()) =>
+export const dateInTimezone = (now = new Date(), timezone = TZ) =>
   new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
+    timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   }).format(now);
+export const dateInBrazil = (now = new Date()) => dateInTimezone(now);
 export const addDays = (date, days) => {
   const d = new Date(`${date}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -16,8 +17,25 @@ export const clock = (minutes) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 export const overlaps = (start, end, existing) =>
   existing.some((x) => start < x.end_minute && end > x.start_minute);
-export function isFuture(date, minute, now = new Date()) {
-  return new Date(`${date}T${clock(minute)}:00-03:00`) > now;
+export function isFuture(date, minute, now = new Date(), timezone = TZ) {
+  const localDate = dateInTimezone(now, timezone);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const current =
+    Number(parts.hour) * 60 +
+    Number(parts.minute) +
+    Number(parts.second) / 60 +
+    now.getUTCMilliseconds() / 60000;
+  return date > localDate || (date === localDate && minute > current);
 }
 export function availableSlots({
   date,
@@ -27,6 +45,7 @@ export function availableSlots({
   close = 19,
   now = new Date(),
   workingDay,
+  timezone = TZ,
 }) {
   if (
     (workingDay === undefined ? weekday(date) === 0 : !workingDay?.active) ||
@@ -53,7 +72,7 @@ export function availableSlots({
     .sort((a, b) => a.start - b.start);
   const addFreeInterval = (from, until) => {
     for (let start = from; start + duration <= until; start += duration) {
-      if (isFuture(date, start, now)) slots.push(clock(start));
+      if (isFuture(date, start, now, timezone)) slots.push(clock(start));
     }
   };
   // Pack each free interval using the selected services' combined duration.

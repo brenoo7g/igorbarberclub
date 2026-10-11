@@ -50,7 +50,7 @@ export async function assertSiteEditor(t, db, second = db) {
       await assert.rejects(db.all('SELECT site_version FROM company_settings'));
       await assert.rejects(db.all('SELECT * FROM company_site_assets'));
       assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), history);
-      assert.deepEqual(await runMigrations(db), [11]);
+      assert.deepEqual(await runMigrations(db), [11, 12, 13]);
       assert.deepEqual(await runMigrations(db), []);
       assert.deepEqual(
         await db.all('SELECT * FROM schema_migrations WHERE version<11 ORDER BY version'),
