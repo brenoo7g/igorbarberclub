@@ -67,11 +67,13 @@ test('real dashboard selects companies explicitly, shows scoped appointments/tri
       });
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole('button', { name: 'Financeiro Em breve', exact: true }).click();
-  await expect(page.locator('.gf-dashboard-info')).toContainText(
-    'A gestão financeira completa será disponibilizada',
-  );
-  await page.getByRole('button', { name: 'Fechar informação', exact: true }).click();
+  await page
+    .locator('.gf-dashboard-sidebar')
+    .getByRole('link', { name: 'Financeiro', exact: true })
+    .click();
+  await expect(page).toHaveURL('/app/financeiro?empresa=dashboard-horizonte');
+  await expect(page.getByRole('heading', { name: 'Financeiro', exact: true })).toBeVisible();
+  await page.goto('/app/dashboard?empresa=dashboard-horizonte');
   await page.getByRole('link', { name: 'Personalizar site', exact: true }).click();
   await expect(page).toHaveURL('/app/meu-site?empresa=dashboard-horizonte');
   await expect(page.getByLabel('Nome público da empresa', { exact: true })).toHaveValue(

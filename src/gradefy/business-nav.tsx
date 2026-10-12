@@ -6,6 +6,8 @@ import {
   UserRound,
   Scissors,
   Globe,
+  Wallet,
+  ChartNoAxesCombined,
 } from 'lucide-react';
 import './business-management.css';
 export const businessLinks = [
@@ -14,6 +16,8 @@ export const businessLinks = [
   { path: '/app/clientes', label: 'Clientes', short: 'Clientes', icon: UserRound },
   { path: '/app/servicos', label: 'Serviços', short: 'Serviços', icon: Scissors },
   { path: '/app/profissionais', label: 'Profissionais', short: 'Equipe', icon: UsersRound },
+  { path: '/app/financeiro', label: 'Financeiro', short: 'Finanças', icon: Wallet },
+  { path: '/app/relatorios', label: 'Relatórios', short: 'Relat.', icon: ChartNoAxesCombined },
   { path: '/app/meu-site', label: 'Meu Site', short: 'Site', icon: Globe },
 ];
 export function BusinessNav({

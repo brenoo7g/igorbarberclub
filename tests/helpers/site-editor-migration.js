@@ -1,5 +1,6 @@
 // Disposable test fixtures only, never an application rollback.
 import { migrations, readMigration } from '../../server/migrations.js';
+import { reconstructBeforeFinance } from './finance-migration.js';
 export async function reconstructBeforeSiteEditor(db) {
   await reconstructBeforeAgenda(db);
   if (!(await db.get('SELECT version FROM schema_migrations WHERE version=11'))) return;
@@ -12,6 +13,7 @@ export async function reconstructBeforeSiteEditor(db) {
   await db.run('DELETE FROM schema_migrations WHERE version=11');
 }
 export async function reconstructBeforeAgenda(db) {
+  await reconstructBeforeFinance(db);
   if (await db.get('SELECT version FROM schema_migrations WHERE version=13')) {
     await db.run('DROP TABLE client_appointments');
     await db.run('DROP TABLE company_clients');

@@ -224,7 +224,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
       0,
     );
     fail = false;
-    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    assert.deepEqual(await runMigrations(db), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
     assert.deepEqual(await runMigrations(db), []);
   } finally {
     sqlite.close();

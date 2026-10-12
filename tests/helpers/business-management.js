@@ -5,9 +5,11 @@ import { createApp } from '../../server/app.js';
 import { seed } from '../../server/seed.js';
 import { runMigrations, migrations, readMigration } from '../../server/migrations.js';
 import { addDays, dateInBrazil } from '../../server/domain.js';
+import { reconstructBeforeFinance } from './finance-migration.js';
 
 export async function assertClientMigration(t, db) {
   await seed(db);
+  await reconstructBeforeFinance(db);
   await db.run(
     "INSERT INTO appointments(company_id,id,barber_id,date,start_minute,end_minute,total,status,guest_name,guest_phone,notes,created_at) VALUES('igor-barber-club','client-migration-legacy','igor','2050-01-01',540,580,3300,'cancelled','Legado','','Preservar','2026')",
   );
@@ -36,7 +38,7 @@ export async function assertClientMigration(t, db) {
   await assert.rejects(runMigrations(broken), /injected 013 failure/);
   await assert.rejects(db.all('SELECT * FROM company_clients'));
   assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), history);
-  assert.deepEqual(await runMigrations(db), [13]);
+  assert.deepEqual(await runMigrations(db), [13, 14]);
   const clients = await db.all('SELECT * FROM company_clients ORDER BY id'),
     links = await db.all('SELECT * FROM client_appointments ORDER BY appointment_id');
   assert.equal(links.length, before.length);

@@ -19,12 +19,20 @@ const querySchema = z
     page: z.coerce.number().int().min(1).max(100000).default(1),
   })
   .strict();
-const integer = (v) => {
+export const metricInteger = (v) => {
   const n = Number(v);
   if (!Number.isSafeInteger(n))
     domainError(500, 'DASHBOARD_NUMBER_OVERFLOW', 'Não foi possível calcular os indicadores.');
   return n;
 };
+const integer = metricInteger;
+export async function appointmentTotals(tx, cid, start, end) {
+  const row = await tx.get(
+    "SELECT COALESCE(SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END),0) AS completed,COALESCE(SUM(CASE WHEN status IN ('confirmed','completed') THEN total ELSE 0 END),0) AS expected,COALESCE(SUM(CASE WHEN status='completed' THEN total ELSE 0 END),0) AS completed_value FROM appointments WHERE company_id=? AND date>=? AND date<=?",
+    [cid, start, end],
+  );
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, integer(value)]));
+}
 export function companyClock(now, timezone) {
   let parts;
   try {
@@ -96,10 +104,7 @@ export async function dashboardSnapshot(tx, cid, query = {}, now = new Date()) {
     "SELECT COUNT(*) AS n FROM appointments WHERE company_id=? AND date=? AND status IN ('confirmed','completed')",
     [cid, local.today],
   );
-  const totals = await tx.get(
-    "SELECT COALESCE(SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END),0) AS completed,COALESCE(SUM(CASE WHEN status IN ('confirmed','completed') THEN total ELSE 0 END),0) AS expected FROM appointments WHERE company_id=? AND date>=? AND date<=?",
-    [cid, range.start, range.end],
-  );
+  const totals = await appointmentTotals(tx, cid, range.start, range.end);
   const where =
     'a.company_id=? AND a.date=?' + (options.professionalId ? ' AND a.barber_id=?' : '');
   const args = [cid, date, ...(options.professionalId ? [options.professionalId] : [])];

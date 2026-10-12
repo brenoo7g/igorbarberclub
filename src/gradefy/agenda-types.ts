@@ -1,4 +1,5 @@
 import type { Appointment } from '../types';
+import type { FinancialBalance } from './finance-types';
 export type AgendaItem = {
   id: string;
   date: string;
@@ -19,6 +20,7 @@ export type ExpectedAppointment = {
   notes: string;
 };
 export type AgendaDetail = {
+  financial: FinancialBalance;
   item: Appointment & { notes: string; client_id: string | null };
   expected: ExpectedAppointment;
   actions: { cancel: boolean; reschedule: boolean; complete: boolean };

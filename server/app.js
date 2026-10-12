@@ -4,6 +4,8 @@ import { installCompanySite } from './company-site.js';
 import { installDashboard } from './dashboard.js';
 import { installAgendaRoutes, agendaAccess, checkExpected, reservationExpected } from './agenda.js';
 import { installClientRoutes, findClient, linkAppointmentClient } from './clients.js';
+import { installFinanceRoutes, appointmentFinance } from './finance.js';
+import { installReportRoutes } from './reports.js';
 import { installSiteAssetRoutes } from './site-assets.js';
 import { installOperationalOnboarding } from './operational-onboarding.js';
 import {
@@ -723,6 +725,19 @@ export function createApp(
             const duration = services.reduce((sum, s) => sum + s.duration, 0);
             const total = services.reduce((sum, s) => sum + s.price, 0);
             if (
+              current &&
+              total !== current.total &&
+              (await tx.get(
+                'SELECT id FROM financial_payments WHERE company_id=? AND appointment_id=? LIMIT 1',
+                [companyId, id],
+              ))
+            )
+              domainError(
+                409,
+                'FINANCIAL_HISTORY_PRICE_LOCKED',
+                'Um atendimento com histórico financeiro deve manter seu valor registrado ao reagendar.',
+              );
+            if (
               (data.expectedTotal !== undefined && data.expectedTotal !== total) ||
               (data.expectedDuration !== undefined && data.expectedDuration !== duration)
             )
@@ -933,12 +948,15 @@ export function createApp(
       res.json({ ok: true });
     });
     installAgendaRoutes(app, db, companyId, {
+      appointmentFinance,
       appointmentList,
       availability,
       updateStatus,
       book: (req, res, reschedule) => book(companyId, req, res, reschedule, false, true),
     });
     installClientRoutes(app, db, companyId, { appointmentList });
+    installFinanceRoutes(app, db, companyId);
+    installReportRoutes(app, db, companyId);
     installServiceRoutes(app, db, companyId, { authorize: authorizeManagement });
     app.get('/admin/blocks', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),

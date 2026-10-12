@@ -301,6 +301,10 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'company_onboarding',
       'company_clients',
       'client_appointments',
+      'financial_payments',
+      'financial_payment_reversals',
+      'financial_expenses',
+      'financial_expense_events',
     ].sort(),
   );
   await assertCatalog(db);
@@ -324,6 +328,10 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'company_onboarding',
           'company_clients',
           'client_appointments',
+          'financial_payments',
+          'financial_payment_reversals',
+          'financial_expenses',
+          'financial_expense_events',
         ].includes(row.table_name),
     );
 });
@@ -635,7 +643,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -768,4 +776,18 @@ test('31 Gradefy 7F.2B PostgreSQL clients, services, professionals and atomic re
     await import('../helpers/business-management.js');
   await assertClientMigration(t, db);
   await assertBusinessManagement(t, db, second);
+});
+test('32 Gradefy 7F.2C.1 PostgreSQL manual finance, audit, limits and concurrent transactions', async (t) => {
+  const { db, url } = await makeCase(t, 'finance'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertFinanceMigration, assertFinance } = await import('../helpers/finance.js');
+  await assertFinanceMigration(t, db);
+  await assertFinance(t, db, second);
+});
+
+test('33 Gradefy 7F.2C.2 PostgreSQL reports, shared cash rules, CSV and large aggregates', async (t) => {
+  const { db } = await makeCase(t, 'reports');
+  const { assertReports } = await import('../helpers/reports.js');
+  await assertReports(t, db);
 });

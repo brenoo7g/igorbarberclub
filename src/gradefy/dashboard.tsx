@@ -36,13 +36,6 @@ const briefDate = (date: string) =>
   }).format(new Date(date + 'T12:00:00Z'));
 const pending = [
   {
-    key: 'finance',
-    label: 'Financeiro',
-    icon: Wallet,
-    description:
-      'A gestão financeira completa será disponibilizada em uma próxima etapa. O valor previsto abaixo soma reservas confirmadas e concluídas; não comprova pagamentos recebidos.',
-  },
-  {
     key: 'settings',
     label: 'Configurações',
     icon: Settings2,
@@ -152,7 +145,7 @@ function DashboardContent({
             <CalendarDays size={19} />
             Minha agenda
           </button>
-          {businessLinks.slice(2, 5).map((p) => (
+          {businessLinks.slice(2, 7).map((p) => (
             <Link key={p.path} to={p.path + '?empresa=' + encodeURIComponent(companyId)}>
               <p.icon size={19} />
               {p.label}
@@ -566,7 +559,7 @@ function DashboardContent({
                   </span>
                   <ChevronRight size={17} />
                 </button>
-                {businessLinks.slice(2, 5).map((p) => (
+                {businessLinks.slice(2, 7).map((p) => (
                   <Link key={p.path} to={p.path + '?empresa=' + encodeURIComponent(companyId)}>
                     <p.icon />
                     <span>

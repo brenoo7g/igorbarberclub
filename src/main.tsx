@@ -42,6 +42,8 @@ const GradefyOperations = lazy(() => import('./gradefy/operations'));
 const GradefySiteEditor = lazy(() => import('./gradefy/site-editor'));
 const GradefyDashboard = lazy(() => import('./gradefy/dashboard'));
 const GradefyAgenda = lazy(() => import('./gradefy/agenda'));
+const GradefyFinance = lazy(() => import('./gradefy/finance'));
+const GradefyReports = lazy(() => import('./gradefy/reports'));
 const GradefyClients = lazy(() =>
   import('./gradefy/business-management').then((m) => ({ default: m.Clients })),
 );
@@ -89,6 +91,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="conta" element={<GradefyAccountReady />} />
             <Route path="dashboard" element={<GradefyDashboard />} />
             <Route path="agenda" element={<GradefyAgenda />} />
+            <Route path="financeiro" element={<GradefyFinance />} />
+            <Route path="relatorios" element={<GradefyReports />} />
             <Route path="clientes" element={<GradefyClients />} />
             <Route path="servicos" element={<GradefyServices />} />
             <Route path="profissionais" element={<GradefyProfessionals />} />

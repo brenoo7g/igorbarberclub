@@ -19,6 +19,7 @@ import { CompanySelector, ManagementAccess } from './management';
 import type { ManagementProps } from './management';
 import type { AgendaCatalog, AgendaDetail, AgendaState } from './agenda-types';
 import { BusinessNav } from './business-nav';
+import { PaymentPanel } from './finance-payment';
 import './dashboard.css';
 import './agenda.css';
 
@@ -530,6 +531,7 @@ function AppointmentDetails({
             <p className="gf-agenda-payment-note">
               Concluir atendimento não registra pagamento recebido.
             </p>
+            <PaymentPanel companyId={companyId} appointmentId={id} />
             {confirm ? (
               <Card className="gf-agenda-confirm">
                 <h3>Cancelar este agendamento?</h3>

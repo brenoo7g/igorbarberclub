@@ -154,7 +154,7 @@
   overflow-wrap: anywhere;
 }
 .gf-business-mobile {
-  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
   gap: 0 !important;
   padding-left: 4px !important;
   padding-right: 4px !important;

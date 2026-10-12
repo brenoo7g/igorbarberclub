@@ -88,7 +88,7 @@ export function installAgendaRoutes(
   router,
   db,
   cid,
-  { book, availability, appointmentList, updateStatus },
+  { book, availability, appointmentList, updateStatus, appointmentFinance },
 ) {
   router.use('/admin/agenda', (req, _res, next) => {
     if (!req.get('X-Gradefy-Company-Id'))
@@ -238,6 +238,7 @@ export function installAgendaRoutes(
           if (!item) domainError(404, 'APPOINTMENT_NOT_FOUND', 'Agendamento não encontrado.');
           return {
             item,
+            financial: await appointmentFinance(tx, cid, item.id),
             expected: reservationFingerprint(item),
             actions: appointmentActions(item, access.editable, now, access.company.timezone),
             editable: access.editable,

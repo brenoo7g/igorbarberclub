@@ -1,0 +1,222 @@
+.gf-report-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 24px 0;
+}
+.gf-report-tabs button,
+.gf-report-text-toggle {
+  background: #121827;
+  color: #cbd5e1;
+  border: 1px solid #303c56;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font: inherit;
+  cursor: pointer;
+  min-height: 44px;
+}
+.gf-report-tabs button[aria-current='page'] {
+  background: #6c5ce7;
+  color: #fff;
+  border-color: #6c5ce7;
+}
+.gf-report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 22px;
+}
+.gf-report-filters > .gf-field {
+  flex: 1 1 210px;
+  margin: 0;
+  min-width: 0;
+}
+.gf-report-date-form {
+  display: flex;
+  flex: 1 1 100%;
+  gap: 16px;
+  align-items: end;
+}
+.gf-report-date-form > .gf-field {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.gf-report-period {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+.gf-report-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.gf-report-counts strong {
+  display: block;
+  font: 600 28px var(--gf-font-heading);
+  margin-top: 12px;
+}
+.gf-report-counts small {
+  color: #94a3b8;
+}
+.gf-report-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+  align-items: start;
+}
+.gf-report-chart {
+  min-width: 0;
+}
+.gf-report-chart h2 {
+  font: 600 16px var(--gf-font-heading);
+  margin: 0 0 16px;
+}
+.gf-report-chart svg {
+  width: 100%;
+  height: auto;
+  min-height: 170px;
+  margin: 16px 0;
+}
+.gf-report-chart svg text {
+  fill: #94a3b8;
+  font: 13px var(--gf-font-body);
+}
+.gf-report-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+.gf-report-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 5px;
+}
+.gf-report-chart-data {
+  max-height: 330px;
+  overflow-y: auto;
+  margin-top: 16px;
+}
+.gf-report-chart-data > div {
+  border-top: 1px solid #303c56;
+  padding: 12px 0;
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.gf-report-chart-data strong {
+  flex-basis: 100%;
+}
+.gf-report-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gf-report-bars li {
+  font-size: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 18px 0;
+}
+.gf-report-bars span {
+  max-width: 70%;
+  overflow-wrap: anywhere;
+}
+.gf-report-bars li > div {
+  flex-basis: 100%;
+  background: #303c56;
+  height: 7px;
+  border-radius: 4px;
+}
+.gf-report-bars i {
+  display: block;
+  background: #00d4ff;
+  height: 100%;
+  border-radius: 4px;
+}
+.gf-report-ranks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.gf-report-ranks .gf-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gf-report-ranks h3 {
+  font: 600 16px var(--gf-font-heading);
+}
+.gf-report-ranks dl {
+  margin: 16px 0 0;
+}
+.gf-report-ranks dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.gf-report-ranks dt {
+  color: #94a3b8;
+}
+.gf-report-ranks dd {
+  font-weight: 600;
+  margin: 0;
+}
+.gf-report-link {
+  display: inline-block;
+  color: #bcb3ff;
+  margin: 16px 0;
+  font-size: 13px;
+}
+.gf-reports section > h2,
+.gf-reports .gf-dashboard-main > h2 {
+  font: 600 18px var(--gf-font-heading);
+  margin-top: 30px;
+}
+@media (max-width: 1000px) {
+  .gf-report-charts {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .gf-report-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gf-report-ranks {
+    grid-template-columns: 1fr;
+  }
+  .gf-report-filters > .gf-field {
+    flex-basis: 100%;
+  }
+  .gf-report-date-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .gf-report-chart {
+    padding: 18px 12px;
+  }
+  .gf-report-tabs button {
+    font-size: 12px;
+    padding: 12px;
+  }
+  .gf-reports .gf-agenda-heading {
+    display: block;
+  }
+  .gf-reports .gf-agenda-heading > .gf-button {
+    margin: 16px 0;
+  }
+  .gf-report-ranks dl > div {
+    flex-wrap: wrap;
+  }
+}

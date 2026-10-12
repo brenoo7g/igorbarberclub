@@ -66,6 +66,11 @@ export const migrations = Object.freeze([
     name: 'gradefy-business-clients',
     file: '013-gradefy-business-clients.sql',
   }),
+  Object.freeze({
+    version: 14,
+    name: 'gradefy-operational-finance',
+    file: '014-gradefy-operational-finance.sql',
+  }),
 ]);
 
 const foundationTables = [
@@ -161,7 +166,7 @@ export async function applyMigrations(tx) {
     const access = migration.version === 4 ? await prepareMultitenantAccess(tx) : null;
     const professionals = migration.version === 6 ? await prepareProfessionalsMigration(tx) : null;
     if (migration.version === 2 && tx.dialect === 'sqlite') await checkSQLiteFoundation(tx, true);
-    if ([7, 9, 10].includes(migration.version) && tx.dialect === 'sqlite') {
+    if ([7, 9, 10, 14].includes(migration.version) && tx.dialect === 'sqlite') {
       const columns = (await tx.all('PRAGMA table_info(idempotency_keys)'))
         .map((c) => c.name)
         .sort();
