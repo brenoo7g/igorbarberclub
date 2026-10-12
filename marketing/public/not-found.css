@@ -1,0 +1,39 @@
+@font-face {
+  font-family: Sora;
+  src: url('/fonts/Sora.ttf') format('truetype');
+  font-display: swap;
+}
+body {
+  margin: 0;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  background: #090d18;
+  color: #f8fafc;
+  font-family: Sora, sans-serif;
+}
+main {
+  max-width: 600px;
+  padding: 40px 24px;
+  text-align: center;
+}
+p {
+  color: #94a3b8;
+  line-height: 1.7;
+}
+h1 {
+  font-size: clamp(24px, 5vw, 38px);
+}
+a {
+  display: inline-flex;
+  padding: 16px 24px;
+  margin-top: 16px;
+  border-radius: 14px;
+  background: #6c5ce7;
+  color: white;
+  text-decoration: none;
+}
+a:focus-visible {
+  outline: 3px solid #00d4ff;
+  outline-offset: 5px;
+}
