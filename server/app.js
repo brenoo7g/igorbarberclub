@@ -6,6 +6,23 @@ import { installAgendaRoutes, agendaAccess, checkExpected, reservationExpected }
 import { installClientRoutes, findClient, linkAppointmentClient } from './clients.js';
 import { installFinanceRoutes, appointmentFinance } from './finance.js';
 import { installReportRoutes } from './reports.js';
+import { installTeamRoutes } from './team.js';
+import {
+  installProfessionalPanel,
+  professionalAccess,
+  professionalCompletionSchema,
+  checkOwnExpected,
+} from './professional-panel.js';
+import { lockProfessionalAccess, professionalEvent } from './professional-links.js';
+import {
+  installOperationalSettings,
+  readPolicies,
+  lockOperational,
+  intersectDay,
+  policyAccess,
+  noticeSlots,
+  enforceCustomerNotice,
+} from './operational-settings.js';
 import { installSiteAssetRoutes } from './site-assets.js';
 import { installOperationalOnboarding } from './operational-onboarding.js';
 import {
@@ -128,6 +145,7 @@ export function createApp(
     siteStorage = createSiteStorage(),
     serveStatic = true,
     testGuestAccess = false,
+    invitationEmail,
   } = {},
 ) {
   if (
@@ -242,6 +260,11 @@ export function createApp(
   });
   installProfileRoutes(app, db, { authenticated, login, authLimiter });
   installPasswordRecovery(app, db, { secret, secureCookies });
+  const installCompanyTeam = installTeamRoutes(app, db, {
+    authenticated,
+    secret,
+    email: invitationEmail,
+  });
   app.get('/api/companies', authenticated, async (req, res) =>
     res.json(await listUserCompanies(db, req.user.id)),
   );
@@ -358,7 +381,7 @@ export function createApp(
     return dispatch(req, res, next);
   });
   app.use('/api', async (req, res, next) => {
-    req.companyContext = /^\/admin(?:\/|$)/i.test(req.path)
+    req.companyContext = /^\/(?:admin|professional)(?:\/|$)/i.test(req.path)
       ? await resolveCompanyContext(db, req.user, req.get('X-Gradefy-Company-Id'))
       : await resolvePublicCompany(db);
     return dispatch(req, res, next);
@@ -440,11 +463,22 @@ export function createApp(
         fail(400, 'Um dos serviços não está mais disponível. Atualize sua seleção.');
       return services;
     };
-    const occupied = async (tx, companyId, barber, date, except = '') => [
-      ...(await tx.all(
-        "SELECT start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND date=? AND status IN ('confirmed','completed') AND id<>?",
-        [companyId, barber, date, except],
-      )),
+    const occupied = async (tx, companyId, barber, date, except = '', buffer = 0) => [
+      ...(
+        await tx.all(
+          "SELECT date,start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND date>=? AND date<=? AND status IN ('confirmed','completed') AND id<>?",
+          [
+            companyId,
+            barber,
+            addDays(date, buffer ? -1 : 0),
+            addDays(date, buffer ? 1 : 0),
+            except,
+          ],
+        )
+      ).map((a) => ({
+        start_minute: a.start_minute + (a.date < date ? -1440 : a.date > date ? 1440 : 0) - buffer,
+        end_minute: a.end_minute + (a.date < date ? -1440 : a.date > date ? 1440 : 0) + buffer,
+      })),
       ...(await tx.all(
         'SELECT start_minute,end_minute FROM blocks WHERE company_id=? AND barber_id=? AND date=?',
         [companyId, barber, date],
@@ -526,17 +560,49 @@ export function createApp(
               message: 'Este profissional não realiza o serviço selecionado.',
             };
           const schedule = await readSchedule(tx, companyId, barberId);
-          const access = dateAccess(schedule, date, today);
+          const policies = await readPolicies(tx, companyId);
+          if (except && !internal) {
+            const current = await tx.get(
+              'SELECT date,start_minute FROM appointments WHERE company_id=? AND id=?',
+              [companyId, except],
+            );
+            try {
+              enforceCustomerNotice(policies, current, 'reschedule', now, company.timezone);
+            } catch (error) {
+              return { slots: [], duration, reason: 'reschedule-notice', message: error.message };
+            }
+          }
+          const policy = policyAccess(policies, date, now, company.timezone, internal, !!except);
+          const access = policy.allowed ? dateAccess(schedule, date, today) : policy;
           return {
             slots: access.allowed
-              ? availableSlots({
+              ? noticeSlots(
+                  availableSlots({
+                    date,
+                    duration,
+                    occupied: await occupied(
+                      tx,
+                      companyId,
+                      barberId,
+                      date,
+                      except,
+                      policies.buffer_minutes,
+                    ),
+                    workingDay: intersectDay(
+                      schedule.days.find((d) => d.weekday === weekday(date)),
+                      policies,
+                      date,
+                    ),
+                    buffer: policies.buffer_minutes,
+                    now,
+                    timezone: company.timezone,
+                  }),
+                  policies,
                   date,
-                  duration,
-                  occupied: await occupied(tx, companyId, barberId, date, except),
-                  workingDay: schedule.days.find((d) => d.weekday === weekday(date)),
                   now,
-                  timezone: company.timezone,
-                })
+                  company.timezone,
+                  internal,
+                )
               : [],
             reason: access.reason,
             message: access.message,
@@ -619,10 +685,11 @@ export function createApp(
       let guestSession;
       const result = await db.transaction(async (tx) => {
         await lockPublication(tx, companyId, true);
+        await lockOperational(tx, companyId, true);
         const company = internal
           ? (await agendaAccess(tx, companyId, req.user.id, true)).company
           : await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
-        const now = await currentTime(tx),
+        let now = await currentTime(tx),
           today = dateInTimezone(now, company.timezone);
         if (
           !internal &&
@@ -695,6 +762,11 @@ export function createApp(
               data.barberId,
               ...(current ? [current.barber_id] : []),
             );
+            now = await currentTime(tx);
+            today = dateInTimezone(now, company.timezone);
+            const policies = await readPolicies(tx, companyId);
+            if (current && !internal)
+              enforceCustomerNotice(policies, current, 'reschedule', now, company.timezone);
             if (current && !internal && !(await ownsAppointment(tx, companyId, req, current, true)))
               fail(404, 'Agendamento não encontrado.');
             if (current && internal) checkExpected(current, data.expected);
@@ -746,22 +818,43 @@ export function createApp(
                 'O preço ou a duração mudou. Atualize a página para revisar os serviços antes de confirmar.',
               );
             const schedule = await readSchedule(tx, companyId, data.barberId);
-            const access = dateAccess(schedule, data.date, today);
-            if (!access.allowed) fail(409, access.message);
-            const slots = availableSlots({
-              date: data.date,
-              duration,
-              occupied: await occupied(
-                tx,
-                companyId,
-                data.barberId,
-                data.date,
-                reschedule ? id : '',
-              ),
-              workingDay: schedule.days.find((d) => d.weekday === weekday(data.date)),
+            const policy = policyAccess(
+              policies,
+              data.date,
               now,
-              timezone: company.timezone,
-            });
+              company.timezone,
+              internal,
+              reschedule,
+            );
+            const access = policy.allowed ? dateAccess(schedule, data.date, today) : policy;
+            if (!access.allowed) fail(409, access.message);
+            const slots = noticeSlots(
+              availableSlots({
+                date: data.date,
+                duration,
+                occupied: await occupied(
+                  tx,
+                  companyId,
+                  data.barberId,
+                  data.date,
+                  reschedule ? id : '',
+                  policies.buffer_minutes,
+                ),
+                workingDay: intersectDay(
+                  schedule.days.find((d) => d.weekday === weekday(data.date)),
+                  policies,
+                  data.date,
+                ),
+                buffer: policies.buffer_minutes,
+                now,
+                timezone: company.timezone,
+              }),
+              policies,
+              data.date,
+              now,
+              company.timezone,
+              internal,
+            );
             if (!slots.includes(data.time))
               fail(409, 'Esse horário acabou de ficar indisponível. Escolha outro horário.');
             const start = minuteOf(data.time);
@@ -856,6 +949,7 @@ export function createApp(
     );
     app.patch('/appointments/:id/cancel', bookingAuthenticated, async (req, res) => {
       await db.transaction(async (tx) => {
+        await lockOperational(tx, companyId, true);
         await lockAppointment(tx, companyId, String(req.params.id));
         const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
           companyId,
@@ -869,8 +963,20 @@ export function createApp(
           companyId,
           a.id,
         ]);
-        if (fresh.status !== 'confirmed' || !isFuture(fresh.date, fresh.start_minute))
+        const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+        const now = await currentTime(tx);
+        if (
+          fresh.status !== 'confirmed' ||
+          !isFuture(fresh.date, fresh.start_minute, now, company.timezone)
+        )
           fail(400, 'Este agendamento não pode mais ser cancelado.');
+        enforceCustomerNotice(
+          await readPolicies(tx, companyId),
+          fresh,
+          'cancel',
+          now,
+          company.timezone,
+        );
         await tx.run("UPDATE appointments SET status='cancelled' WHERE company_id=? AND id=?", [
           companyId,
           a.id,
@@ -882,6 +988,7 @@ export function createApp(
 
     app.use('/admin', authenticated, admin);
     const authorizeManagement = (tx, req, write) => agendaAccess(tx, companyId, req.user.id, write);
+    installOperationalSettings(app, db, companyId);
     installProfessionalRoutes(app, db, companyId, { authorize: authorizeManagement });
     app.get('/admin/appointments', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),
@@ -889,64 +996,96 @@ export function createApp(
       if (to < from || to > addDays(from, 366)) fail(400, 'Intervalo inválido.');
       res.json(await appointmentList(companyId, 'a.date>=? AND a.date<=?', [from, to]));
     });
-    async function updateStatus(req, internal = false) {
-      const data = internal
-        ? z
-            .object({
-              status: z.enum(['completed', 'cancelled']),
-              expected: reservationExpected.optional(),
-            })
-            .strict()
-            .parse(req.body)
-        : { status: z.enum(['completed', 'cancelled', 'no-show']).parse(req.body.status) };
+    async function updateStatus(req, internal = false, own = false) {
+      const data = own
+        ? { ...professionalCompletionSchema.parse(req.body), status: 'completed' }
+        : internal
+          ? z
+              .object({
+                status: z.enum(['completed', 'cancelled']),
+                expected: reservationExpected.optional(),
+              })
+              .strict()
+              .parse(req.body)
+          : { status: z.enum(['completed', 'cancelled', 'no-show']).parse(req.body.status) };
       const status = data.status,
         id = String(req.params.id),
         key = internal ? requestKey(req) : null;
       return db.transaction(async (tx) => {
-        const company = internal
-          ? (await agendaAccess(tx, companyId, req.user.id, true)).company
-          : await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
-        return idempotent(tx, companyId, 'managed-status', key, { id, ...data }, async () => {
-          await lockAppointment(tx, companyId, String(req.params.id));
-          const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
-            companyId,
-            String(req.params.id),
-          ]);
-          if (!a) fail(404, 'Agendamento não encontrado.');
-          await lockBarbers(tx, companyId, a.barber_id);
-          const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
-            companyId,
-            a.id,
-          ]);
-          // Without a key, repeated terminal status is still a no-op, never another outbox event.
-          if (internal && fresh.status === status) return { ok: true };
-          if (internal) checkExpected(fresh, data.expected);
-          if (fresh.status !== 'confirmed') fail(400, 'Este agendamento já foi finalizado.');
-          const now = await currentTime(tx);
-          if (
-            status === 'completed' &&
-            isFuture(fresh.date, fresh.end_minute, now, company.timezone)
-          )
-            fail(400, 'Aguarde o fim do horário para concluir o atendimento.');
-          if (
-            status === 'no-show' &&
-            isFuture(fresh.date, fresh.start_minute, now, company.timezone)
-          )
-            fail(400, 'Aguarde o horário do atendimento para marcar ausência.');
-          await tx.run('UPDATE appointments SET status=? WHERE company_id=? AND id=?', [
-            status,
-            companyId,
-            a.id,
-          ]);
-          if (status === 'cancelled') await enqueueNotification(tx, companyId, a.id, 'cancelled');
-          return { ok: true };
-        });
+        if (own) await lockProfessionalAccess(tx, companyId, true);
+        let access = own ? await professionalAccess(tx, companyId, req.user.id, true) : null;
+        if (
+          own &&
+          !(await tx.get(
+            'SELECT id FROM appointments WHERE company_id=? AND barber_id=? AND id=?',
+            [companyId, access.professional.id, id],
+          ))
+        )
+          fail(404, 'Atendimento não encontrado.');
+        const company = own
+          ? access.company
+          : internal
+            ? (await agendaAccess(tx, companyId, req.user.id, true)).company
+            : await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+        return idempotent(
+          tx,
+          companyId,
+          'managed-status',
+          key,
+          { id, ...data, ...(own ? { scope: 'own-professional' } : {}) },
+          async () => {
+            await lockAppointment(tx, companyId, String(req.params.id));
+            const a = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+              companyId,
+              String(req.params.id),
+            ]);
+            if (!a) fail(404, 'Agendamento não encontrado.');
+            await lockBarbers(tx, companyId, a.barber_id);
+            if (own) {
+              access = await professionalAccess(tx, companyId, req.user.id, true);
+              if (a.barber_id !== access.professional.id) fail(404, 'Atendimento não encontrado.');
+            }
+            const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+              companyId,
+              a.id,
+            ]);
+            // Without a key, repeated terminal status is still a no-op, never another outbox event.
+            if (internal && fresh.status === status) return { ok: true };
+            if (own) checkOwnExpected(fresh, data.expected);
+            else if (internal) checkExpected(fresh, data.expected);
+            if (fresh.status !== 'confirmed') fail(400, 'Este agendamento já foi finalizado.');
+            const now = await currentTime(tx);
+            if (
+              status === 'completed' &&
+              isFuture(fresh.date, fresh.end_minute, now, company.timezone)
+            )
+              fail(400, 'Aguarde o fim do horário para concluir o atendimento.');
+            if (
+              status === 'no-show' &&
+              isFuture(fresh.date, fresh.start_minute, now, company.timezone)
+            )
+              fail(400, 'Aguarde o horário do atendimento para marcar ausência.');
+            await tx.run('UPDATE appointments SET status=? WHERE company_id=? AND id=?', [
+              status,
+              companyId,
+              a.id,
+            ]);
+            if (own)
+              await professionalEvent(tx, companyId, req.user.id, 'completed', {
+                professional: fresh.barber_id,
+                appointment: fresh.id,
+              });
+            if (status === 'cancelled') await enqueueNotification(tx, companyId, a.id, 'cancelled');
+            return { ok: true };
+          },
+        );
       });
     }
     app.patch('/admin/appointments/:id/status', async (req, res) => {
       await updateStatus(req);
       res.json({ ok: true });
     });
+    installProfessionalPanel(app, db, companyId, { authenticated, updateStatus });
     installAgendaRoutes(app, db, companyId, {
       appointmentFinance,
       appointmentList,
@@ -957,6 +1096,7 @@ export function createApp(
     installClientRoutes(app, db, companyId, { appointmentList });
     installFinanceRoutes(app, db, companyId);
     installReportRoutes(app, db, companyId);
+    installCompanyTeam(app, companyId);
     installServiceRoutes(app, db, companyId, { authorize: authorizeManagement });
     app.get('/admin/blocks', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),

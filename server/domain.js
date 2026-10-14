@@ -17,6 +17,51 @@ export const clock = (minutes) =>
   `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 export const overlaps = (start, end, existing) =>
   existing.some((x) => start < x.end_minute && end > x.start_minute);
+const offsetCache = new Map();
+// Resolve local wall time only when it identifies exactly one instant. Both
+// nonexistent and ambiguous DST times are unavailable, never guessed silently.
+export function localInstant(date, minute, timezone = TZ) {
+  const base = Date.parse(`${date}T00:00:00Z`) + minute * 60000;
+  const key = `${timezone}:${date}`;
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  const parts = (instant) =>
+    Object.fromEntries(formatter.formatToParts(new Date(instant)).map((p) => [p.type, p.value]));
+  let offsets = offsetCache.get(key);
+  if (!offsets) {
+    offsets = [
+      ...new Set(
+        [-36, -12, 12, 36].map((hour) => {
+          const probe = Date.parse(`${date}T12:00:00Z`) + hour * 3600000,
+            p = parts(probe);
+          return (
+            Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`) - probe
+          );
+        }),
+      ),
+    ];
+    if (offsetCache.size > 512) offsetCache.clear();
+    offsetCache.set(key, offsets);
+  }
+  const matches = offsets
+    .map((offset) => base - offset)
+    .filter((instant) => {
+      const p = parts(instant);
+      return (
+        `${p.year}-${p.month}-${p.day}` === date &&
+        Number(p.hour) * 60 + Number(p.minute) === minute
+      );
+    });
+  return matches.length === 1 ? new Date(matches[0]) : null;
+}
 export function isFuture(date, minute, now = new Date(), timezone = TZ) {
   const localDate = dateInTimezone(now, timezone);
   const parts = Object.fromEntries(
@@ -46,11 +91,14 @@ export function availableSlots({
   now = new Date(),
   workingDay,
   timezone = TZ,
+  buffer = 0,
 }) {
   if (
     (workingDay === undefined ? weekday(date) === 0 : !workingDay?.active) ||
     !Number.isInteger(duration) ||
-    duration <= 0
+    duration <= 0 ||
+    !Number.isInteger(buffer) ||
+    buffer < 0
   )
     return [];
   const slots = [];
@@ -71,8 +119,16 @@ export function availableSlots({
     }))
     .sort((a, b) => a.start - b.start);
   const addFreeInterval = (from, until) => {
-    for (let start = from; start + duration <= until; start += duration) {
-      if (isFuture(date, start, now, timezone)) slots.push(clock(start));
+    for (let start = from; start + duration <= until; start += duration + buffer) {
+      const first = localInstant(date, start, timezone),
+        last = localInstant(date, start + duration, timezone);
+      if (
+        isFuture(date, start, now, timezone) &&
+        first &&
+        last &&
+        last.getTime() - first.getTime() === duration * 60000
+      )
+        slots.push(clock(start));
     }
   };
   // Pack each free interval using the selected services' combined duration.

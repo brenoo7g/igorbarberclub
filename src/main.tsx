@@ -42,8 +42,20 @@ const GradefyOperations = lazy(() => import('./gradefy/operations'));
 const GradefySiteEditor = lazy(() => import('./gradefy/site-editor'));
 const GradefyDashboard = lazy(() => import('./gradefy/dashboard'));
 const GradefyAgenda = lazy(() => import('./gradefy/agenda'));
+const GradefyProfessionalAgenda = lazy(() => import('./gradefy/professional-agenda'));
 const GradefyFinance = lazy(() => import('./gradefy/finance'));
 const GradefyReports = lazy(() => import('./gradefy/reports'));
+const GradefyTeam = lazy(() => import('./gradefy/team'));
+const GradefyOperationalSettings = lazy(() => import('./gradefy/operational-settings'));
+const GradefyEntryProfile = lazy(() =>
+  import('./gradefy/team-entry').then((m) => ({ default: m.EntryProfile })),
+);
+const GradefyTeamEntry = lazy(() =>
+  import('./gradefy/team-entry').then((m) => ({ default: m.TeamEntry })),
+);
+const GradefyInvite = lazy(() =>
+  import('./gradefy/team').then((m) => ({ default: m.AcceptInvitation })),
+);
 const GradefyClients = lazy(() =>
   import('./gradefy/business-management').then((m) => ({ default: m.Clients })),
 );
@@ -88,11 +100,17 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route index element={<GradefyWelcome />} />
             <Route path="login" element={<GradefyAccountForm key="login" />} />
             <Route path="cadastro" element={<GradefyAccountForm key="register" register />} />
+            <Route path="comecar" element={<GradefyEntryProfile />} />
+            <Route path="entrar-equipe" element={<GradefyTeamEntry />} />
             <Route path="conta" element={<GradefyAccountReady />} />
             <Route path="dashboard" element={<GradefyDashboard />} />
             <Route path="agenda" element={<GradefyAgenda />} />
+            <Route path="minha-agenda" element={<GradefyProfessionalAgenda />} />
             <Route path="financeiro" element={<GradefyFinance />} />
             <Route path="relatorios" element={<GradefyReports />} />
+            <Route path="equipe" element={<GradefyTeam />} />
+            <Route path="configuracoes" element={<GradefyOperationalSettings />} />
+            <Route path="convite" element={<GradefyInvite />} />
             <Route path="clientes" element={<GradefyClients />} />
             <Route path="servicos" element={<GradefyServices />} />
             <Route path="profissionais" element={<GradefyProfessionals />} />

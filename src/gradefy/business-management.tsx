@@ -356,7 +356,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
                               </p>
                               <p className="gf-hint">
                                 {p.user_id
-                                  ? 'Vínculo de usuário preservado.'
+                                  ? 'Conta vinculada ao cadastro profissional.'
                                   : 'Profissional sem conta de login.'}
                               </p>
                               <div className="gf-business-actions">

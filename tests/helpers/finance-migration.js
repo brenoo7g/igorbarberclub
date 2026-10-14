@@ -1,5 +1,6 @@
 // Disposable test schemas only. Never exposed by application migrations.
 import { migrations, readMigration } from '../../server/migrations.js';
+import { reconstructBeforeTeam } from './team-migration.js';
 export const financialTables = [
   'financial_payments',
   'financial_payment_reversals',
@@ -7,6 +8,7 @@ export const financialTables = [
   'financial_expense_events',
 ];
 export async function reconstructBeforeFinance(db) {
+  await reconstructBeforeTeam(db);
   if (!(await db.get('SELECT version FROM schema_migrations WHERE version=14'))) return;
   for (const name of [
     'financial_expense_events',

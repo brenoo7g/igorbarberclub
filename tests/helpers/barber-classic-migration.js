@@ -19,6 +19,18 @@ export const igorPresentation = {
   highlight_service_id: 'combo',
 };
 export function expectBarberClassicMetadata(before) {
+  for (const row of before.company_settings || [])
+    if (!('operational_version' in row))
+      Object.assign(row, {
+        operational_version: 0,
+        minimum_notice_minutes: 0,
+        maximum_booking_days: null,
+        buffer_minutes: 0,
+        cancel_notice_minutes: 0,
+        reschedule_notice_minutes: 0,
+        online_booking_enabled: 1,
+        working_days_json: null,
+      });
   for (const row of before.appointments || []) if (!('notes' in row)) row.notes = '';
   for (const row of before.company_settings || [])
     if (!('site_version' in row)) Object.assign(row, { site_version: 0, sections_json: null });

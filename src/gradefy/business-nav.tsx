@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import {
   CalendarDays,
   LayoutDashboard,
@@ -8,6 +9,8 @@ import {
   Globe,
   Wallet,
   ChartNoAxesCombined,
+  ShieldCheck,
+  Settings2,
 } from 'lucide-react';
 import './business-management.css';
 export const businessLinks = [
@@ -15,10 +18,12 @@ export const businessLinks = [
   { path: '/app/agenda', label: 'Minha agenda', short: 'Agenda', icon: CalendarDays },
   { path: '/app/clientes', label: 'Clientes', short: 'Clientes', icon: UserRound },
   { path: '/app/servicos', label: 'Serviços', short: 'Serviços', icon: Scissors },
-  { path: '/app/profissionais', label: 'Profissionais', short: 'Equipe', icon: UsersRound },
+  { path: '/app/profissionais', label: 'Profissionais', short: 'Profis.', icon: UsersRound },
   { path: '/app/financeiro', label: 'Financeiro', short: 'Finanças', icon: Wallet },
   { path: '/app/relatorios', label: 'Relatórios', short: 'Relat.', icon: ChartNoAxesCombined },
+  { path: '/app/equipe', label: 'Equipe e acessos', short: 'Equipe', icon: ShieldCheck },
   { path: '/app/meu-site', label: 'Meu Site', short: 'Site', icon: Globe },
+  { path: '/app/configuracoes', label: 'Configurações', short: 'Config.', icon: Settings2 },
 ];
 export function BusinessNav({
   companyId,
@@ -28,6 +33,19 @@ export function BusinessNav({
   mobile?: boolean;
 }) {
   const { pathname } = useLocation();
+  const mobileNav = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!mobile) return;
+    const nav = mobileNav.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    const align = () => {
+      if (nav && active && nav.clientWidth)
+        nav.scrollLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
+    };
+    align();
+    window.addEventListener('resize', align);
+    return () => window.removeEventListener('resize', align);
+  }, [mobile, pathname]);
   const links = businessLinks.map((l) => (
     <Link
       key={l.path}
@@ -41,7 +59,11 @@ export function BusinessNav({
     </Link>
   ));
   return mobile ? (
-    <nav className="gf-dashboard-mobile-nav gf-business-mobile" aria-label="Navegação móvel">
+    <nav
+      ref={mobileNav}
+      className="gf-dashboard-mobile-nav gf-business-mobile"
+      aria-label="Navegação móvel"
+    >
       {links}
     </nav>
   ) : (

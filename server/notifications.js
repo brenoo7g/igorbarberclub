@@ -2,6 +2,7 @@ import { requireCompanyId, publicCompanyPath } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import { cleanIdempotency } from './idempotency.js';
 import { clock } from './domain.js';
+import { sendTransactionalEmail } from './transactional-email.js';
 
 export async function enqueueNotification(db, companyId, appointmentId, event) {
   requireCompanyId(companyId);
@@ -231,16 +232,7 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
         try {
           let response;
           if (row.channel === 'email') {
-            response = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              signal: AbortSignal.timeout(15000),
-              headers: {
-                Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-                'Content-Type': 'application/json',
-                'Idempotency-Key': row.id,
-              },
-              body: row.delivery_payload,
-            });
+            response = await sendTransactionalEmail(row.delivery_payload, row.id);
           } else {
             response = await fetch(
               `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,

@@ -43,6 +43,7 @@ export async function getPublicSite(db, companyId, { preview = false } = {}) {
     /* Optional configuration. */
   }
   const settings = {
+    online_booking_enabled: row.online_booking_enabled !== 0,
     logo_url: publicAsset(row.logo_url),
     favicon_url: publicAsset(row.favicon_url),
     hero_image_url: publicAsset(row.hero_image_url),

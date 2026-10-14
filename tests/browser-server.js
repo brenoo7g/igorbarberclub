@@ -63,6 +63,8 @@ const { installDashboardBrowserFixture } = await import('./helpers/dashboard-bro
 await installDashboardBrowserFixture(db, recoveryHash);
 const { installAgendaBrowserFixture } = await import('./helpers/agenda-browser.js');
 await installAgendaBrowserFixture(db, recoveryHash);
+const { installProfessionalBrowserFixture } = await import('./helpers/professional-browser.js');
+await installProfessionalBrowserFixture(db, recoveryHash);
 createApp(db, { test: true, siteStorage: testSiteStorage() }).listen(4173, '127.0.0.1', () =>
   console.log('Browser test server listening on 4173'),
 );

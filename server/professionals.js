@@ -11,6 +11,11 @@ import {
 import { dateInTimezone, isFuture } from './domain.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { publicAsset } from './public-site.js';
+import {
+  lockProfessionalAccess,
+  setProfessionalLink,
+  requireLinkOwner,
+} from './professional-links.js';
 
 const details = z
   .object({
@@ -30,6 +35,8 @@ const details = z
       .max(100)
       .refine((ids) => new Set(ids).size === ids.length, 'Não repita serviços.'),
     userId: z.string().min(1).max(200).nullable().optional(),
+    confirmLink: z.literal(true).optional(),
+    expectedUserId: z.string().min(1).max(200).nullable().optional(),
   })
   .strict();
 const creation = details.extend({ active: z.boolean().default(true) });
@@ -91,7 +98,7 @@ async function upcomingAppointments(db, companyId, id) {
   return rows.filter((row) => isFuture(row.date, row.end_minute, now, timezone)).length;
 }
 
-async function replaceRelations(tx, companyId, id, data) {
+async function replaceRelations(tx, companyId, id, data, actor) {
   for (const serviceId of data.services) {
     // Inactive catalog entries may remain associated, but never become bookable.
     if (
@@ -128,15 +135,38 @@ async function replaceRelations(tx, companyId, id, data) {
       [companyId, id, serviceId, new Date().toISOString()],
     );
   if (data.userId !== undefined) {
-    await tx.run('DELETE FROM professional_users WHERE company_id=? AND barber_id=?', [
-      companyId,
-      id,
-    ]);
-    if (data.userId)
-      await tx.run(
-        'INSERT INTO professional_users(company_id,barber_id,user_id,created_at) VALUES(?,?,?,?)',
-        [companyId, id, data.userId, new Date().toISOString()],
-      );
+    const current =
+      (
+        await tx.get('SELECT user_id FROM professional_users WHERE company_id=? AND barber_id=?', [
+          companyId,
+          id,
+        ])
+      )?.user_id ?? null;
+    if (current !== data.userId) {
+      await requireLinkOwner(tx, companyId, actor);
+      if (data.expectedUserId !== undefined && data.expectedUserId !== current)
+        domainError(
+          409,
+          'PROFESSIONAL_LINK_CHANGED',
+          'O vínculo mudou. Atualize antes de confirmar.',
+        );
+      if (current && (!data.confirmLink || data.expectedUserId === undefined))
+        domainError(
+          400,
+          'LINK_CONFIRMATION_REQUIRED',
+          'Confirme a alteração e informe a conta vinculada atual.',
+        );
+      if (current)
+        await setProfessionalLink(tx, companyId, actor, current, null, {
+          expected: id,
+          confirm: true,
+          professionalRole: false,
+        });
+      if (data.userId)
+        await setProfessionalLink(tx, companyId, actor, data.userId, id, {
+          professionalRole: false,
+        });
+    }
   }
 }
 
@@ -180,6 +210,7 @@ export function installProfessionalRoutes(
       key = requestKey(req);
     const result = await db.transaction(async (tx) => {
       await authorize(tx, req, false);
+      if (data.userId !== undefined) await lockProfessionalAccess(tx, companyId);
       return idempotent(tx, companyId, 'professional-create', key, data, async () => {
         await authorize(tx, req, true);
         const id = randomUUID();
@@ -193,7 +224,7 @@ export function installProfessionalRoutes(
           data.specialty,
           data.active ? 1 : 0,
         ]);
-        await replaceRelations(tx, companyId, id, data);
+        await replaceRelations(tx, companyId, id, data, req.user.id);
         if (data.photo_url !== undefined)
           await tx.run('UPDATE barbers SET photo_url=? WHERE company_id=? AND id=?', [
             publicAsset(data.photo_url),
@@ -220,11 +251,12 @@ export function installProfessionalRoutes(
       id = String(req.params.id);
     const result = await db.transaction(async (tx) => {
       await authorize(tx, req, true);
+      if (data.userId !== undefined) await lockProfessionalAccess(tx, companyId);
       await lockEntitlements(tx, companyId); // Serializes optional member links as well as mutations.
       await lockCatalog(tx, companyId, true);
       await lockBarbers(tx, companyId, id);
       await professional(tx, companyId, id);
-      await replaceRelations(tx, companyId, id, data);
+      await replaceRelations(tx, companyId, id, data, req.user.id);
       if (data.photo_url !== undefined)
         await tx.run('UPDATE barbers SET photo_url=? WHERE company_id=? AND id=?', [
           publicAsset(data.photo_url),

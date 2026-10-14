@@ -56,6 +56,7 @@ test('Meu Site saves identity/colors/contact/sections; reload/login/mobile prese
   await page.getByLabel('E-mail', { exact: true }).fill(email);
   await page.getByLabel('Senha', { exact: true }).fill('GradefyTeste123!');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await expect(page).toHaveURL('/app/dashboard');
   await page.goto('/app/meu-site');
   await expect(page.getByLabel('Nome público da empresa', { exact: true })).toHaveValue(
     'Barbearia Aurora',

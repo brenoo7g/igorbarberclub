@@ -35,6 +35,9 @@ export default function GradefyShell() {
     '/app/profissionais',
     '/app/financeiro',
     '/app/relatorios',
+    '/app/equipe',
+    '/app/configuracoes',
+    '/app/minha-agenda',
   ].includes(useLocation().pathname);
   useEffect(() => {
     const title = document.title;

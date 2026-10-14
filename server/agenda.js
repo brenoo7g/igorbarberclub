@@ -48,6 +48,10 @@ export function checkExpected(row, expected) {
 export async function agendaAccess(tx, cid, userId, write = false) {
   if (!(await canManageCompany(tx, userId, cid)))
     domainError(403, 'COMPANY_ROLE_DENIED', 'Acesso exclusivo da gestão desta empresa.');
+  return agendaCompanyState(tx, cid, write);
+}
+// Business state only. Callers must first authorize the current company membership.
+export async function agendaCompanyState(tx, cid, write = false) {
   const company = await tx.get('SELECT id,name,timezone FROM companies WHERE id=?', [cid]);
   const onboarding = await tx.get('SELECT status FROM company_onboarding WHERE company_id=?', [
     cid,

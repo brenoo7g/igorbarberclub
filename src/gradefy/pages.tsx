@@ -82,7 +82,7 @@ export function Welcome() {
             </ButtonLink>
           ) : (
             <>
-              <ButtonLink to="/app/cadastro">
+              <ButtonLink to="/app/comecar">
                 Criar minha conta <ArrowRight size={19} />
               </ButtonLink>
               <ButtonLink to="/app/login" variant="secondary">
@@ -100,14 +100,16 @@ export function Welcome() {
     </div>
   );
 }
-function FormFrame({
+export function FormFrame({
   title,
   description,
   children,
+  backTo = '/app',
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  backTo?: string;
 }) {
   return (
     <div className="gf-auth-layout">
@@ -122,7 +124,7 @@ function FormFrame({
         <BrandScene />
       </aside>
       <Card className="gf-form-card">
-        <Link to="/app" className="gf-back">
+        <Link to={backTo} className="gf-back">
           <ArrowLeft size={17} /> Voltar
         </Link>
         <div className="gf-form-heading">
@@ -138,6 +140,10 @@ const empty: AccountValues = { name: '', email: '', password: '', confirmPasswor
 export function AccountForm({ register = false }: { register?: boolean }) {
   const { api, setUser, loading, user } = useApp();
   const location = useLocation();
+  const invitationToken = new URLSearchParams(location.hash.slice(1)).get('token');
+  const invitationReturn =
+    invitationToken && /^[a-f0-9]{64}$/.test(invitationToken) ? '#token=' + invitationToken : '';
+  const teamEntry = new URLSearchParams(location.search).get('equipe') === '1';
   const [values, setValues] = useState(empty);
   const [errors, setErrors] = useState<FormErrors>({});
   const [error, setError] = useState('');
@@ -185,7 +191,15 @@ export function AccountForm({ register = false }: { register?: boolean }) {
   if (user)
     return (
       <Navigate
-        to={register && completed ? '/app/onboarding/plan' : '/app/dashboard'}
+        to={
+          invitationReturn
+            ? '/app/convite' + invitationReturn
+            : teamEntry
+              ? '/app/entrar-equipe'
+              : register && completed
+                ? '/app/onboarding/plan'
+                : '/app/dashboard'
+        }
         replace
         state={{ accountCreated: register && completed }}
       />
@@ -274,17 +288,34 @@ export function AccountForm({ register = false }: { register?: boolean }) {
         </Button>
         {register && (
           <p className="gf-privacy">
-            <ShieldCheck size={16} /> Seus dados protegidos. Você configura seu negócio no próximo
-            passo.
+            <ShieldCheck size={16} />{' '}
+            {invitationReturn || teamEntry
+              ? 'Seus dados protegidos. Você confirmará o convite após criar sua conta.'
+              : 'Seus dados protegidos. Você configura seu negócio no próximo passo.'}
           </p>
         )}
       </form>
       <p className="gf-form-switch">
         {register ? 'Já tem uma conta?' : 'Ainda não tem uma conta?'}{' '}
-        <Link to={register ? '/app/login' : '/app/cadastro'}>
+        <Link
+          to={
+            (register
+              ? '/app/login'
+              : invitationReturn || teamEntry
+                ? '/app/cadastro'
+                : '/app/comecar') +
+            (teamEntry ? '?equipe=1' : '') +
+            invitationReturn
+          }
+        >
           {register ? 'Entrar' : 'Criar minha conta'}
         </Link>
       </p>
+      {register && !invitationReturn && !teamEntry && (
+        <p className="gf-form-switch">
+          <Link to="/app/comecar">Sou proprietário ou colaborador? Escolher perfil</Link>
+        </p>
+      )}
     </FormFrame>
   );
 }
@@ -342,10 +373,10 @@ export function AccountReady() {
                 {business?.onboardingStatus === 'completed'
                   ? `${business.name}: configuração concluída. Seu site ainda não foi publicado.`
                   : companies.length
-                    ? 'Você já tem vínculo com um estabelecimento. Acesse o painel para consultar a rotina da sua empresa.'
+                    ? 'Seus vínculos estão ativos. Acesse Minha Agenda como profissional ou o painel empresarial conforme seu papel em cada estabelecimento.'
                     : business
                       ? `${business.name}: sua empresa foi criada e aguarda a conclusão da configuração. Seu teste grátis ainda não começou.`
-                      : 'Nenhum estabelecimento foi vinculado à sua conta. Escolha seu plano para preparar a configuração do seu negócio.'}
+                      : 'Nenhum estabelecimento foi vinculado à sua conta. Configure seu negócio ou entre em uma equipe com um convite.'}
               </p>
               {companies.length > 0 && (
                 <ul>
@@ -376,12 +407,22 @@ export function AccountReady() {
           </ButtonLink>
         )}
         {companies
+          ?.filter((c) => c.role === 'professional')
+          .map((c) => (
+            <ButtonLink key={c.id} to={`/app/minha-agenda?empresa=${encodeURIComponent(c.id)}`}>
+              Minha Agenda — {c.name}
+            </ButtonLink>
+          ))}
+        {companies
           ?.filter((c) => ['owner', 'manager'].includes(c.role))
           .map((c) => (
             <ButtonLink key={c.id} to={`/app/meu-site?empresa=${encodeURIComponent(c.id)}`}>
               Meu Site — {c.name}
             </ButtonLink>
           ))}
+        <ButtonLink to="/app/entrar-equipe" variant="secondary">
+          Entrar em uma equipe
+        </ButtonLink>
         <Button variant="secondary" busy={busy} onClick={exit}>
           {busy ? 'Saindo…' : 'Sair da conta'}
         </Button>

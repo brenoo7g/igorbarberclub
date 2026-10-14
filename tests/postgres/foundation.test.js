@@ -298,6 +298,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'portfolio_assets',
       'barber_services',
       'professional_users',
+      'professional_activity_events',
       'company_onboarding',
       'company_clients',
       'client_appointments',
@@ -305,6 +306,9 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'financial_payment_reversals',
       'financial_expenses',
       'financial_expense_events',
+      'company_invitations',
+      'company_access_events',
+      'company_invitation_limits',
     ].sort(),
   );
   await assertCatalog(db);
@@ -325,6 +329,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'idempotency_keys',
           'barber_services',
           'professional_users',
+          'professional_activity_events',
           'company_onboarding',
           'company_clients',
           'client_appointments',
@@ -332,6 +337,8 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'financial_payment_reversals',
           'financial_expenses',
           'financial_expense_events',
+          'company_invitations',
+          'company_access_events',
         ].includes(row.table_name),
     );
 });
@@ -643,7 +650,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -790,4 +797,41 @@ test('33 Gradefy 7F.2C.2 PostgreSQL reports, shared cash rules, CSV and large ag
   const { db } = await makeCase(t, 'reports');
   const { assertReports } = await import('../helpers/reports.js');
   await assertReports(t, db);
+});
+
+test('34 Gradefy 7F.3A PostgreSQL team invitations, audit, rollback and concurrent acceptance', async (t) => {
+  const { db, url } = await makeCase(t, 'team'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertTeamMigration, assertTeam } = await import('../helpers/team.js');
+  await assertTeamMigration(t, db);
+  await assertTeam(t, db, second);
+});
+
+test('35 Gradefy 7F.3A.1 PostgreSQL shared invite codes, rollback and mixed acceptance races', async (t) => {
+  const { db, url } = await makeCase(t, 'team_codes'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertTeamCodes } = await import('../helpers/team-code.js');
+  await assertTeamCodes(t, db, second);
+});
+
+test('36 Gradefy 7F.3B PostgreSQL policies, operational settings and concurrent reservations', async (t) => {
+  const { db, url } = await makeCase(t, 'operational_settings'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertSettingsMigration, assertOperationalSettings } =
+    await import('../helpers/operational-settings.js');
+  await assertSettingsMigration(t, db);
+  await assertOperationalSettings(t, db, second);
+});
+
+test('37 Gradefy 7F.3C PostgreSQL professional links, own agenda, audit and concurrency', async (t) => {
+  const { db, url } = await makeCase(t, 'professional_panel'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertProfessionalPanelMigration, assertProfessionalPanel } =
+    await import('../helpers/professional-panel.js');
+  await assertProfessionalPanelMigration(t, db);
+  await assertProfessionalPanel(t, db, second);
 });

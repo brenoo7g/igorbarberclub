@@ -22,16 +22,8 @@ import { BusinessNav } from './business-nav';
 import { PaymentPanel } from './finance-payment';
 import './dashboard.css';
 import './agenda.css';
-
-export const agendaDateLabel = (date: string) =>
-  new Intl.DateTimeFormat('pt-BR', {
-    weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(date + 'T12:00Z'));
-const monday = (date: string) => addDays(date, -((new Date(date + 'T12:00Z').getUTCDay() + 6) % 7));
+import { agendaDateLabel, monday } from './agenda-display';
+export { agendaDateLabel } from './agenda-display';
 export default function Agenda() {
   return <ManagementAccess>{(props) => <AgendaContent {...props} />}</ManagementAccess>;
 }

@@ -1,4 +1,4 @@
-import { SiteLink as Link } from '../site-context';
+import { SiteLink as Link, useSite } from '../site-context';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ArrowRight, CalendarDays, Clock3, LogOut, Scissors, UserRound } from 'lucide-react';
@@ -18,6 +18,7 @@ import {
 } from '../components/UI';
 
 export default function Account() {
+  const { site } = useSite();
   const { api, user, visitor, loading, logout, notify } = useApp();
   const identity = user || visitor;
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -94,8 +95,22 @@ export default function Account() {
         </div>
       </div>
     );
+  const local = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: site.company.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date())
+      .map((p) => [p.type, p.value]),
+  );
+  const localNow = `${local.year}-${local.month}-${local.day}T${local.hour}:${local.minute}`;
   const upcoming = appointments.filter(
-    (a) => a.status === 'confirmed' && new Date(`${a.date}T${a.time}:00-03:00`) > new Date(),
+    (a) => a.status === 'confirmed' && `${a.date}T${a.time}` > localNow,
   );
   const visible =
     tab === 'upcoming'

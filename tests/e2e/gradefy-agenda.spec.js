@@ -7,7 +7,9 @@ async function login(page, role = 'owner') {
   await page.getByLabel('E-mail', { exact: true }).fill('agenda-browser-' + role + '@example.com');
   await page.getByLabel('Senha', { exact: true }).fill('ClienteDemo2026!');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page).toHaveURL('/app/dashboard');
+  await expect(page).toHaveURL(
+    role === 'professional' ? '/app/minha-agenda?empresa=' + cid : '/app/dashboard',
+  );
 }
 const dayAfter = (date, n) =>
   new Date(Date.parse(date + 'T12:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -205,7 +207,7 @@ test('professional and anonymous users cannot manage agenda', async ({ page }) =
   await expect(page).toHaveURL('/app/login');
   await login(page, 'professional');
   await page.goto(calendar);
-  await expect(page.getByRole('heading', { name: 'Acesso à gestão' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Seu vínculo está pendente' })).toBeVisible();
   expect((await page.request.get('/api/admin/agenda', { headers })).status()).toBe(403);
   await expect(page.locator('.gf-agenda-row')).toHaveCount(0);
 });

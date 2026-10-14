@@ -332,7 +332,7 @@ export async function assertOnboardingMigration(t, db) {
   assert.equal(await db.get('SELECT version FROM schema_migrations WHERE version=9'), undefined);
   await assert.rejects(db.all('SELECT * FROM company_onboarding'));
   assert.deepEqual(await db.all('SELECT * FROM idempotency_keys ORDER BY 1'), before);
-  assert.deepEqual(await runMigrations(db), [9, 10, 11, 12, 13, 14]);
+  assert.deepEqual(await runMigrations(db), [9, 10, 11, 12, 13, 14, 15, 16, 17]);
   assert.deepEqual(await runMigrations(db), []);
   assert.equal(
     (await db.get('SELECT checksum FROM schema_migrations WHERE version=9')).checksum,

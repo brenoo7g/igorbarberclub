@@ -145,7 +145,7 @@ function DashboardContent({
             <CalendarDays size={19} />
             Minha agenda
           </button>
-          {businessLinks.slice(2, 7).map((p) => (
+          {businessLinks.slice(2, 8).map((p) => (
             <Link key={p.path} to={p.path + '?empresa=' + encodeURIComponent(companyId)}>
               <p.icon size={19} />
               {p.label}
@@ -559,7 +559,7 @@ function DashboardContent({
                   </span>
                   <ChevronRight size={17} />
                 </button>
-                {businessLinks.slice(2, 7).map((p) => (
+                {businessLinks.slice(2, 8).map((p) => (
                   <Link key={p.path} to={p.path + '?empresa=' + encodeURIComponent(companyId)}>
                     <p.icon />
                     <span>

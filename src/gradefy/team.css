@@ -1,0 +1,115 @@
+.gf-team .gf-card {
+  margin-bottom: 18px;
+}
+.gf-team .gf-card h2 {
+  font: 600 19px/1.4 var(--gf-font-heading);
+  margin-top: 0;
+}
+.gf-team h3 {
+  font: 600 16px/1.5 var(--gf-font-heading);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.gf-team p {
+  color: var(--gf-muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.gf-team-intro {
+  display: flex;
+  gap: 16px;
+}
+.gf-team-intro > svg {
+  color: var(--gf-accent);
+  flex-shrink: 0;
+}
+.gf-team-intro a {
+  color: var(--gf-accent);
+  text-decoration: underline;
+}
+.gf-team-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+}
+.gf-team-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.gf-team-tags span {
+  border: 1px solid #34405b;
+  border-radius: 18px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--gf-text);
+}
+.gf-invite-ready h2,
+.gf-invite-ready p {
+  overflow-wrap: anywhere;
+}
+.gf-invite-ready .gf-button {
+  margin: 10px 0;
+}
+.gf-entry-profiles {
+  display: grid;
+  gap: 16px;
+}
+.gf-entry-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 18px;
+  border: 1px solid #34405b;
+  border-radius: 18px;
+  color: var(--gf-text);
+  background: var(--gf-surface);
+  transition:
+    border-color 160ms,
+    background 160ms;
+}
+.gf-entry-profile > svg {
+  color: var(--gf-accent);
+  flex-shrink: 0;
+}
+.gf-entry-profile > div {
+  flex: 1;
+  min-width: 0;
+}
+.gf-entry-profile h2 {
+  font: 600 19px/1.4 var(--gf-font-heading);
+  margin: 0 0 8px;
+}
+.gf-entry-profile p {
+  color: var(--gf-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+.gf-entry-profile:hover {
+  border-color: var(--gf-primary);
+  background: #6c5ce711;
+}
+.gf-entry-profile:focus-visible {
+  outline: 2px solid var(--gf-accent);
+  outline-offset: 4px;
+}
+.gf-invitation-code {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: none;
+  border: 1px solid #34405b;
+  border-radius: 12px;
+  background: var(--gf-surface);
+  color: var(--gf-text);
+  padding: 12px;
+  font: 500 14px/1.7 var(--gf-font-body);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 768px) {
+  .gf-team-form {
+    grid-template-columns: 1fr;
+  }
+}

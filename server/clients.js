@@ -40,7 +40,12 @@ export async function findClient(tx, cid, id) {
 }
 // Called inside the existing booking transaction. Identity comes from a stable account/session
 // or an explicit company client. Never merge unrelated people by phone/name/email.
-export async function linkAppointmentClient(tx, cid, id, { clientId, userId, visitorId, contact }) {
+export async function linkAppointmentClient(
+  tx,
+  cid,
+  id,
+  { clientId = undefined, userId, visitorId, contact },
+) {
   requireCompanyId(cid);
   let client = clientId ? await findClient(tx, cid, clientId) : null;
   if (!client) {

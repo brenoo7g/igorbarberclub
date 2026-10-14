@@ -16,7 +16,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useApp } from '../context';
-import { addDays, ApiError, bookingWeek, errorMessage, formatDate, money, today } from '../lib';
+import { addDays, ApiError, bookingWeek, errorMessage, formatDate, money } from '../lib';
 import type { Appointment, Barber, Service, PublicSchedule, Visitor } from '../types';
 import { EmptyState, ErrorBox, Eyebrow, Spinner } from '../components/UI';
 import { AuthForm } from '../components/AuthForm';
@@ -24,6 +24,14 @@ import { Avatar } from '../components/Avatar';
 
 export default function Booking() {
   const { site } = useSite();
+  const timezone = site.company.timezone;
+  const today = () =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
   const location = site.settings.address || siteLocation(site);
   const [params] = useSearchParams();
   const reschedule = params.get('remarcar');
@@ -35,9 +43,9 @@ export default function Booking() {
   const weekParam = params.get('semana');
   const professionalParam = params.get('profissional');
   const [date, setDate] = useState(() =>
-    bookingWeek(weekParam) < today() ? today() : bookingWeek(weekParam),
+    bookingWeek(weekParam, today()) < today() ? today() : bookingWeek(weekParam, today()),
   );
-  const [week, setWeek] = useState(() => bookingWeek(weekParam));
+  const [week, setWeek] = useState(() => bookingWeek(weekParam, today()));
   const [schedule, setSchedule] = useState<PublicSchedule | null>(null);
   const [scheduleError, setScheduleError] = useState('');
   const [availabilityMessage, setAvailabilityMessage] = useState('');
@@ -121,11 +129,11 @@ export default function Booking() {
     };
   }, [reschedule, catalogRetry, professionalParam]);
   useEffect(() => {
-    const initial = bookingWeek(weekParam);
+    const initial = bookingWeek(weekParam, today());
     setDate(initial < today() ? today() : initial);
     setWeek(initial);
     setTime('');
-  }, [weekParam]);
+  }, [weekParam, timezone]);
   useEffect(() => {
     setSchedule(null);
     setScheduleError('');
@@ -228,6 +236,20 @@ export default function Booking() {
     }
   }
   if (loading || identityLoading) return <Spinner />;
+  if (!reschedule && !confirmed && site.settings.online_booking_enabled === false)
+    return (
+      <div className="container success-page">
+        <Eyebrow>AGENDAMENTOS ONLINE</Eyebrow>
+        <h1>Uma pausa na agenda online.</h1>
+        <p>
+          Os agendamentos online estão pausados. Entre em contato com o estabelecimento para
+          reservar seu atendimento.
+        </p>
+        <Link className="button secondary" to="/">
+          Voltar ao estabelecimento
+        </Link>
+      </div>
+    );
   if (confirmed)
     return (
       <div className="container success-page">
@@ -372,7 +394,12 @@ export default function Booking() {
                 <span>02</span>
                 <div>
                   <h2>Com quem e quando?</h2>
-                  <p>Horários de Brasília · Disponibilidade em tempo real.</p>
+                  <p>
+                    {timezone === 'America/Sao_Paulo'
+                      ? 'Horários de Brasília'
+                      : `Horários em ${timezone}`}
+                    {' · Disponibilidade em tempo real.'}
+                  </p>
                 </div>
               </div>
               <h3 className="field-title">Escolha o profissional</h3>

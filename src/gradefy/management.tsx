@@ -8,11 +8,14 @@ export type ManagementProps = {
   companyId: string;
   companies: Company[];
   choose: (id: string) => void;
+  refreshAccess?: () => void;
 };
 export function ManagementAccess({
   children,
+  area = 'management',
 }: {
   children: (props: ManagementProps) => ReactNode;
+  area?: 'management' | 'professional';
 }) {
   const { user, loading } = useApp();
   const { companies, business, error, retry } = useCompanies();
@@ -33,6 +36,23 @@ export function ManagementAccess({
     );
   if (!companies) return <Loading />;
   if (!companies.length)
+    if (area === 'professional')
+      return (
+        <div className="gf-ready">
+          <Card>
+            <h1>Sem acesso a estabelecimentos</h1>
+            <p>
+              Seu acesso pode ter sido revogado. Fale com o proprietário para receber um novo
+              convite.
+            </p>
+            <Button onClick={retry}>Verificar acesso</Button>
+            <ButtonLink to="/app/conta" variant="secondary">
+              Minha conta
+            </ButtonLink>
+          </Card>
+        </div>
+      );
+  if (!companies.length)
     return (
       <Navigate
         to={
@@ -43,7 +63,7 @@ export function ManagementAccess({
         replace
       />
     );
-  const allowed = companies.filter((c) => ['owner', 'manager'].includes(c.role));
+  const allowed = companies.filter((c) => ['owner', 'manager', 'professional'].includes(c.role));
   if (!allowed.length)
     return (
       <div className="gf-ready">
@@ -74,7 +94,16 @@ export function ManagementAccess({
         </Card>
       </div>
     );
-  return <div key={selected}>{children({ companyId: selected, companies: allowed, choose })}</div>;
+  const company = allowed.find((c) => c.id === selected)!;
+  if (company.role === 'professional' && area === 'management')
+    return <Navigate to={'/app/minha-agenda?empresa=' + encodeURIComponent(selected)} replace />;
+  if (company.role !== 'professional' && area === 'professional')
+    return <Navigate to={'/app/dashboard?empresa=' + encodeURIComponent(selected)} replace />;
+  return (
+    <div key={selected}>
+      {children({ companyId: selected, companies: allowed, choose, refreshAccess: retry })}
+    </div>
+  );
 }
 export function CompanySelector({
   companies,

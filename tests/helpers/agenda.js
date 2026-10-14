@@ -49,7 +49,7 @@ export async function assertAgendaMigration(t, db) {
     await db.all('SELECT * FROM idempotency_keys ORDER BY company_id,operation,key_hash'),
     keysBefore,
   );
-  assert.deepEqual(await runMigrations(db), [12, 13, 14]);
+  assert.deepEqual(await runMigrations(db), [12, 13, 14, 15, 16, 17]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(
     await db.all('SELECT id,date,status,total FROM appointments ORDER BY id'),

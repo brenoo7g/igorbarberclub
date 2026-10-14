@@ -1,6 +1,9 @@
 import { lockBarbers } from './scheduling-locks.js';
 import { requireCompanyId, publicCompanyPath } from './company-context.js';
 import { z } from 'zod';
+import { currentTime } from './entitlements.js';
+import { dateInTimezone } from './domain.js';
+import { readPolicies, intersectDay } from './operational-settings.js';
 import { addDays, clock, dateInBrazil, isFuture, weekday } from './domain.js';
 import {
   automaticDates,
@@ -94,12 +97,14 @@ export async function readSchedule(db, companyId, barberId) {
         end_time: clock(Number(process.env.CLOSE_HOUR || 19) * 60),
         breaks: [],
       }));
+  const company = await db.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+  const today = dateInTimezone(await currentTime(db), company.timezone);
   return {
     settings: settings || { agenda_mode: 'auto', max_days_ahead: 90, version: 0 },
     days,
     released_weeks: await db.all(
       'SELECT week_start,start_date,end_date FROM released_weeks WHERE company_id=? AND barber_id=? AND week_start>=? ORDER BY week_start',
-      [companyId, barberId, monday(dateInBrazil())],
+      [companyId, barberId, monday(today)],
     ),
   };
 }
@@ -125,19 +130,35 @@ export function installScheduleRoutes(
       async (tx) => {
         await exists(tx, req.params.id);
         const schedule = await readSchedule(tx, companyId, req.params.id);
-        const today = dateInBrazil();
+        const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+        const today = dateInTimezone(await currentTime(tx), company.timezone);
+        const policies = await readPolicies(tx, companyId);
         const dates =
           schedule.settings.agenda_mode === 'auto'
             ? automaticDates(schedule.days, today, schedule.settings.max_days_ahead)
             : Array.from({ length: 731 }, (_, i) => addDays(today, i)).filter(
                 (date) => dateAccess(schedule, date, today).allowed,
               );
+        const visibleDates = dates.filter(
+          (date) =>
+            (policies.maximum_booking_days === null ||
+              date <= addDays(today, policies.maximum_booking_days)) &&
+            intersectDay(
+              schedule.days.find((d) => d.weekday === weekday(date)),
+              policies,
+              date,
+            )?.active,
+        );
         return {
           mode: schedule.settings.agenda_mode,
           active_days: schedule.days.filter((d) => d.active).map((d) => d.weekday),
-          dates,
+          dates: visibleDates,
           max_date:
-            schedule.settings.agenda_mode === 'auto' ? dates.at(-1) || today : addDays(today, 730),
+            policies.maximum_booking_days !== null
+              ? addDays(today, policies.maximum_booking_days)
+              : schedule.settings.agenda_mode === 'auto'
+                ? visibleDates.at(-1) || today
+                : addDays(today, 730),
         };
       },
       { readOnly: true },
@@ -150,7 +171,11 @@ export function installScheduleRoutes(
         await authorize(tx, req, false);
         await exists(tx, req.params.id, true);
         const schedule = await readSchedule(tx, companyId, req.params.id);
-        return { ...schedule, next_week: nextWeek(schedule, dateInBrazil()) };
+        const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+        return {
+          ...schedule,
+          next_week: nextWeek(schedule, dateInTimezone(await currentTime(tx), company.timezone)),
+        };
       },
       { readOnly: true },
     );
@@ -167,15 +192,18 @@ export function installScheduleRoutes(
       await lockSchedule(tx, companyId, req.params.id);
       await exists(tx, req.params.id, true);
       const current = await readSchedule(tx, companyId, req.params.id);
+      const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+      const now = await currentTime(tx),
+        today = dateInTimezone(now, company.timezone);
       if (current.settings.version !== data.version)
         fail(409, 'A agenda foi alterada em outra aba. Atualize as configurações antes de salvar.');
       const appointments = await tx.all(
         "SELECT date,start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND status='confirmed' AND date>=? ORDER BY date,start_minute",
-        [companyId, req.params.id, dateInBrazil()],
+        [companyId, req.params.id, today],
       );
       const conflict = appointments.find(
         (a) =>
-          isFuture(a.date, a.end_minute) &&
+          isFuture(a.date, a.end_minute, now, company.timezone) &&
           !fitsWorkingDay(
             days.find((d) => d.weekday === weekday(a.date)),
             a.start_minute,
@@ -252,7 +280,8 @@ export function installScheduleRoutes(
         fail(409, 'Selecione e salve o modo manual antes de liberar uma semana.');
       const existing = schedule.released_weeks.find((w) => w.week_start === data.week_start);
       if (existing) return existing; // Retrying a completed request must not release the following week.
-      const next = nextWeek(schedule, dateInBrazil());
+      const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+      const next = nextWeek(schedule, dateInTimezone(await currentTime(tx), company.timezone));
       if (
         schedule.settings.version !== data.version ||
         !next ||
