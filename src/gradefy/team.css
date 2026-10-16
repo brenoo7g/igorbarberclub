@@ -33,6 +33,9 @@
   gap: 16px;
   align-items: end;
 }
+.gf-team-form > .gf-hint {
+  grid-column: 1 / -1;
+}
 .gf-team-tags {
   display: flex;
   flex-wrap: wrap;

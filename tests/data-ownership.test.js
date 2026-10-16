@@ -94,7 +94,7 @@ test('Gradefy 2A SQLite: empty installation, seed and bootstrap keep every opera
   await seed(db);
   assert.deepEqual(
     (await db.all('SELECT version FROM schema_migrations ORDER BY version')).map((r) => r.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
   );
   for (const table of ownedTables)
     assert.equal(

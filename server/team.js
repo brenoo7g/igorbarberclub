@@ -7,6 +7,10 @@ import { emailConfigured, sendTransactionalEmail } from './transactional-email.j
 import { invitationCode, invitationToken } from './invitation-code.js';
 import { setProfessionalLink } from './professional-links.js';
 import { agendaCompanyState } from './agenda.js';
+import {
+  validateInvitationProfessional,
+  acceptInvitationProfessional,
+} from './invitation-professionals.js';
 
 export const INVITATION_DAYS = 7;
 const digest = (token) => createHash('sha256').update(token).digest('hex');
@@ -31,8 +35,20 @@ const inviteSchema = z
       .max(200)
       .transform((s) => s.toLowerCase()),
     role,
+    professional: z
+      .discriminatedUnion('mode', [
+        z.object({ mode: z.literal('new') }).strict(),
+        z
+          .object({ mode: z.literal('existing'), professionalId: z.string().min(1).max(200) })
+          .strict(),
+      ])
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) => !data.professional || data.role === 'professional',
+    'Somente convites de profissional podem criar ou vincular um cadastro.',
+  );
 const confirmation = z.object({ confirm: z.literal(true) }).strict();
 const changeSchema = z
   .object({
@@ -77,6 +93,9 @@ const publicInvite = (row, now) => ({
   createdAt: row.created_at,
   expiresAt: row.expires_at,
   delivery: row.delivery,
+  ...(row.professional_mode
+    ? { professional: { mode: row.professional_mode, professionalId: row.professional_id } }
+    : {}),
 });
 async function audit(
   tx,
@@ -131,6 +150,7 @@ function linkFor(token) {
   return url.href;
 }
 async function issue(tx, cid, actor, data, previous) {
+  await validateInvitationProfessional(tx, cid, data.professional, data.email);
   const now = await currentTime(tx),
     token = randomBytes(32).toString('hex'),
     expiresAt = new Date(now.getTime() + INVITATION_DAYS * 86400000).toISOString(),
@@ -188,6 +208,16 @@ async function issue(tx, cid, actor, data, previous) {
     invitation: id,
     nextRole: data.role,
   });
+  if (!previous && data.professional)
+    await tx.run(
+      'INSERT INTO company_invitation_professionals(company_id,invitation_id,mode,barber_id) VALUES(?,?,?,?)',
+      [
+        cid,
+        id,
+        data.professional.mode,
+        data.professional.mode === 'existing' ? data.professional.professionalId : null,
+      ],
+    );
   return {
     invitation: publicInvite(
       await tx.get('SELECT * FROM company_invitations WHERE company_id=? AND id=?', [cid, id]),
@@ -206,6 +236,19 @@ async function candidate(tx, token) {
   if (!row || row.expires_at <= (await currentTime(tx)).toISOString()) unavailable();
   return row;
 }
+async function acceptanceCandidate(tx, token, userId) {
+  try {
+    return await candidate(tx, token);
+  } catch (error) {
+    if (error.code !== 'INVITATION_UNAVAILABLE') throw error;
+    const previous = await tx.get(
+      "SELECT i.*,c.name AS company_name FROM company_invitations i JOIN company_invitation_professionals p ON p.company_id=i.company_id AND p.invitation_id=i.id JOIN companies c ON c.id=i.company_id WHERE p.accepted_token_hash=? AND i.status='accepted' AND i.accepted_by=? AND c.status='active'",
+      [digest(token), userId],
+    );
+    if (!previous) throw error;
+    return previous;
+  }
+}
 export function installTeamRoutes(
   app,
   db,
@@ -222,7 +265,9 @@ export function installTeamRoutes(
   };
   app.post('/api/team/invitations/inspect', limiter, limited, async (req, res) => {
     const { token } = tokenSchema.parse(req.body);
-    const row = await candidate(db, token);
+    const row = req.user
+      ? await acceptanceCandidate(db, token, req.user.id)
+      : await candidate(db, token);
     res.json({
       companyName: row.company_name,
       role: row.role,
@@ -235,12 +280,12 @@ export function installTeamRoutes(
   app.post('/api/team/invitations/accept', limiter, authenticated, limited, async (req, res) => {
     const { token } = tokenSchema.parse(req.body);
     // Discover the lock scope; all authorization and state are checked again after locking.
-    const found = await candidate(db, token);
+    const found = await acceptanceCandidate(db, token, req.user.id);
     const result = await db.transaction(async (tx) => {
       await lockTeam(tx, found.company_id);
-      const row = await candidate(tx, token);
+      const row = await acceptanceCandidate(tx, token, req.user.id);
       const user = await tx.get(
-        `SELECT id,email,session_version FROM users WHERE id=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
+        `SELECT id,name,email,session_version FROM users WHERE id=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
         [req.user.id],
       );
       if (!user || user.session_version !== req.sessionVersion)
@@ -255,6 +300,24 @@ export function installTeamRoutes(
         'SELECT role,status FROM company_members WHERE company_id=? AND user_id=?',
         [row.company_id, user.id],
       );
+      if (row.status === 'accepted') {
+        const link = await tx.get(
+          'SELECT p.barber_id FROM company_invitation_professionals p JOIN professional_users u ON u.company_id=p.company_id AND u.barber_id=p.barber_id WHERE p.company_id=? AND p.invitation_id=? AND u.user_id=?',
+          [row.company_id, row.id, user.id],
+        );
+        if (!member || member.status !== 'active' || !link)
+          domainError(
+            409,
+            'INVITATION_ACCESS_CHANGED',
+            'O acesso ou vínculo foi alterado. Fale com o proprietário.',
+          );
+        return {
+          companyId: row.company_id,
+          companyName: row.company_name,
+          role: row.role,
+          professionalId: link.barber_id,
+        };
+      }
       if (member && (member.status === 'active' || member.role === 'owner'))
         domainError(409, 'MEMBER_ALREADY_EXISTS', 'Esta conta já possui acesso à empresa.');
       const now = (await currentTime(tx)).toISOString();
@@ -262,6 +325,7 @@ export function installTeamRoutes(
         "INSERT INTO company_members(company_id,user_id,role,status,created_at) VALUES(?,?,?,'active',?) ON CONFLICT(company_id,user_id) DO UPDATE SET role=excluded.role,status='active'",
         [row.company_id, user.id, row.role, now],
       );
+      const professionalId = await acceptInvitationProfessional(tx, row, user, digest(token));
       await tx.run(
         "UPDATE company_invitations SET status='accepted',token_hash=NULL,accepted_by=?,accepted_at=?,updated_at=? WHERE company_id=? AND id=?",
         [user.id, now, now, row.company_id, row.id],
@@ -271,7 +335,12 @@ export function installTeamRoutes(
         invitation: row.id,
         nextRole: row.role,
       });
-      return { companyId: row.company_id, companyName: row.company_name, role: row.role };
+      return {
+        companyId: row.company_id,
+        companyName: row.company_name,
+        role: row.role,
+        ...(professionalId ? { professionalId } : {}),
+      };
     });
     res.json(result);
   });
@@ -313,7 +382,7 @@ export function installTeamRoutes(
           );
           const invitations = (
             await tx.all(
-              'SELECT * FROM company_invitations WHERE company_id=? ORDER BY created_at DESC,id',
+              'SELECT i.*,p.mode AS professional_mode,p.barber_id AS professional_id FROM company_invitations i LEFT JOIN company_invitation_professionals p ON p.company_id=i.company_id AND p.invitation_id=i.id WHERE i.company_id=? ORDER BY i.created_at DESC,i.id',
               [cid],
             )
           ).map((row) => publicInvite(row, now));

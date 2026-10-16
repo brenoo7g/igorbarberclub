@@ -54,7 +54,7 @@ export default function GradefyShell() {
   }, []);
   return (
     <div className={'gf-app' + (management ? ' gf-management' : '')} style={variables}>
-      <AppProvider api={gradefyApi} loadConfig={false}>
+      <AppProvider api={gradefyApi} loadConfig={false} sessionScope="gradefy">
         <a className="gf-skip" href="#gradefy-main">
           Ir para o conteúdo
         </a>

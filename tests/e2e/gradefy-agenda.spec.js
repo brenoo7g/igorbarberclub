@@ -198,6 +198,7 @@ test('completion updates dashboard without payments; session and load failures n
   await page.route('**/api/admin/agenda?**', (route) =>
     route.fulfill({ status: 401, json: { error: 'Sessão expirada.' } }),
   );
+  await page.context().clearCookies();
   await page.getByRole('button', { name: 'Atualizar agenda', exact: true }).click();
   await expect(page).toHaveURL('/app/login');
 });

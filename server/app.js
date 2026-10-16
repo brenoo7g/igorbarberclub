@@ -7,6 +7,7 @@ import { installClientRoutes, findClient, linkAppointmentClient } from './client
 import { installFinanceRoutes, appointmentFinance } from './finance.js';
 import { installReportRoutes } from './reports.js';
 import { installTeamRoutes } from './team.js';
+import { jwtSecret } from './jwt-secret.js';
 import {
   installProfessionalPanel,
   professionalAccess,
@@ -140,12 +141,13 @@ const fail = (status, message) => {
 export function createApp(
   db,
   {
-    secret = process.env.JWT_SECRET || randomBytes(48).toString('hex'),
+    secret = process.env.JWT_SECRET,
     test = false,
     siteStorage = createSiteStorage(),
     serveStatic = true,
     testGuestAccess = false,
     invitationEmail,
+    postalLookup,
   } = {},
 ) {
   if (
@@ -157,6 +159,7 @@ export function createApp(
       db.ephemeral !== true)
   )
     throw new Error('Acesso sem verificação exige demonstração com banco temporário isolado.');
+  secret = jwtSecret(secret, { test, ephemeral: db.ephemeral === true });
   const app = express();
   const allowedOrigins = new Set([new URL(process.env.APP_URL || 'http://localhost:5173').origin]);
   if (process.env.VERCEL && process.env.VERCEL_URL)
@@ -270,7 +273,7 @@ export function createApp(
   );
   app.get('/api/plans', authenticated, async (_req, res) => res.json(await getPlanCatalog(db)));
   installOnboardingCatalog(app, db, authenticated);
-  installCompanyOnboarding(app, db, authenticated);
+  installCompanyOnboarding(app, db, authenticated, postalLookup);
   installOperationalOnboarding(app, db, authenticated);
   installCompanySite(app, db, { authenticated, storage: siteStorage });
   installDashboard(app, db, authenticated);

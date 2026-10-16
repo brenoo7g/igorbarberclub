@@ -4,6 +4,7 @@ import { lockResource } from './scheduling-locks.js';
 import { currentTime, domainError } from './entitlements.js';
 import { addDays, dateInTimezone, localInstant, weekday } from './domain.js';
 import { settingsSchema } from './schedule.js';
+import { invalidateStructuredAddress } from './postal-address.js';
 
 export const lockOperational = (tx, cid, shared = false) =>
   lockResource(tx, cid, 'operational-settings', 'policies', shared);
@@ -198,6 +199,7 @@ export function installOperationalSettings(router, db, cid) {
           'O fuso não pode mudar com reservas existentes: suas datas e horários locais precisam ser preservados.',
         );
       const now = (await currentTime(tx)).toISOString();
+      if (data.address !== existing.address) await invalidateStructuredAddress(tx, cid);
       await tx.run('UPDATE companies SET name=?,timezone=?,updated_at=? WHERE id=?', [
         data.name,
         data.timezone,

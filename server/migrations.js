@@ -82,6 +82,11 @@ export const migrations = Object.freeze([
     name: 'gradefy-professional-panel',
     file: '017-gradefy-professional-panel.sql',
   }),
+  Object.freeze({
+    version: 18,
+    name: 'gradefy-session-address-invitations',
+    file: '018-gradefy-session-address-invitations.sql',
+  }),
 ]);
 
 const foundationTables = [

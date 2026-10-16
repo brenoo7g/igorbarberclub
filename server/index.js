@@ -3,6 +3,7 @@ import { createDatabase } from './database.js';
 import { createApp } from './app.js';
 import { seed, demoMode } from './seed.js';
 import { startCompanyNotifications } from './notifications.js';
+import { jwtSecret } from './jwt-secret.js';
 
 if (process.env.NODE_ENV === 'production') {
   if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)
@@ -30,11 +31,13 @@ if (testGuestAccess) {
     'Modo de teste: banco temporário separado; os dados são descartados ao encerrar. Defina APP_URL para o endereço usado no navegador.',
   );
 }
+// Validate before opening/seeding any persistent database or starting workers.
+const secret = jwtSecret(process.env.JWT_SECRET, { ephemeral: testGuestAccess });
 const db = testGuestAccess ? await createDatabase('', ':memory:') : await createDatabase();
 await seed(db);
 const stopNotifications = startCompanyNotifications(db);
 const port = Number(process.env.PORT || 3001);
-const app = createApp(db, { testGuestAccess });
+const app = createApp(db, { testGuestAccess, secret });
 const recoveryTimer = setInterval(() => void app.locals.processPasswordEmails(), 15000);
 recoveryTimer.unref();
 const server = app.listen(port, () =>

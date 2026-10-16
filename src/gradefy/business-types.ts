@@ -17,6 +17,11 @@ export interface PendingBusiness {
     city: string;
     region: string;
     address: string;
+    postal_code?: string | null;
+    street?: string | null;
+    neighborhood?: string | null;
+    address_number?: string | null;
+    address_complement?: string | null;
   };
 }
 

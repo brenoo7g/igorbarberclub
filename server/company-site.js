@@ -9,6 +9,7 @@ import { cleanupAssets, readAsset, portfolioImage } from './site-assets.js';
 import { publicAsset, getPublicSite } from './public-site.js';
 import { publicProfessionals } from './professionals.js';
 import { lockPublication, validatePublication } from './site-publication.js';
+import { invalidateStructuredAddress } from './postal-address.js';
 
 const version = z.number().int().nonnegative();
 const optionalText = (max) => z.string().trim().max(max);
@@ -247,6 +248,12 @@ export function installCompanySite(app, db, { authenticated, storage }) {
     const saved = await transaction(req, async (tx, row) => {
       assertVersion(row, data.version);
       const cid = row.company_id;
+      if (
+        data.address !== (row.address || '') ||
+        data.city !== (row.city || '') ||
+        data.region !== (row.region || '')
+      )
+        await invalidateStructuredAddress(tx, cid);
       await tx.run('UPDATE companies SET name=?,updated_at=? WHERE id=?', [
         data.name,
         new Date().toISOString(),

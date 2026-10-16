@@ -141,6 +141,7 @@ test('manager auto selection, connection recovery, session expiry and configured
   await page.route('**/api/dashboard?**', (route) =>
     route.fulfill({ status: 401, json: { error: 'Entre novamente.' } }),
   );
+  await page.context().clearCookies();
   await page.getByRole('button', { name: 'Atualizar painel', exact: true }).click();
   await expect(page).toHaveURL('/app/login');
 });

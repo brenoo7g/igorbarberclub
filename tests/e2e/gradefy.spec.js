@@ -119,10 +119,13 @@ test('Gradefy protects the account route and handles an expired session without 
   await page.route('**/api/companies', (route) =>
     route.fulfill({ status: 401, json: { error: 'Entre novamente.' } }),
   );
+  await page.route('**/api/auth/me?scope=gradefy', (route) =>
+    route.fulfill({ status: 401, json: { error: 'Sessão expirada.' } }),
+  );
   await page.reload();
   await expect(page).toHaveURL('/app/login');
   await expect(page.getByRole('status').filter({ hasText: 'Sua sessão expirou.' })).toBeVisible();
-  // The mocked 401 cleared client state; expire the real test cookie before a full navigation.
+  await page.unroute('**/api/auth/me?scope=gradefy');
   await page.context().clearCookies();
   await page.goto('/app/inexistente');
   await expect(page.getByRole('heading', { name: 'Vamos voltar ao início?' })).toBeVisible();

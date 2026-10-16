@@ -307,6 +307,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'financial_expenses',
       'financial_expense_events',
       'company_invitations',
+      'company_invitation_professionals',
       'company_access_events',
       'company_invitation_limits',
     ].sort(),
@@ -338,6 +339,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'financial_expenses',
           'financial_expense_events',
           'company_invitations',
+          'company_invitation_professionals',
           'company_access_events',
         ].includes(row.table_name),
     );
@@ -650,7 +652,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -834,4 +836,14 @@ test('37 Gradefy 7F.3C PostgreSQL professional links, own agenda, audit and conc
     await import('../helpers/professional-panel.js');
   await assertProfessionalPanelMigration(t, db);
   await assertProfessionalPanel(t, db, second);
+});
+
+test('38 Gradefy 7F.3C.1 PostgreSQL structured address, professional invitations and cross-connection races', async (t) => {
+  const { db, url } = await makeCase(t, 'session_address_invites'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertSessionAddressMigration, assertSessionAddressInvitations } =
+    await import('../helpers/session-address-invitations.js');
+  await assertSessionAddressMigration(t, db);
+  await assertSessionAddressInvitations(t, db, second);
 });

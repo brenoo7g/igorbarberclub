@@ -6,6 +6,13 @@ import { getOnboardingCatalog } from './onboarding-catalog.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { lockResource } from './scheduling-locks.js';
 import { companySlugSchema } from './company-slugs.js';
+import {
+  structuredAddress,
+  validateAddress,
+  formatAddress,
+  postalCode,
+  lookupPostalCode,
+} from './postal-address.js';
 
 const phone = z
   .string()
@@ -65,11 +72,13 @@ const fields = {
 export const companyOnboardingSchema = z
   .object({
     ...fields,
+    ...structuredAddress,
     planCode: z.enum(['individual', 'team']),
     nicheCode: z.string().min(1).max(80),
     templateCode: z.string().min(1).max(80),
   })
-  .strict();
+  .strict()
+  .superRefine(validateAddress);
 
 // Stable identity for this initial onboarding, independent of slug or request key.
 // This lets the existing company-scoped idempotency record reference the newly created company.
@@ -78,7 +87,7 @@ const initialCompanyId = (userId) =>
 
 export async function getPendingBusiness(db, userId) {
   const row = await db.get(
-    "SELECT c.id,c.name,c.slug,c.niche_id,c.template_id,o.plan_id,o.current_step,o.completed_at,o.subscription_id,o.status AS onboarding_status,s.description,s.phone,s.whatsapp,s.instagram_url,s.city,s.region,s.address,p.name AS plan_name,n.name AS niche_name,t.name AS template_name FROM company_onboarding o JOIN companies c ON c.id=o.company_id JOIN company_members m ON m.company_id=c.id JOIN company_settings s ON s.company_id=c.id JOIN plans p ON p.id=o.plan_id JOIN niches n ON n.id=c.niche_id JOIN templates t ON t.id=c.template_id WHERE o.created_by=? AND m.user_id=? AND m.role='owner' AND m.status='active' AND c.site_published=0 AND ((o.status='pending' AND c.status='suspended') OR (o.status='completed' AND c.status='active'))",
+    "SELECT c.id,c.name,c.slug,c.niche_id,c.template_id,o.plan_id,o.current_step,o.completed_at,o.subscription_id,o.status AS onboarding_status,s.description,s.phone,s.whatsapp,s.instagram_url,s.city,s.region,s.address,s.postal_code,s.street,s.neighborhood,s.address_number,s.address_complement,p.name AS plan_name,n.name AS niche_name,t.name AS template_name FROM company_onboarding o JOIN companies c ON c.id=o.company_id JOIN company_members m ON m.company_id=c.id JOIN company_settings s ON s.company_id=c.id JOIN plans p ON p.id=o.plan_id JOIN niches n ON n.id=c.niche_id JOIN templates t ON t.id=c.template_id WHERE o.created_by=? AND m.user_id=? AND m.role='owner' AND m.status='active' AND c.site_published=0 AND ((o.status='pending' AND c.status='suspended') OR (o.status='completed' AND c.status='active'))",
     [userId, userId],
   );
   if (!row) return null;
@@ -106,6 +115,11 @@ export async function getPendingBusiness(db, userId) {
       city: row.city,
       region: row.region,
       address: row.address,
+      postal_code: row.postal_code,
+      street: row.street,
+      neighborhood: row.neighborhood,
+      address_number: row.address_number,
+      address_complement: row.address_complement,
     },
   };
 }
@@ -178,8 +192,19 @@ export async function createOnboardingBusiness(db, userId, input, key = null) {
             payload.instagram,
             payload.city,
             payload.region,
-            payload.address,
+            formatAddress(payload),
             now,
+          ],
+        );
+        await tx.run(
+          'UPDATE company_settings SET postal_code=?,street=?,neighborhood=?,address_number=?,address_complement=? WHERE company_id=?',
+          [
+            payload.postal_code || null,
+            payload.street || null,
+            payload.neighborhood || null,
+            payload.address_number || null,
+            payload.address_complement || null,
+            companyId,
           ],
         );
         await tx.run(
@@ -199,7 +224,10 @@ export async function createOnboardingBusiness(db, userId, input, key = null) {
     });
 }
 
-export function installCompanyOnboarding(app, db, authenticated) {
+export function installCompanyOnboarding(app, db, authenticated, lookup = lookupPostalCode) {
+  app.get('/api/address/cep/:cep', authenticated, async (req, res) =>
+    res.json(await lookup(postalCode.parse(req.params.cep))),
+  );
   app.get('/api/onboarding/business', authenticated, async (req, res) =>
     res.json({ company: await getPendingBusiness(db, req.user.id) }),
   );

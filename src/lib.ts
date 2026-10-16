@@ -12,7 +12,14 @@ export const newIdempotencyKey = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
-export async function api<T>(path: string, options: RequestInit = {}, base = '/api'): Promise<T> {
+export const requestSessionCheck = (scope: string) =>
+  window.dispatchEvent(new CustomEvent('session-check', { detail: { scope } }));
+export async function api<T>(
+  path: string,
+  options: RequestInit = {},
+  base = '/api',
+  sessionScope = 'public:' + base,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${base}${path}`, {
@@ -38,8 +45,8 @@ export async function api<T>(path: string, options: RequestInit = {}, base = '/a
     throw new ApiError(unavailable, response.status);
   }
   if (!response.ok) {
-    if (response.status === 401 && path !== '/auth/login' && path !== '/auth/register')
-      window.dispatchEvent(new Event('session-expired'));
+    if (response.status === 401 && !/^\/auth\/(?:me|login|register|logout)(?:[?]|$)/.test(path))
+      requestSessionCheck(sessionScope);
     const message =
       data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error

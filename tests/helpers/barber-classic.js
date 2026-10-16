@@ -101,7 +101,7 @@ export async function assertBarberClassic(t, db) {
       for (const [table, rows] of Object.entries(before))
         assert.deepEqual(await db.all(`SELECT * FROM ${table} ORDER BY 1`), rows);
       await assert.rejects(db.all('SELECT logo_url FROM company_settings'));
-      assert.deepEqual(await runMigrations(db), [8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+      assert.deepEqual(await runMigrations(db), [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
       for (const row of before.companies) row.site_published = 1;
       for (const row of before.barbers) row.photo_url = null;
       for (const row of before.portfolio) row.sort_order = 0;

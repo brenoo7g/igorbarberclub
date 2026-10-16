@@ -41,6 +41,30 @@ const details = z
   .strict();
 const creation = details.extend({ active: z.boolean().default(true) });
 
+// Shared by manual creation and invitation acceptance, inside the caller's transaction.
+export async function insertProfessional(
+  tx,
+  companyId,
+  { id, name, specialty = '', active = false },
+) {
+  await tx.run('INSERT INTO barbers(company_id,id,name,specialty,active) VALUES(?,?,?,?,?)', [
+    companyId,
+    id,
+    name,
+    specialty,
+    active ? 1 : 0,
+  ]);
+  await tx.run(
+    "INSERT INTO barber_settings(company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES(?,?,'manual',90,0)",
+    [companyId, id],
+  );
+  for (let weekday = 0; weekday < 7; weekday++)
+    await tx.run(
+      "INSERT INTO barber_working_hours(company_id,barber_id,weekday,active,start_time,end_time) VALUES(?,?,?,0,'09:00','19:00')",
+      [companyId, id, weekday],
+    );
+}
+
 export async function performsServices(db, companyId, barberId, ids) {
   requireCompanyId(companyId);
   if (!ids.length) return false;
@@ -217,13 +241,7 @@ export function installProfessionalRoutes(
         await lockEntitlements(tx, companyId);
         await requireCapacity(tx, companyId, data.active ? 1 : 0);
         await lockCatalog(tx, companyId, true);
-        await tx.run('INSERT INTO barbers(company_id,id,name,specialty,active) VALUES(?,?,?,?,?)', [
-          companyId,
-          id,
-          data.name,
-          data.specialty,
-          data.active ? 1 : 0,
-        ]);
+        await insertProfessional(tx, companyId, { id, ...data });
         await replaceRelations(tx, companyId, id, data, req.user.id);
         if (data.photo_url !== undefined)
           await tx.run('UPDATE barbers SET photo_url=? WHERE company_id=? AND id=?', [
@@ -231,16 +249,6 @@ export function installProfessionalRoutes(
             companyId,
             id,
           ]);
-        // Explicitly closed, even though legacy professionals retain their historical defaults.
-        await tx.run(
-          "INSERT INTO barber_settings(company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES(?,?,'manual',90,0)",
-          [companyId, id],
-        );
-        for (let weekday = 0; weekday < 7; weekday++)
-          await tx.run(
-            "INSERT INTO barber_working_hours(company_id,barber_id,weekday,active,start_time,end_time) VALUES(?,?,?,0,'09:00','19:00')",
-            [companyId, id, weekday],
-          );
         return professional(tx, companyId, id);
       });
     });

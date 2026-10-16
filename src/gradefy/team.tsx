@@ -72,6 +72,8 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
     [notice, setNotice] = useState(''),
     [email, setEmail] = useState(''),
     [role, setRole] = useState<Role>('manager'),
+    [professionalMode, setProfessionalMode] = useState('new'),
+    [invitedProfessional, setInvitedProfessional] = useState(''),
     [mutating, setMutating] = useState(false),
     [shared, setShared] = useState<SharedInvite | null>(null),
     [linkTarget, setLinkTarget] = useState(''),
@@ -129,7 +131,18 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
   }
   function submit(e: FormEvent) {
     e.preventDefault();
-    void mutate('/admin/team/invitations', { email, role });
+    void mutate('/admin/team/invitations', {
+      email,
+      role,
+      ...(role === 'professional'
+        ? {
+            professional:
+              professionalMode === 'new'
+                ? { mode: 'new' }
+                : { mode: 'existing', professionalId: invitedProfessional },
+          }
+        : {}),
+    });
   }
   function confirm() {
     if (!action) return;
@@ -191,8 +204,8 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
               <div>
                 <h2>Acesso ao painel e atendimento são diferentes</h2>
                 <p>
-                  Convidar uma pessoa concede acesso à empresa conforme seu papel. Isso não cria um
-                  profissional na agenda.
+                  Gestores recebem acesso à gestão. No convite de profissional, escolha criar um
+                  cadastro no aceite ou vincular um cadastro existente.
                 </p>
                 <Link to={'/app/profissionais?empresa=' + encodeURIComponent(companyId)}>
                   Gerenciar profissionais de atendimento
@@ -228,6 +241,53 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
                     <option value="professional">Profissional</option>
                   </select>
                 </label>
+                {role === 'professional' && (
+                  <>
+                    <label className="gf-field">
+                      Cadastro na agenda
+                      <select
+                        value={professionalMode}
+                        disabled={mutating}
+                        onChange={(e) => setProfessionalMode(e.target.value)}
+                      >
+                        <option value="new">Criar novo profissional no aceite</option>
+                        <option value="existing">Vincular profissional existente</option>
+                      </select>
+                    </label>
+                    {professionalMode === 'existing' && (
+                      <label className="gf-field">
+                        Profissional do convite
+                        <select
+                          value={invitedProfessional}
+                          required
+                          disabled={mutating}
+                          onChange={(e) => setInvitedProfessional(e.target.value)}
+                        >
+                          <option value="">Selecione o cadastro</option>
+                          {data.professionals
+                            .filter(
+                              (p) =>
+                                !p.user_id ||
+                                data.members.some(
+                                  (m) =>
+                                    m.id === p.user_id && m.email === email.trim().toLowerCase(),
+                                ),
+                            )
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                                {p.active ? '' : ' (inativo)'}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    )}
+                    <p className="gf-hint">
+                      O cadastro novo fica inativo, sem serviços e com a agenda fechada. Configure e
+                      ative em Profissionais; os limites do plano continuam valendo.
+                    </p>
+                  </>
+                )}
                 <Button type="submit" busy={mutating}>
                   <MailPlus size={18} /> Criar convite
                 </Button>
@@ -514,7 +574,11 @@ export function AcceptInvitation() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(true),
     [mutating, setMutating] = useState(false),
-    [accepted, setAccepted] = useState<{ companyId: string; role: Role } | null>(null),
+    [accepted, setAccepted] = useState<{
+      companyId: string;
+      role: Role;
+      professionalId?: string;
+    } | null>(null),
     [revision, setRevision] = useState(0);
   const working = useRef(false);
   useEffect(() => {
@@ -545,10 +609,13 @@ export function AcceptInvitation() {
     setMutating(true);
     setError('');
     try {
-      const result = await api<{ companyId: string; role: Role }>('/team/invitations/accept', {
-        method: 'POST',
-        body: JSON.stringify({ token }),
-      });
+      const result = await api<{ companyId: string; role: Role; professionalId?: string }>(
+        '/team/invitations/accept',
+        {
+          method: 'POST',
+          body: JSON.stringify({ token }),
+        },
+      );
       setAccepted(result);
       navigate('/app/convite', { replace: true }); // Remove the consumed token from the current URL.
     } catch (e) {
@@ -585,7 +652,11 @@ export function AcceptInvitation() {
         {accepted ? (
           <>
             <Feedback success>Convite aceito com sucesso.</Feedback>
-            <p>Seu acesso foi vinculado à empresa. Nenhum profissional foi criado na agenda.</p>
+            <p>
+              {accepted.professionalId
+                ? 'Sua conta foi vinculada ao cadastro profissional. O proprietário pode conferir serviços, horários e ativação antes de liberar reservas.'
+                : 'Seu acesso foi vinculado à empresa. Nenhum profissional foi criado na agenda.'}
+            </p>
             <ButtonLink
               to={
                 accepted.role === 'manager'

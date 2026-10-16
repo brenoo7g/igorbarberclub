@@ -20,6 +20,15 @@ export const igorPresentation = {
 };
 export function expectBarberClassicMetadata(before) {
   for (const row of before.company_settings || [])
+    for (const key of [
+      'postal_code',
+      'street',
+      'neighborhood',
+      'address_number',
+      'address_complement',
+    ])
+      if (!(key in row)) row[key] = null;
+  for (const row of before.company_settings || [])
     if (!('operational_version' in row))
       Object.assign(row, {
         operational_version: 0,

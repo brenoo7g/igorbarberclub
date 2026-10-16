@@ -9,6 +9,7 @@ import { Progress } from './plans';
 import { readPendingSelection } from './pending-plan';
 import type { Plan } from './pending-plan';
 import type { PendingBusiness } from './business-types';
+import { usePostalAddress } from './postal-address';
 
 interface Catalog {
   niches: { code: string; name: string }[];
@@ -24,6 +25,10 @@ const empty = {
   city: '',
   region: '',
   address: '',
+  postal_code: '',
+  neighborhood: '',
+  address_number: '',
+  address_complement: '',
 };
 type Field = keyof typeof empty;
 const states = [
@@ -67,6 +72,7 @@ export default function BusinessSetup() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
   const [values, setValues] = useState(empty);
+  const postal = usePostalAddress(values, setValues);
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   const submitting = useRef(false);
@@ -94,6 +100,7 @@ export default function BusinessSetup() {
     (item) => item.code === draft?.templateCode && item.nicheCode === niche?.code,
   );
   function update(field: Field, value: string) {
+    postal.markEdited(field);
     setValues((previous) => ({ ...previous, [field]: value }));
     setFieldErrors((previous) => ({ ...previous, [field]: undefined }));
   }
@@ -106,6 +113,13 @@ export default function BusinessSetup() {
     setFieldErrors({});
     const payload = JSON.stringify({
       ...values,
+      street:
+        values.postal_code ||
+        values.address_number ||
+        values.neighborhood ||
+        values.address_complement
+          ? values.address
+          : undefined,
       planCode: plan.code,
       nicheCode: niche.code,
       templateCode: template.code,
@@ -126,7 +140,8 @@ export default function BusinessSetup() {
       if (failure instanceof ApiError) {
         const errors: Partial<Record<Field, string>> = {};
         for (const detail of failure.details || [])
-          if (detail.field in empty) errors[detail.field as Field] = detail.message;
+          if (detail.field === 'street') errors.address = detail.message;
+          else if (detail.field in empty) errors[detail.field as Field] = detail.message;
         setFieldErrors(errors);
         if (failure.status === 409) {
           // Also recovers a successful request whose response was lost, including across reloads.
@@ -303,6 +318,25 @@ export default function BusinessSetup() {
               placeholder="https://instagram.com/seu_perfil"
               error={fieldErrors.instagram}
             />
+            <div className="gf-business-wide">
+              <h2>Endereço do estabelecimento</h2>
+              <Input
+                label="CEP"
+                value={values.postal_code}
+                onChange={(e) => update('postal_code', e.target.value)}
+                inputMode="numeric"
+                autoComplete="postal-code"
+                maxLength={9}
+                pattern="[0-9]{5}-?[0-9]{3}"
+                hint="Opcional. Ao completar oito números, buscamos seu endereço."
+                error={fieldErrors.postal_code}
+              />
+              {postal.message && (
+                <p role="status" aria-live="polite" className="gf-hint">
+                  {postal.message}
+                </p>
+              )}
+            </div>
             <Input
               label="Cidade"
               value={values.city}
@@ -344,6 +378,34 @@ export default function BusinessSetup() {
               maxLength={250}
               autoComplete="street-address"
               error={fieldErrors.address}
+              hint="Rua ou logradouro. Você pode corrigir o endereço manualmente."
+            />
+            <Input
+              label="Bairro"
+              value={values.neighborhood}
+              onChange={(e) => update('neighborhood', e.target.value)}
+              maxLength={100}
+              autoComplete="address-level3"
+              error={fieldErrors.neighborhood}
+            />
+            <Input
+              label="Número do imóvel"
+              value={values.address_number}
+              onChange={(e) => update('address_number', e.target.value)}
+              maxLength={20}
+              required={
+                !!values.postal_code || !!values.neighborhood || !!values.address_complement
+              }
+              hint="Informe s/n quando não houver número."
+              error={fieldErrors.address_number}
+            />
+            <Input
+              label="Complemento (opcional)"
+              value={values.address_complement}
+              onChange={(e) => update('address_complement', e.target.value)}
+              maxLength={100}
+              autoComplete="address-line2"
+              error={fieldErrors.address_complement}
             />
           </fieldset>
           <p className="gf-hint">

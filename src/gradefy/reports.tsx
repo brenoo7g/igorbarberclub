@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Download, RefreshCw, ChartNoAxesCombined } from 'lucide-react';
 import { useApp } from '../context';
-import { ApiError, errorMessage, money, statusLabels } from '../lib';
+import { ApiError, errorMessage, money, statusLabels, requestSessionCheck } from '../lib';
 import { Button, Card, Feedback, Input, Loading } from './components';
 import { BusinessNav } from './business-nav';
 import { ManagementAccess, CompanySelector } from './management';
@@ -133,9 +133,14 @@ function ReportContent({ companyId, companies, choose }: ManagementProps) {
         headers: { 'X-Gradefy-Company-Id': companyId },
       });
       if (!response.ok) {
-        if (response.status === 401) window.dispatchEvent(new Event('session-expired'));
-        const body = await response.json();
-        throw new ApiError(body.error || 'Não foi possível exportar.', response.status);
+        if (response.status === 401) requestSessionCheck('gradefy');
+        const body = await response.json().catch(() => null);
+        throw new ApiError(
+          typeof body?.error === 'string'
+            ? body.error
+            : 'Não foi possível exportar. Tente novamente.',
+          response.status,
+        );
       }
       if (!response.headers.get('content-type')?.includes('text/csv'))
         throw new Error('Resposta de exportação inválida. Atualize o relatório.');
