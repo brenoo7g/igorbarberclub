@@ -5,13 +5,16 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
-  Check,
   CheckCheck,
   Layers3,
   LockKeyhole,
   Mail,
   ShieldCheck,
   UserRound,
+  Store,
+  UsersRound,
+  LogOut,
+  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { errorMessage } from '../lib';
@@ -20,6 +23,7 @@ import { Button, ButtonLink, Card, Feedback, Input, Loading } from './components
 import { validateAccount, validateEmail, validatePassword } from './forms';
 import type { AccountFields, AccountValues, FormErrors } from './forms';
 import { useCompanies } from './company-access';
+import { DetailTile, JourneyFrame } from './journey';
 
 function BrandScene() {
   return (
@@ -340,11 +344,8 @@ export function AccountReady() {
   if (loading) return <Loading />;
   if (!user) return <Navigate to="/app/login" replace state={{ sessionRequired: true }} />;
   return (
-    <div className="gf-ready">
-      <Card>
-        <span className="gf-ready-icon">
-          <Check size={29} />
-        </span>
+    <JourneyFrame className="gf-account-journey">
+      <header className="gf-journey-heading">
         <div className="gf-kicker">SUA CONTA GRADEFY</div>
         <h1>
           {location.state?.accountCreated
@@ -353,84 +354,109 @@ export function AccountReady() {
         </h1>
         {location.state?.accountCreated && <Feedback success>Conta criada com sucesso.</Feedback>}
         <p className="gf-account-email">{user.email}</p>
-        <Feedback>{error || companyError}</Feedback>
-        {companies === null && !companyError ? (
-          <Loading />
-        ) : (
-          companies && (
-            <div className="gf-account-state">
-              <Layers3 size={24} />
-              <h2>
-                {business?.onboardingStatus === 'completed'
-                  ? 'Sua empresa está configurada!'
-                  : companies.length
-                    ? 'Seu acesso está ativo.'
-                    : business
-                      ? 'Seu negócio está em configuração.'
-                      : 'Seu próximo passo: seu negócio.'}
-              </h2>
-              <p>
-                {business?.onboardingStatus === 'completed'
-                  ? `${business.name}: configuração concluída. Seu site ainda não foi publicado.`
-                  : companies.length
-                    ? 'Seus vínculos estão ativos. Acesse Minha Agenda como profissional ou o painel empresarial conforme seu papel em cada estabelecimento.'
-                    : business
-                      ? `${business.name}: sua empresa foi criada e aguarda a conclusão da configuração. Seu teste grátis ainda não começou.`
-                      : 'Nenhum estabelecimento foi vinculado à sua conta. Configure seu negócio ou entre em uma equipe com um convite.'}
-              </p>
-              {companies.length > 0 && (
-                <ul>
-                  {companies.map((company) => (
-                    <li key={company.id}>{company.name}</li>
-                  ))}
-                </ul>
+      </header>
+      <hr className="gf-journey-divider" />
+      <Feedback>{error || companyError}</Feedback>
+      {companies === null && !companyError ? (
+        <Loading />
+      ) : (
+        companies && (
+          <div className="gf-journey-state">
+            <span className="gf-journey-icon" aria-hidden="true">
+              <Layers3 size={36} />
+            </span>
+            <h2>
+              {companies.length ? (
+                <>
+                  Seu acesso está ativo <CheckCheck size={23} />
+                </>
+              ) : business?.onboardingStatus === 'completed' ? (
+                'Sua empresa está configurada!'
+              ) : business ? (
+                'Seu negócio está em configuração.'
+              ) : (
+                'Seu próximo passo: seu negócio.'
               )}
-            </div>
-          )
-        )}
-        {companyError && (
-          <Button variant="secondary" onClick={retry}>
-            Tentar novamente
-          </Button>
-        )}
-        {companies?.length === 0 && (
-          <ButtonLink to={business ? '/app/onboarding/setup' : '/app/onboarding/plan'}>
-            {business ? 'Retomar configuração' : 'Escolher meu plano'} <ArrowRight size={18} />
-          </ButtonLink>
-        )}
-        {business?.onboardingStatus === 'completed' && (
-          <ButtonLink to="/app/onboarding/complete">Ver meu período grátis</ButtonLink>
-        )}
-        {companies?.some((c) => ['owner', 'manager'].includes(c.role)) && (
-          <ButtonLink to="/app/dashboard">
-            Acessar painel empresarial <ArrowRight size={18} />
-          </ButtonLink>
-        )}
-        {companies
-          ?.filter((c) => c.role === 'professional')
-          .map((c) => (
-            <ButtonLink key={c.id} to={`/app/minha-agenda?empresa=${encodeURIComponent(c.id)}`}>
-              Minha Agenda — {c.name}
-            </ButtonLink>
-          ))}
-        {companies
-          ?.filter((c) => ['owner', 'manager'].includes(c.role))
-          .map((c) => (
-            <ButtonLink key={c.id} to={`/app/meu-site?empresa=${encodeURIComponent(c.id)}`}>
-              Meu Site — {c.name}
-            </ButtonLink>
-          ))}
+            </h2>
+            <p>
+              {companies.length
+                ? 'Escolha um estabelecimento para continuar.'
+                : business?.onboardingStatus === 'completed'
+                  ? `${business.name}: configuração concluída.`
+                  : business
+                    ? `${business.name}: sua empresa foi criada e aguarda a conclusão da configuração. Seu teste grátis ainda não começou.`
+                    : 'Nenhum estabelecimento foi vinculado à sua conta. Configure seu negócio ou entre em uma equipe com um convite.'}
+            </p>
+          </div>
+        )
+      )}
+      {companyError && (
+        <Button variant="secondary" onClick={retry}>
+          Tentar novamente
+        </Button>
+      )}
+      {companies?.length === 0 && (
+        <ButtonLink to={business ? '/app/onboarding/setup' : '/app/onboarding/plan'}>
+          {business ? 'Retomar configuração' : 'Escolher meu plano'} <ArrowRight size={18} />
+        </ButtonLink>
+      )}
+      {business?.onboardingStatus === 'completed' && (
+        <ButtonLink to="/app/onboarding/complete">Ver meu período grátis</ButtonLink>
+      )}
+      <div className="gf-account-companies">
+        {companies?.map((company) => {
+          const management = ['owner', 'manager'].includes(company.role);
+          const professional = company.role === 'professional';
+          const query = '?empresa=' + encodeURIComponent(company.id);
+          return (
+            <section
+              key={company.id}
+              className="gf-account-company"
+              aria-label={'Acesso a ' + company.name}
+            >
+              <div className="gf-detail-grid">
+                <DetailTile icon={<Store size={24} />} label="Estabelecimento">
+                  {company.name}
+                </DetailTile>
+                <DetailTile icon={<UserRound size={24} />} label="Seu papel">
+                  {(
+                    {
+                      owner: 'Proprietário',
+                      manager: 'Gestor',
+                      professional: 'Profissional',
+                    } as Record<string, string>
+                  )[company.role] || 'Acesso restrito'}
+                </DetailTile>
+              </div>
+              <div className="gf-journey-actions">
+                {(management || professional) && (
+                  <ButtonLink to={(management ? '/app/dashboard' : '/app/minha-agenda') + query}>
+                    {management ? 'Abrir painel empresarial' : 'Abrir Minha Agenda'}{' '}
+                    <ArrowRight size={18} />
+                  </ButtonLink>
+                )}
+                {management && (
+                  <ButtonLink to={'/app/meu-site' + query} variant="secondary">
+                    Meu Mini Site <ExternalLink size={17} />
+                  </ButtonLink>
+                )}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+      <div className="gf-journey-actions">
         <ButtonLink to="/app/entrar-equipe" variant="secondary">
-          Entrar em uma equipe
+          <UsersRound size={20} /> Entrar em uma equipe
         </ButtonLink>
         <Button variant="secondary" busy={busy} onClick={exit}>
-          {busy ? 'Saindo…' : 'Sair da conta'}
+          <LogOut size={20} /> {busy ? 'Saindo…' : 'Sair da conta'}
         </Button>
-        <Link className="gf-text-link" to="/app">
-          Voltar ao início
-        </Link>
-      </Card>
-    </div>
+      </div>
+      <Link className="gf-text-link" to="/app">
+        Voltar ao início
+      </Link>
+    </JourneyFrame>
   );
 }
 export function PasswordRecovery({ reset = false }: { reset?: boolean }) {

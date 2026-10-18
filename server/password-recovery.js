@@ -15,17 +15,39 @@ const fail = (status, text) => {
 };
 const configured = () => Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
 const tokenSchema = z.string().regex(/^[a-f0-9]{64}$/, invalid);
+const miniContext = (id) => {
+  const match = /^minisite:([A-Za-z0-9_-]+):(agendar|reservas):/.exec(id);
+  return match
+    ? { companyId: Buffer.from(match[1], 'base64url').toString('utf8'), destination: match[2] }
+    : null;
+};
 
-export function installPasswordRecovery(app, db, { secret, secureCookies }) {
-  const limiter = rateLimit({
-    windowMs: 15 * 60000,
-    limit: 30,
-    message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
-  });
-  app.post('/api/auth/forgot-password', limiter, async (req, res) => {
-    const { email, scope } = z
+export function installPasswordRecovery(
+  app,
+  db,
+  {
+    secret,
+    secureCookies,
+    prefix = '/api/auth',
+    clientCompanyId,
+    clientCookie = 'session',
+    limiter: sharedLimiter,
+  },
+) {
+  const limiter =
+    sharedLimiter ||
+    rateLimit({
+      windowMs: 15 * 60000,
+      limit: 30,
+      message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+    });
+  app.post(`${prefix}/forgot-password`, limiter, async (req, res) => {
+    const { email, scope, destination } = z
       .object({
         scope: z.literal('gradefy').optional(),
+        destination: clientCompanyId
+          ? z.enum(['agendar', 'reservas']).default('agendar')
+          : z.undefined().optional(),
         email: z
           .string()
           .trim()
@@ -74,7 +96,9 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
       const user = await tx.get('SELECT * FROM users WHERE email=?', [email]);
       if (!user) return;
       // Persist only a trusted presentation namespace; no caller-provided return URL.
-      const id = `${scope === 'gradefy' ? 'gradefy-' : ''}${randomUUID()}`;
+      const id = clientCompanyId
+        ? `minisite:${Buffer.from(clientCompanyId).toString('base64url')}:${destination}:${randomUUID()}`
+        : `${scope === 'gradefy' ? 'gradefy-' : ''}${randomUUID()}`;
       await tx.run(
         'INSERT INTO password_recovery (id,user_id,email,session_version,token_hash,event,created_at,expires_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?,?)',
         [
@@ -93,7 +117,7 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
     // Delivery runs after the response; provider latency cannot reveal account existence.
     res.status(202).json({ message });
   });
-  app.post('/api/auth/reset-password', limiter, async (req, res) => {
+  app.post(`${prefix}/reset-password`, limiter, async (req, res) => {
     const data = z
       .object({
         token: tokenSchema,
@@ -104,10 +128,11 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
       .refine((value) => value.password === value.confirmPassword, 'As senhas não coincidem.')
       .parse(req.body);
     const hash = digest(data.token);
-    const candidate = await db.get('SELECT user_id FROM password_recovery WHERE token_hash=?', [
+    const candidate = await db.get('SELECT id,user_id FROM password_recovery WHERE token_hash=?', [
       hash,
     ]);
     if (!candidate) fail(400, invalid);
+    if (miniContext(candidate.id)?.companyId !== clientCompanyId) fail(400, invalid);
     await db.transaction(async (tx) => {
       // Same user lock as profile/password edits. Recheck after waiting for concurrent resets.
       const user = await tx.get(
@@ -140,7 +165,7 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
       await tx.run(
         'INSERT INTO password_recovery (id,user_id,email,session_version,event,created_at,expires_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?)',
         [
-          `${row.id.startsWith('gradefy-') ? 'gradefy-' : ''}${randomUUID()}`,
+          `${miniContext(row.id) ? row.id.split(':').slice(0, 3).join(':') + ':' : row.id.startsWith('gradefy-') ? 'gradefy-' : ''}${randomUUID()}`,
           user.id,
           user.email,
           user.session_version + 1,
@@ -151,7 +176,7 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
         ],
       );
     });
-    res.clearCookie('session', {
+    res.clearCookie(clientCookie, {
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
@@ -159,7 +184,7 @@ export function installPasswordRecovery(app, db, { secret, secureCookies }) {
     });
     res.json({ message: 'Senha redefinida com sucesso. Entre com sua nova senha.' });
   });
-  app.locals.processPasswordEmails = createPasswordEmailProcessor(db, secret);
+  if (app.locals) app.locals.processPasswordEmails = createPasswordEmailProcessor(db, secret);
 }
 
 export function createPasswordEmailProcessor(db, secret) {
@@ -201,11 +226,20 @@ export function createPasswordEmailProcessor(db, secret) {
           return;
         }
         const gradefy = job.id.startsWith('gradefy-');
-        const brand = gradefy ? 'Gradefy' : 'Igor Barber Club';
+        const mini = miniContext(job.id);
+        const company =
+          mini && (await db.get('SELECT name,slug FROM companies WHERE id=?', [mini.companyId]));
+        if (mini && !company) throw new Error('Recovery company unavailable');
+        const brand = mini ? company.name : gradefy ? 'Gradefy' : 'Igor Barber Club';
         const url = new URL(
-          gradefy ? '/app/redefinir-senha' : '/redefinir-senha',
+          mini
+            ? `/${encodeURIComponent(company.slug)}/redefinir-senha`
+            : gradefy
+              ? '/app/redefinir-senha'
+              : '/redefinir-senha',
           process.env.APP_URL || 'http://localhost:5173',
         );
+        if (mini) url.searchParams.set('destino', mini.destination);
         // Fragment keeps the token out of HTTP access logs and referrer headers.
         url.hash = `token=${tokenFor(secret, job.id)}`;
         const reset = job.event === 'reset';
@@ -222,8 +256,8 @@ export function createPasswordEmailProcessor(db, secret) {
             to: [job.email],
             subject: reset ? `Redefina sua senha — ${brand}` : `Sua senha foi alterada — ${brand}`,
             text: reset
-              ? `Recebemos uma solicitação para redefinir sua senha ${gradefy ? 'no Gradefy' : 'na Igor Barber Club'}.\n\nAbra o link e escolha uma nova senha:\n${url.href}\n\nEste link é de uso único e expira em 30 minutos após a solicitação. Se você não pediu essa alteração, ignore este e-mail. Sua senha permanece a mesma.\n\n${brand}`
-              : `Sua senha ${gradefy ? 'no Gradefy' : 'na Igor Barber Club'} foi redefinida com sucesso. As sessões anteriores foram encerradas.\n\nSe você não realizou esta alteração, solicite uma nova recuperação no site${gradefy ? '' : ' e entre em contato com a barbearia'}.\n\n${brand}`,
+              ? `Recebemos uma solicitação para redefinir sua senha ${mini ? 'em ' + brand : gradefy ? 'no Gradefy' : 'na Igor Barber Club'}.\n\nAbra o link e escolha uma nova senha:\n${url.href}\n\nEste link é de uso único e expira em 30 minutos após a solicitação. Se você não pediu essa alteração, ignore este e-mail. Sua senha permanece a mesma.\n\n${brand}`
+              : `Sua senha ${mini ? 'em ' + brand : gradefy ? 'no Gradefy' : 'na Igor Barber Club'} foi redefinida com sucesso. As sessões anteriores foram encerradas.\n\nSe você não realizou esta alteração, solicite uma nova recuperação no site${gradefy || mini ? '' : ' e entre em contato com a barbearia'}.\n\n${brand}`,
           }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);

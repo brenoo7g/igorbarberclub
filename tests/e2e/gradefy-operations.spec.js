@@ -25,7 +25,7 @@ test('operational wizard persists services, owner and breaks, deliberately start
       region: 'RJ',
       planCode: 'individual',
       nicheCode: 'barbershop',
-      templateCode: 'barber-classic',
+      templateCode: 'gradefy-minisite',
     },
   });
   expect(created.status()).toBe(201);
@@ -124,9 +124,11 @@ test('operational wizard persists services, owner and breaks, deliberately start
   await finish.click();
   await expect(page.getByRole('alert')).toContainText('conectar ao servidor');
   await finish.click();
+  await expect(page).toHaveURL(/\/app\/onboarding\/site/);
+  await page.getByRole('link', { name: 'Concluir e revisar', exact: true }).click();
   await expect(page).toHaveURL('/app/onboarding/complete');
-  await expect(page.getByRole('heading', { name: 'Sua empresa está configurada!' })).toBeVisible();
-  await expect(page.getByText('7 dias gratuitos ativos.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Seu negócio está pronto!' })).toBeVisible();
+  await expect(page.getByText('Teste grátis ativo', { exact: true })).toBeVisible();
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);
   const after = (await (await page.request.get('/api/onboarding/business')).json()).company;
@@ -135,11 +137,13 @@ test('operational wizard persists services, owner and breaks, deliberately start
     604800000,
   );
   expect((await page.request.get(`/api/public/${company.slug}/site`)).status()).toBe(404);
-  await page.getByRole('link', { name: 'Personalizar meu site', exact: true }).click();
-  await expect(page).toHaveURL('/app/meu-site');
-  await expect(page.getByRole('heading', { name: 'Meu Site', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Personalizar meu Mini Site', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/onboarding\/site/);
+  await expect(
+    page.getByRole('heading', { name: 'Personalize seu Mini Site', exact: true }),
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Meu Site' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Personalize seu Mini Site' })).toBeVisible();
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('NÃO É SÓ');
   expect(errors).toEqual([]);

@@ -103,7 +103,7 @@ export async function finishOperationalOnboarding(db, userId, companyId, key) {
     return idempotent(tx, companyId, 'onboarding-complete', key, {}, async () => {
       if (business.onboardingStatus === 'completed') return { company: business };
       const plan = await getAvailablePlan(tx, business.plan.code);
-      const catalog = await getOnboardingCatalog(tx);
+      const catalog = await getOnboardingCatalog(tx, { legacy: true });
       if (
         plan.trial_days !== 7 ||
         !catalog.templates.some(

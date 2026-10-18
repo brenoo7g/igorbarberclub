@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { MailPlus, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  MailPlus,
+  RefreshCw,
+  ShieldCheck,
+  CalendarDays,
+  UserRound,
+  Mail,
+  Clock3,
+  Copy,
+  Link2,
+  ArrowRight,
+  CircleAlert,
+  ScanLine,
+} from 'lucide-react';
 import { useApp } from '../context';
 import { errorMessage } from '../lib';
 import { Modal } from '../components/UI';
-import { Button, ButtonLink, Card, Feedback, Input, Loading } from './components';
+import { Button, ButtonLink, Card, Feedback, Input, Loading, GradefyLogo } from './components';
+import { DetailTile, JourneyFrame, StatusBadge } from './journey';
 import { CompanySelector, ManagementAccess } from './management';
 import type { ManagementProps } from './management';
 import { BusinessNav } from './business-nav';
@@ -83,6 +97,16 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
       member?: Member;
     } | null>(null);
   const working = useRef(false);
+  const invitationForm = useRef<HTMLFormElement>(null);
+  const restoreInvitationFocus = useRef(false);
+  useEffect(() => {
+    if (shared || busy || !restoreInvitationFocus.current) return;
+    const target =
+      invitationForm.current?.querySelector<HTMLButtonElement>('button[type="submit"]') ||
+      document.querySelector<HTMLButtonElement>('.gf-team .gf-agenda-heading button');
+    target?.focus();
+    restoreInvitationFocus.current = false;
+  }, [shared, busy]);
   useEffect(() => {
     const controller = new AbortController();
     setBusy(true);
@@ -219,7 +243,7 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
                 mantém o vínculo empresarial, sem acesso à gestão. Somente proprietários gerenciam
                 acessos.
               </p>
-              <form className="gf-team-form" onSubmit={submit}>
+              <form className="gf-team-form" onSubmit={submit} ref={invitationForm}>
                 <Input
                   label="E-mail do convidado"
                   type="email"
@@ -495,7 +519,15 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
           </div>
         </Modal>
       )}
-      {shared && <InviteLink value={shared} onClose={() => setShared(null)} />}
+      {shared && (
+        <InviteLink
+          value={shared}
+          onClose={() => {
+            restoreInvitationFocus.current = true;
+            setShared(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -510,46 +542,73 @@ function InviteLink({ value, onClose }: { value: SharedInvite; onClose: () => vo
     }
   }
   return (
-    <Modal title="Convite pronto" onClose={onClose}>
-      <div className="gf-form">
+    <Modal
+      title="Convite pronto"
+      onClose={onClose}
+      className="gf-invitation-dialog"
+      brand={
+        <div className="gf-journey-brand">
+          <GradefyLogo />
+        </div>
+      }
+    >
+      <div className="gf-invitation-content">
         <h3>{value.companyName}</h3>
-        <p>
-          {roles[value.invitation.role]} · {statuses[value.invitation.status]}
+        <div className="gf-journey-badges">
+          <StatusBadge>
+            <UserRound size={17} />
+            {roles[value.invitation.role]}
+          </StatusBadge>
+          <StatusBadge pending>
+            <Clock3 size={17} />
+            {statuses[value.invitation.status]}
+          </StatusBadge>
+        </div>
+        <div className="gf-detail-grid">
+          <DetailTile icon={<Mail size={21} />} label="Destinatário" className="gf-detail-wide">
+            {value.invitation.email}
+          </DetailTile>
+          <DetailTile icon={<CalendarDays size={21} />} label="Validade" className="gf-detail-wide">
+            {date(value.invitation.expiresAt)}
+          </DetailTile>
+        </div>
+        {(['link', 'code'] as const).map((kind) => (
+          <div className="gf-copy-field" key={kind}>
+            <label htmlFor={'shared-invitation-' + kind}>
+              {kind === 'link' ? 'Link do convite' : 'Código do convite'}
+            </label>
+            <span className="gf-copy-control">
+              {kind === 'link' && <Link2 size={21} aria-hidden="true" />}
+              <input
+                id={'shared-invitation-' + kind}
+                className={kind === 'code' ? 'gf-copy-code' : ''}
+                value={value[kind]}
+                readOnly
+                spellCheck={false}
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                type="button"
+                aria-label={kind === 'link' ? 'Copiar link' : 'Copiar código'}
+                onClick={() => void copy(kind)}
+              >
+                <Copy size={20} />
+              </button>
+            </span>
+          </div>
+        ))}
+        <p className="gf-hint">
+          O código aparece somente agora. Ao renovar, o anterior será invalidado.
         </p>
-        <p>{deliveryText(value.invitation.delivery)}</p>
-        <p>
-          Compartilhe o link ou o código com a pessoa convidada. O convite é individual e expira em
-          7 dias.
-        </p>
-        <p>
-          O link é exclusivo para {value.invitation.email} e expira em{' '}
-          {date(value.invitation.expiresAt)}.
-        </p>
-        <Input
-          label="Link do convite"
-          value={value.link}
-          readOnly
-          onFocus={(e) => e.target.select()}
-        />
-        <label className="gf-field">
-          Código do convite
-          <textarea
-            className="gf-invitation-code"
-            value={value.code}
-            readOnly
-            rows={3}
-            spellCheck={false}
-            onFocus={(e) => e.target.select()}
-          />
-        </label>
-        <p>
-          O código aparece somente agora. Para obter outro, renove o convite; o anterior será
-          invalidado.
-        </p>
+        <p className="gf-hint">{deliveryText(value.invitation.delivery)}</p>
         <Feedback success>{notice}</Feedback>
-        <Button onClick={() => void copy('link')}>Copiar link de convite</Button>
+        <Button onClick={() => void copy('link')}>
+          <Copy size={19} />
+          Copiar link do convite
+        </Button>
         <Button variant="secondary" onClick={() => void copy('code')}>
-          Copiar código de convite
+          <Copy size={19} />
+          Copiar código do convite
         </Button>
         <Button variant="secondary" onClick={onClose}>
           Concluir
@@ -609,15 +668,20 @@ export function AcceptInvitation() {
     setMutating(true);
     setError('');
     try {
-      const result = await api<{ companyId: string; role: Role; professionalId?: string }>(
-        '/team/invitations/accept',
-        {
-          method: 'POST',
-          body: JSON.stringify({ token }),
-        },
-      );
+      const result = await api<{
+        companyId: string;
+        role: Role;
+        professionalId?: string;
+        nextPath?: string;
+      }>('/team/invitations/accept', {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      });
       setAccepted(result);
-      navigate('/app/convite', { replace: true }); // Remove the consumed token from the current URL.
+      navigate(
+        result.role === 'professional' && result.nextPath ? result.nextPath : '/app/convite',
+        { replace: true },
+      );
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -638,84 +702,95 @@ export function AcceptInvitation() {
   }
   const fragment = '#token=' + encodeURIComponent(token);
   return (
-    <div className="gf-ready gf-invite-ready">
-      <Card>
+    <JourneyFrame className="gf-invite-journey">
+      <header className="gf-journey-heading">
         <div className="gf-kicker">CONVITE GRADEFY</div>
         <h1>
-          {accepted
-            ? 'Você faz parte da equipe.'
-            : info
-              ? `Convite para ${info.companyName}`
-              : 'Seu próximo passo começa aqui.'}
+          {accepted ? (
+            'Você faz parte da equipe.'
+          ) : info ? (
+            <>
+              Você foi convidado para <span>{info.companyName}</span>
+            </>
+          ) : (
+            'Seu próximo passo começa aqui.'
+          )}
         </h1>
-        <Feedback>{error}</Feedback>
-        {accepted ? (
-          <>
-            <Feedback success>Convite aceito com sucesso.</Feedback>
-            <p>
-              {accepted.professionalId
-                ? 'Sua conta foi vinculada ao cadastro profissional. O proprietário pode conferir serviços, horários e ativação antes de liberar reservas.'
-                : 'Seu acesso foi vinculado à empresa. Nenhum profissional foi criado na agenda.'}
-            </p>
-            <ButtonLink
-              to={
-                accepted.role === 'manager'
-                  ? '/app/dashboard?empresa=' + encodeURIComponent(accepted.companyId)
-                  : '/app/minha-agenda?empresa=' + encodeURIComponent(accepted.companyId)
-              }
-            >
-              Acessar minha conta empresarial
-            </ButtonLink>
-          </>
-        ) : loading || busy ? (
-          <Loading label="Verificando convite…" />
-        ) : info ? (
-          <>
-            <p>Você foi convidado para fazer parte desta equipe.</p>
-            <p>
-              Você foi convidado como {roles[info.role].toLowerCase()}. Entre com o e-mail{' '}
-              {info.emailHint} para confirmar.
-            </p>
-            <p>Validade: {date(info.expiresAt)}</p>
-            {!user ? (
-              <div className="gf-form">
-                <ButtonLink to={'/app/login' + fragment}>Já tenho uma conta</ButtonLink>
-                <ButtonLink to={'/app/cadastro' + fragment} variant="secondary">
-                  Criar minha conta
-                </ButtonLink>
-              </div>
-            ) : info.emailMatches ? (
-              <Button busy={mutating} onClick={() => void accept()}>
-                Aceitar convite
-              </Button>
-            ) : (
-              <>
-                <Feedback>
-                  Esta conta usa outro e-mail. Entre com a conta que recebeu o convite.
-                </Feedback>
-                <Button busy={mutating} onClick={() => void switchAccount()}>
-                  Trocar conta
-                </Button>
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            <p>Peça ao proprietário um novo convite. Você também pode voltar à sua conta.</p>
-            <Button variant="secondary" onClick={() => setRevision((v) => v + 1)}>
-              Tentar novamente
+        {info && !accepted && <p>Faça parte desta equipe.</p>}
+      </header>
+      <Feedback>{error}</Feedback>
+      {accepted ? (
+        <>
+          <Feedback success>Convite aceito com sucesso.</Feedback>
+          <p>Seu acesso ao estabelecimento está pronto.</p>
+          <ButtonLink
+            to={
+              accepted.role === 'manager'
+                ? '/app/dashboard?empresa=' + encodeURIComponent(accepted.companyId)
+                : '/app/minha-agenda?empresa=' + encodeURIComponent(accepted.companyId)
+            }
+          >
+            Acessar minha conta empresarial
+          </ButtonLink>
+        </>
+      ) : loading || busy ? (
+        <Loading label="Verificando convite…" />
+      ) : info ? (
+        <>
+          <div className="gf-detail-grid">
+            <DetailTile icon={<UserRound size={24} />} label="Função">
+              {roles[info.role]}
+            </DetailTile>
+            <DetailTile icon={<CalendarDays size={24} />} label="Validade">
+              {date(info.expiresAt)}
+            </DetailTile>
+            <DetailTile icon={<Mail size={24} />} label="Conta esperada" className="gf-detail-wide">
+              {info.emailHint}
+            </DetailTile>
+          </div>
+          {!user ? (
+            <div className="gf-journey-actions">
+              <ButtonLink to={'/app/login' + fragment}>Já tenho uma conta</ButtonLink>
+              <ButtonLink to={'/app/cadastro' + fragment} variant="secondary">
+                Criar minha conta <ArrowRight size={18} />
+              </ButtonLink>
+            </div>
+          ) : info.emailMatches ? (
+            <Button busy={mutating} onClick={() => void accept()}>
+              Aceitar convite
             </Button>
-          </>
-        )}
-        <Link className="gf-back" to="/app/conta">
-          Minha conta
-        </Link>
-        {!accepted && (
-          <Link className="gf-back" to="/app/entrar-equipe">
-            Digitar outro código
-          </Link>
-        )}
-      </Card>
-    </div>
+          ) : (
+            <>
+              <div className="gf-invite-alert" role="alert">
+                <CircleAlert size={28} />
+                <div>
+                  <strong>Esta conta usa outro e-mail.</strong>
+                  <p>Entre com a conta que recebeu o convite.</p>
+                </div>
+              </div>
+              <Button busy={mutating} onClick={() => void switchAccount()}>
+                Trocar conta <ArrowRight size={19} />
+              </Button>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <p>Peça ao proprietário um novo convite. Você também pode voltar à sua conta.</p>
+          <Button variant="secondary" onClick={() => setRevision((v) => v + 1)}>
+            Tentar novamente
+          </Button>
+        </>
+      )}
+      <Link className="gf-text-link" to="/app/conta">
+        Minha conta
+      </Link>
+      {!accepted && (
+        <ButtonLink to="/app/entrar-equipe" variant="secondary">
+          <ScanLine size={19} />
+          Digitar outro código
+        </ButtonLink>
+      )}
+    </JourneyFrame>
   );
 }

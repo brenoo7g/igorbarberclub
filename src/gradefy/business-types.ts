@@ -44,6 +44,7 @@ export interface Service {
   active: number;
 }
 export interface Professional {
+  availability?: { configured: boolean; state: 'setup' | 'waiting' | 'ready'; pending: string[] };
   id: string;
   name: string;
   specialty: string;

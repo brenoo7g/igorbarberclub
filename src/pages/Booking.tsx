@@ -16,14 +16,26 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useApp } from '../context';
-import { addDays, ApiError, bookingWeek, errorMessage, formatDate, money } from '../lib';
+import {
+  addDays,
+  ApiError,
+  bookingWeek,
+  errorMessage,
+  formatDate,
+  money,
+  newIdempotencyKey,
+} from '../lib';
 import type { Appointment, Barber, Service, PublicSchedule, Visitor } from '../types';
 import { EmptyState, ErrorBox, Eyebrow, Spinner } from '../components/UI';
 import { AuthForm } from '../components/AuthForm';
 import { Avatar } from '../components/Avatar';
+import { MiniBookingSummary, MiniServicePicker } from '../templates/gradefy-minisite/booking';
 
 export default function Booking() {
   const { site } = useSite();
+  const mini = site.company.template === 'gradefy-minisite';
+  const pageRef = useRef<HTMLDivElement>(null);
+  const attempt = useRef<{ payload: string; key: string } | null>(null);
   const timezone = site.company.timezone;
   const today = () =>
     new Intl.DateTimeFormat('en-CA', {
@@ -84,6 +96,17 @@ export default function Booking() {
   const returningGuest = !user && visitor;
   const confirmationContact = user || rescheduleContact || visitor;
   const asGuest = !user && guestMode && !reschedule;
+  useEffect(() => {
+    if (!mini || loading || identityLoading) return;
+    const frame = requestAnimationFrame(() => {
+      const heading =
+        pageRef.current?.querySelector<HTMLElement>('.step-heading h2') ||
+        pageRef.current?.querySelector<HTMLElement>('h1');
+      heading?.setAttribute('tabindex', '-1');
+      heading?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mini, step, loading, identityLoading, confirmed]);
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -194,7 +217,11 @@ export default function Booking() {
   const changeStep = (value: number) => {
     setStep(value);
     setError('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({
+      top: 0,
+      behavior:
+        mini && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    });
   };
   async function confirm() {
     if (submitting.current) return;
@@ -202,6 +229,18 @@ export default function Booking() {
     setBusy(true);
     setError('');
     try {
+      const body = JSON.stringify({
+        services: selected ? [selected] : [],
+        barberId: barber,
+        date,
+        time,
+        expectedTotal: total,
+        expectedDuration: duration,
+        ...(asGuest ? { guest } : {}),
+      });
+      const signature = JSON.stringify([site.company.id, user?.id || 'guest', asGuest, body]);
+      if (mini && attempt.current?.payload !== signature)
+        attempt.current = { payload: signature, key: newIdempotencyKey() };
       const a = await api<Appointment & { visitor?: Visitor }>(
         reschedule
           ? `/appointments/${reschedule}/reschedule`
@@ -210,25 +249,23 @@ export default function Booking() {
             : '/appointments',
         {
           method: reschedule ? 'PATCH' : 'POST',
-          body: JSON.stringify({
-            services: selected ? [selected] : [],
-            barberId: barber,
-            date,
-            time,
-            expectedTotal: total,
-            expectedDuration: duration,
-            ...(asGuest ? { guest } : {}),
-          }),
+          body,
+          ...(mini && !reschedule ? { headers: { 'Idempotency-Key': attempt.current!.key } } : {}),
         },
       );
       setConfirmed(a);
       if (a.visitor) setVisitor(a.visitor);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({
+        top: 0,
+        behavior:
+          mini && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      });
     } catch (e) {
       setError(errorMessage(e));
       if (e instanceof ApiError && e.status === 409) {
         setStep(1);
         setReload((r) => r + 1);
+        if (mini) window.scrollTo({ top: 0, behavior: 'instant' });
       }
     } finally {
       submitting.current = false;
@@ -238,7 +275,10 @@ export default function Booking() {
   if (loading || identityLoading) return <Spinner />;
   if (!reschedule && !confirmed && site.settings.online_booking_enabled === false)
     return (
-      <div className="container success-page">
+      <div
+        className={`container success-page ${mini ? 'mini-booking mb-success' : ''}`}
+        ref={pageRef}
+      >
         <Eyebrow>AGENDAMENTOS ONLINE</Eyebrow>
         <h1>Uma pausa na agenda online.</h1>
         <p>
@@ -252,15 +292,25 @@ export default function Booking() {
     );
   if (confirmed)
     return (
-      <div className="container success-page">
+      <div
+        className={`container success-page ${mini ? 'mini-booking mb-success' : ''}`}
+        ref={pageRef}
+      >
         <div className="success-icon">
           <CheckCheck size={35} />
         </div>
         <Eyebrow>TUDO CERTO POR AQUI</Eyebrow>
-        <h1>{reschedule ? 'Novo horário. Mesmo estilo.' : 'Seu horário está na régua.'}</h1>
+        <h1>
+          {mini
+            ? 'Seu horário está confirmado!'
+            : reschedule
+              ? 'Novo horário. Mesmo estilo.'
+              : 'Seu horário está na régua.'}
+        </h1>
         <p>
-          Te esperamos, {confirmed.client_name.split(' ')[0]}. Agora é só chegar e deixar com a
-          gente.
+          {mini
+            ? `${site.company.name} espera por você, ${confirmed.client_name.split(' ')[0]}.`
+            : `Te esperamos, ${confirmed.client_name.split(' ')[0]}. Agora é só chegar e deixar com a gente.`}
         </p>
         <div className="confirmation-card">
           <div className="confirmation-top">
@@ -292,7 +342,7 @@ export default function Booking() {
             )}
           </div>
           <div className="summary-total">
-            <span>Pagamento na barbearia</span>
+            <span>{mini ? 'Pagamento no estabelecimento' : 'Pagamento na barbearia'}</span>
             <strong>{money(confirmed.total)}</strong>
           </div>
         </div>
@@ -308,22 +358,37 @@ export default function Booking() {
           <ArrowRight size={18} />
         </Link>
         <Link className="text-link" to="/">
-          Voltar ao início
+          {mini ? 'Voltar ao Mini Site' : 'Voltar ao início'}
         </Link>
       </div>
     );
   return (
-    <div className="container booking-page">
-      <Link to={reschedule ? '/minha-conta' : '/'} className="back-link">
-        <ArrowLeft size={15} />
-        {reschedule ? 'Meus agendamentos' : 'Voltar ao início'}
-      </Link>
+    <div className={`container booking-page ${mini ? 'mini-booking' : ''}`} ref={pageRef}>
+      {!mini && (
+        <Link to={reschedule ? '/minha-conta' : '/'} className="back-link">
+          <ArrowLeft size={15} />
+          {reschedule ? 'Meus agendamentos' : 'Voltar ao início'}
+        </Link>
+      )}
       <div className="booking-heading">
         <Eyebrow>RESERVE SEU MOMENTO</Eyebrow>
         <h1>
-          {reschedule ? 'Vamos encontrar um novo horário.' : 'Seu próximo visual começa aqui.'}
+          {reschedule ? (
+            'Vamos encontrar um novo horário.'
+          ) : mini ? (
+            <>
+              Seu próximo visual <span>começa aqui.</span>
+            </>
+          ) : (
+            'Seu próximo visual começa aqui.'
+          )}
         </h1>
         <p>Escolha seu serviço. Encontre seu horário. Deixe o resto com a gente.</p>
+        {mini && (
+          <span className="mb-company">
+            Agendamento em <strong>{site.company.name}</strong>
+          </span>
+        )}
       </div>
       <ol className="booking-steps">
         {['Serviços', 'Profissional e horário', 'Confirmação'].map((label, i) => (
@@ -333,7 +398,22 @@ export default function Booking() {
             aria-current={i === step ? 'step' : undefined}
           >
             <span>{i < step ? <Check size={15} /> : `0${i + 1}`}</span>
-            {label}
+            {mini ? (
+              <p className="mb-step-label">
+                <strong>{label}</strong>
+                <small>
+                  {
+                    [
+                      'Escolha o que deseja',
+                      'Selecione o profissional e o horário',
+                      'Revise e finalize',
+                    ][i]
+                  }
+                </small>
+              </p>
+            ) : (
+              label
+            )}
             <div />
           </li>
         ))}
@@ -351,41 +431,56 @@ export default function Booking() {
               <div className="step-heading">
                 <span>01</span>
                 <div>
-                  <h2>Como vamos cuidar do seu estilo?</h2>
-                  <p>Escolha um serviço por agendamento.</p>
+                  <h2>{mini ? 'Escolha seu serviço' : 'Como vamos cuidar do seu estilo?'}</h2>
+                  <p>
+                    {mini
+                      ? 'Como podemos cuidar de você hoje?'
+                      : 'Escolha um serviço por agendamento.'}
+                  </p>
                 </div>
               </div>
-              <div className="booking-service-list">
-                {services.map((service) => (
-                  <label
-                    key={service.id}
-                    className={`booking-service ${selected === service.id ? 'selected' : ''}`}
-                  >
-                    <input
-                      type="radio"
-                      name="booking-service"
-                      value={service.id}
-                      checked={selected === service.id}
-                      onChange={() => {
-                        setSelected(service.id);
-                        setTime('');
-                      }}
-                    />
-                    <span className="custom-check">
-                      {selected === service.id && <Check size={14} />}
-                    </span>
-                    <span className="booking-service-info">
-                      <strong>{service.name}</strong>
-                      <span>{service.description}</span>
-                      <small>
-                        <Clock3 size={12} />
-                        {service.duration} minutos
-                      </small>
-                    </span>
-                    <strong>{money(service.price)}</strong>
-                  </label>
-                ))}
-              </div>
+              {mini ? (
+                <MiniServicePicker
+                  services={services}
+                  selected={selected}
+                  onSelect={(id) => {
+                    setSelected(id);
+                    setTime('');
+                  }}
+                />
+              ) : (
+                <div className="booking-service-list">
+                  {services.map((service) => (
+                    <label
+                      key={service.id}
+                      className={`booking-service ${selected === service.id ? 'selected' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="booking-service"
+                        value={service.id}
+                        checked={selected === service.id}
+                        onChange={() => {
+                          setSelected(service.id);
+                          setTime('');
+                        }}
+                      />
+                      <span className="custom-check">
+                        {selected === service.id && <Check size={14} />}
+                      </span>
+                      <span className="booking-service-info">
+                        <strong>{service.name}</strong>
+                        <span>{service.description}</span>
+                        <small>
+                          <Clock3 size={12} />
+                          {service.duration} minutos
+                        </small>
+                      </span>
+                      <strong>{money(service.price)}</strong>
+                    </label>
+                  ))}
+                </div>
+              )}
             </>
           )}
           {step === 1 && (
@@ -426,6 +521,11 @@ export default function Booking() {
                   </button>
                 ))}
               </div>
+              {mini && !eligibleBarbers.length && (
+                <EmptyState title="Nenhum profissional disponível">
+                  Escolha outro serviço ou tente novamente mais tarde.
+                </EmptyState>
+              )}
               <div className="date-heading">
                 <h3 className="field-title">Escolha o dia</h3>
                 <label className="date-picker-label">
@@ -436,6 +536,7 @@ export default function Booking() {
                     min={today()}
                     max={schedule?.max_date || addDays(today(), 730)}
                     value={date}
+                    disabled={mini && (!schedule || !barber)}
                     onChange={(e) => {
                       if (e.target.value) {
                         setDate(e.target.value);
@@ -451,7 +552,7 @@ export default function Booking() {
                   <button
                     aria-label="Semana anterior"
                     className="icon-button"
-                    disabled={week <= today()}
+                    disabled={week <= today() || (mini && !schedule)}
                     onClick={() =>
                       setWeek(addDays(week, -7) < today() ? today() : addDays(week, -7))
                     }
@@ -461,7 +562,10 @@ export default function Booking() {
                   <button
                     aria-label="Próxima semana"
                     className="icon-button"
-                    disabled={addDays(week, 7) > (schedule?.max_date || addDays(today(), 730))}
+                    disabled={
+                      (mini && !schedule) ||
+                      addDays(week, 7) > (schedule?.max_date || addDays(today(), 730))
+                    }
                     onClick={() => setWeek(addDays(week, 7))}
                   >
                     <ChevronRight size={18} />
@@ -469,11 +573,17 @@ export default function Booking() {
                 </div>
               </div>
               <ErrorBox message={scheduleError} />
+              {mini && scheduleError && (
+                <button className="button ghost" onClick={() => setReload((r) => r + 1)}>
+                  Tentar novamente
+                </button>
+              )}
               <div className="date-options">
                 {Array.from({ length: 7 }, (_, i) => addDays(week, i)).map((d) => (
                   <button
                     key={d}
                     disabled={
+                      (mini && (!schedule || !barber)) ||
                       d < today() ||
                       d > addDays(today(), 730) ||
                       (schedule?.mode === 'auto' && !schedule.dates.includes(d)) ||
@@ -514,6 +624,7 @@ export default function Booking() {
                       aria-pressed={time === t}
                     >
                       {t}
+                      {mini && time === t && <Check size={13} aria-hidden="true" />}
                     </button>
                   ))}
                 </div>
@@ -522,13 +633,19 @@ export default function Booking() {
                   <EmptyState
                     icon={<CalendarDays size={28} />}
                     title={
-                      availabilityMessage
-                        ? 'Agenda indisponível para este dia'
-                        : 'Agenda cheia por aqui'
+                      mini
+                        ? 'Nenhum horário disponível nesta data'
+                        : availabilityMessage
+                          ? 'Agenda indisponível para este dia'
+                          : 'Agenda cheia por aqui'
                     }
                   >
-                    {availabilityMessage ||
-                      'Não há horários disponíveis para esse serviço neste dia. Escolha outra data.'}
+                    {(mini
+                      ? availabilityMessage.replace(/pelo barbeiro/gi, 'pelo estabelecimento')
+                      : availabilityMessage) ||
+                      (mini
+                        ? 'Experimente outro dia ou profissional.'
+                        : 'Não há horários disponíveis para esse serviço neste dia. Escolha outra data.')}
                   </EmptyState>
                 )
               )}
@@ -649,7 +766,9 @@ export default function Booking() {
                 <div>
                   <strong>Seu horário, sem complicação.</strong>
                   <p>
-                    O pagamento é feito na barbearia.{' '}
+                    {mini
+                      ? 'O pagamento é feito no estabelecimento. '
+                      : 'O pagamento é feito na barbearia. '}
                     {asGuest
                       ? 'Consulte, cancele ou remarque em Meus agendamentos neste navegador, antes do horário reservado.'
                       : 'Precisa mudar os planos? Cancele ou remarque pela sua conta antes do horário reservado.'}
@@ -659,6 +778,12 @@ export default function Booking() {
             </>
           )}
           <div className="step-actions">
+            {mini && step === 0 && (
+              <Link to="/" className="button ghost">
+                <ArrowLeft size={16} />
+                Voltar
+              </Link>
+            )}
             {step > 0 && (
               <button className="button ghost" onClick={() => changeStep(step - 1)} disabled={busy}>
                 <ArrowLeft size={16} />
@@ -700,54 +825,69 @@ export default function Booking() {
             )}
           </div>
         </div>
-        <aside className="booking-summary">
-          <div className="summary-heading">
-            <Scissors size={19} />
-            <h3>Seu momento no Club</h3>
-          </div>
-          {chosen.length ? (
-            <div className="summary-services">
-              {chosen.map((s) => (
-                <div key={s.id}>
-                  <span>
-                    {s.name}
-                    <small>{s.duration} min</small>
-                  </span>
-                  <strong>{money(s.price)}</strong>
-                </div>
-              ))}
+        {mini ? (
+          <MiniBookingSummary
+            company={site.company.name}
+            service={chosen[0]}
+            professional={step > 0 ? barbers.find((b) => b.id === barber)?.name : undefined}
+            date={date}
+            time={time}
+            step={step}
+            onRemove={() => {
+              setSelected('');
+              setTime('');
+            }}
+          />
+        ) : (
+          <aside className="booking-summary">
+            <div className="summary-heading">
+              <Scissors size={19} />
+              <h3>Seu momento no Club</h3>
             </div>
-          ) : (
-            <p className="summary-empty">Escolha o serviço para montar o seu momento.</p>
-          )}
-          <div className="summary-meta">
-            <span>
-              <UserRound size={16} />
-              {barbers.find((b) => b.id === barber)?.name || 'Profissional a escolher'}
-            </span>
-            <span>
-              <CalendarDays size={16} />
-              {step > 0
-                ? formatDate(date, { day: 'numeric', month: 'long', weekday: 'short' })
-                : 'Escolha o melhor dia'}
-            </span>
-            <span>
-              <Clock3 size={16} />
-              {time || 'Horário a escolher'}
-              {duration > 0 && ` · ${duration} min`}
-            </span>
-          </div>
-          <div className="summary-total">
-            <span>
-              Total<strong className="summary-total-note">Pagamento na barbearia</strong>
-            </span>
-            <strong>{money(total)}</strong>
-          </div>
-          <p className="summary-footer">
-            <ShieldCheck size={14} />
-            Seu estilo merece esse cuidado.
-          </p>
-        </aside>
+            {chosen.length ? (
+              <div className="summary-services">
+                {chosen.map((s) => (
+                  <div key={s.id}>
+                    <span>
+                      {s.name}
+                      <small>{s.duration} min</small>
+                    </span>
+                    <strong>{money(s.price)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="summary-empty">Escolha o serviço para montar o seu momento.</p>
+            )}
+            <div className="summary-meta">
+              <span>
+                <UserRound size={16} />
+                {barbers.find((b) => b.id === barber)?.name || 'Profissional a escolher'}
+              </span>
+              <span>
+                <CalendarDays size={16} />
+                {step > 0
+                  ? formatDate(date, { day: 'numeric', month: 'long', weekday: 'short' })
+                  : 'Escolha o melhor dia'}
+              </span>
+              <span>
+                <Clock3 size={16} />
+                {time || 'Horário a escolher'}
+                {duration > 0 && ` · ${duration} min`}
+              </span>
+            </div>
+            <div className="summary-total">
+              <span>
+                Total<strong className="summary-total-note">Pagamento na barbearia</strong>
+              </span>
+              <strong>{money(total)}</strong>
+            </div>
+            <p className="summary-footer">
+              <ShieldCheck size={14} />
+              Seu estilo merece esse cuidado.
+            </p>
+          </aside>
+        )}
       </div>
     </div>
   );

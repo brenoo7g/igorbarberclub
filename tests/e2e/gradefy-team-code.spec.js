@@ -68,14 +68,15 @@ test('code sharing modal exposes real metadata and both clipboard actions at all
   await page.getByRole('button', { name: 'Criar convite', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Convite pronto' });
   await expect(dialog).toContainText('Clube Horizonte');
-  await expect(dialog).toContainText('Gestor · Convite pendente');
-  await expect(dialog).toContainText('expira em 7 dias');
+  await expect(dialog).toContainText('Gestor');
+  await expect(dialog).toContainText('Convite pendente');
+  await expect(dialog).toContainText('Validade');
   await responsive(page, 'share');
   const code = await dialog.getByLabel('Código do convite').inputValue(),
     link = await dialog.getByLabel('Link do convite').inputValue();
-  await dialog.getByRole('button', { name: 'Copiar código de convite', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Copiar código do convite', exact: true }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code);
-  await dialog.getByRole('button', { name: 'Copiar link de convite', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Copiar link do convite', exact: true }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(link);
   await dialog.getByRole('button', { name: 'Concluir', exact: true }).click();
   await page.reload();
@@ -99,12 +100,12 @@ test('collaborator code survives refresh and registration and never enters owner
     await guest.getByRole('button', { name: 'Continuar', exact: true }).click();
     await expect(guest).toHaveURL(/\/app\/convite#token=/);
     await expect(
-      guest.getByRole('heading', { name: 'Convite para Clube Horizonte' }),
+      guest.getByRole('heading', { name: 'Você foi convidado para Clube Horizonte' }),
     ).toBeVisible();
     await responsive(guest, 'confirmation');
     await guest.reload();
     await expect(
-      guest.getByRole('heading', { name: 'Convite para Clube Horizonte' }),
+      guest.getByRole('heading', { name: 'Você foi convidado para Clube Horizonte' }),
     ).toBeVisible();
     await guest.getByRole('link', { name: 'Criar minha conta', exact: true }).click();
     await guest.reload();

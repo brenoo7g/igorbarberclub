@@ -21,7 +21,6 @@ async function setup(page) {
     .filter({ has: page.getByRole('radio', { name: 'Barbearia', exact: true }) })
     .click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await page.getByRole('button', { name: 'Escolher este template' }).click();
   await expect(page.getByLabel('CEP', { exact: true })).toBeVisible();
 }
 const address = { street: 'Praça da Sé', neighborhood: 'Sé', city: 'São Paulo', region: 'SP' };
@@ -174,12 +173,12 @@ for (const mode of ['new', 'existing'])
       ).toBe(201);
       await guest.goto(link);
       await guest.getByRole('button', { name: 'Aceitar convite', exact: true }).click();
-      await expect(guest.getByText('Convite aceito com sucesso.', { exact: true })).toBeVisible();
-      await guest.getByRole('link', { name: 'Acessar minha conta empresarial' }).click();
-      await expect(guest).toHaveURL('/app/minha-agenda?empresa=' + cid);
+      await expect(guest).toHaveURL(
+        '/app/minha-agenda' + (mode === 'new' ? '/configurar' : '') + '?empresa=' + cid,
+      );
       await expect(
         guest.getByRole('heading', {
-          name: mode === 'new' ? 'Cadastro desativado' : 'Minha Agenda',
+          name: mode === 'new' ? 'Quais dias você atende?' : 'Minha Agenda',
           exact: true,
         }),
       ).toBeVisible();

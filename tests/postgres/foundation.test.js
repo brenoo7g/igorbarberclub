@@ -144,8 +144,9 @@ async function snapshot(raw, tables) {
 const count = async (db, table) =>
   Number((await db.get(`SELECT COUNT(*) AS count FROM ${table}`)).count);
 async function assertCatalog(db) {
-  for (const table of ['companies', 'niches', 'templates', 'company_settings'])
+  for (const table of ['companies', 'niches', 'company_settings'])
     assert.equal(await count(db, table), 1);
+  assert.equal(await count(db, 'templates'), 2);
   assert.equal(await count(db, 'schema_migrations'), migrations.length);
   assert.deepEqual(
     (await db.all('SELECT id,max_professionals FROM plans ORDER BY id')).map((p) => [
@@ -159,7 +160,10 @@ async function assertCatalog(db) {
   );
   assert.equal((await db.get('SELECT id FROM companies')).id, 'igor-barber-club');
   assert.equal((await db.get('SELECT id FROM niches')).id, 'barbershop');
-  assert.equal((await db.get('SELECT id FROM templates')).id, 'barber-classic');
+  assert.equal(
+    (await db.get("SELECT id FROM templates WHERE id='barber-classic'")).id,
+    'barber-classic',
+  );
   assert.equal(await count(db, 'subscriptions'), 0);
 }
 async function shadow(t) {
@@ -299,6 +303,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'barber_services',
       'professional_users',
       'professional_activity_events',
+      'professional_personal_blocks',
       'company_onboarding',
       'company_clients',
       'client_appointments',
@@ -331,6 +336,7 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'barber_services',
           'professional_users',
           'professional_activity_events',
+          'professional_personal_blocks',
           'company_onboarding',
           'company_clients',
           'client_appointments',
@@ -652,7 +658,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
@@ -661,6 +667,8 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   for (const row of before.appointments || []) if (row.notes === '') delete row.notes;
   for (const row of before.barbers || []) if (row.photo_url === null) delete row.photo_url;
   for (const row of before.portfolio || []) if (row.sort_order === 0) delete row.sort_order;
+  assert.equal(after.templates.filter((row) => row.id === 'gradefy-minisite').length, 1);
+  after.templates = after.templates.filter((row) => row.id !== 'gradefy-minisite');
   assert.deepEqual(after, before);
   assert.equal(
     (await raw.query("SELECT indexname FROM pg_indexes WHERE indexname='custom_company_name'")).rows
@@ -721,11 +729,15 @@ test('24 Gradefy 7C PostgreSQL real onboarding catalog and inactive templates', 
     ['barbershop'],
   );
   assert.deepEqual(catalog.templates, [
-    { code: 'barber-classic', name: 'Barber Classic', nicheCode: 'barbershop' },
+    { code: 'gradefy-minisite', name: 'Gradefy Mini Site', nicheCode: 'barbershop' },
   ]);
   assert.equal((await db.get('SELECT COUNT(*) AS n FROM subscriptions')).n, '0');
-  await db.run("UPDATE templates SET active=0 WHERE id='barber-classic'");
-  assert.deepEqual(await getOnboardingCatalog(db), { niches: [], templates: [] });
+  await db.run("UPDATE templates SET active=0 WHERE id IN ('barber-classic','gradefy-minisite')");
+  assert.deepEqual(await getOnboardingCatalog(db), {
+    defaultTemplateCode: null,
+    niches: [],
+    templates: [],
+  });
 });
 
 test('25 Gradefy 7D.1 PostgreSQL company creation, idempotency and cross-connection concurrency', async (t) => {
@@ -846,4 +858,22 @@ test('38 Gradefy 7F.3C.1 PostgreSQL structured address, professional invitations
     await import('../helpers/session-address-invitations.js');
   await assertSessionAddressMigration(t, db);
   await assertSessionAddressInvitations(t, db, second);
+});
+
+test('39 Gradefy 7F.3C.2 PostgreSQL personal schedule onboarding and cross-connection races', async (t) => {
+  const { db, url } = await makeCase(t, 'own_availability'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertProfessionalAvailability, assertProfessionalAvailabilityMigration } =
+    await import('../helpers/professional-availability.js');
+  await assertProfessionalAvailabilityMigration(t, db);
+  await assertProfessionalAvailability(t, db, second);
+});
+
+test('40 Gradefy 7F.4A PostgreSQL Mini Site lifecycle, images and existing booking motor', async (t) => {
+  const { db, url } = await makeCase(t, 'minisite'),
+    second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertMinisite } = await import('../helpers/minisite.js');
+  await assertMinisite(t, db, second);
 });

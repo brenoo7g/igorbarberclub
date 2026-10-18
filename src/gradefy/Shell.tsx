@@ -6,6 +6,7 @@ import { gradefyApi } from './api';
 import { gradefyTokens } from './tokens';
 import { GradefyLogo } from './components';
 import './styles.css';
+import './journey.css';
 
 const variables = {
   ...Object.fromEntries(
@@ -27,6 +28,8 @@ const variables = {
   ),
 } as CSSProperties;
 export default function GradefyShell() {
+  const pathname = useLocation().pathname;
+  const journey = ['/app/conta', '/app/convite', '/app/minha-agenda/configurar'].includes(pathname);
   const management = [
     '/app/dashboard',
     '/app/agenda',
@@ -38,6 +41,7 @@ export default function GradefyShell() {
     '/app/equipe',
     '/app/configuracoes',
     '/app/minha-agenda',
+    '/app/minha-agenda/configurar',
   ].includes(useLocation().pathname);
   useEffect(() => {
     const title = document.title;
@@ -53,7 +57,12 @@ export default function GradefyShell() {
     };
   }, []);
   return (
-    <div className={'gf-app' + (management ? ' gf-management' : '')} style={variables}>
+    <div
+      className={
+        'gf-app' + (management ? ' gf-management' : '') + (journey ? ' gf-journey-root' : '')
+      }
+      style={variables}
+    >
       <AppProvider api={gradefyApi} loadConfig={false} sessionScope="gradefy">
         <a className="gf-skip" href="#gradefy-main">
           Ir para o conteúdo

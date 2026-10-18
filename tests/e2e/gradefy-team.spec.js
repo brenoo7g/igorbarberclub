@@ -95,7 +95,9 @@ test('invited registration preserves fragment, acceptance adds one membership an
     guest = await context.newPage();
   try {
     await guest.goto(invite.link);
-    await expect(guest.getByRole('heading', { name: 'Clube Horizonte' })).toBeVisible();
+    await expect(
+      guest.getByRole('heading', { name: 'Você foi convidado para Clube Horizonte' }),
+    ).toBeVisible();
     await guest.getByRole('link', { name: 'Criar minha conta', exact: true }).click();
     await expect(guest).toHaveURL(/\/app\/cadastro#token=/);
     await guest.getByLabel('Nome', { exact: true }).fill('Equipe Convidada');

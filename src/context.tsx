@@ -36,6 +36,7 @@ export function AppProvider({
         ? `/api/public/${encodeURIComponent(site.site.company.slug)}`
         : '/api');
   const [user, updateUser] = useState<User | null>(null);
+  const customerScope = sessionScope.startsWith('client:');
   const [visitor, updateVisitor] = useState<Visitor | null>(null);
   const identity = useRef({ user, visitor });
   identity.current = { user, visitor };
@@ -90,7 +91,7 @@ export function AppProvider({
           } else if (
             !identity.current.user &&
             !identity.current.visitor &&
-            sessionScope === 'gradefy'
+            (sessionScope === 'gradefy' || customerScope)
           )
             setSessionError(errorMessage(error));
           else if (!loadConfig) setToast(errorMessage(error));
@@ -107,7 +108,9 @@ export function AppProvider({
       if (active) setLoading(false);
     });
     if (typeof BroadcastChannel !== 'undefined') {
-      channel.current = new BroadcastChannel('igor-account');
+      channel.current = new BroadcastChannel(
+        customerScope ? 'gradefy-client-account' : 'igor-account',
+      );
       channel.current.onmessage = () => {
         revision.current++;
         if (checking)
@@ -161,13 +164,15 @@ export function AppProvider({
     <Context.Provider
       value={{ api, user, visitor, setVisitor, loading, config, setUser, logout, notify }}
     >
-      {!loading && sessionError && !user && sessionScope === 'gradefy' ? (
-        <div className="gf-ready">
-          <div className="gf-card">
+      {!loading && sessionError && !user && (sessionScope === 'gradefy' || customerScope) ? (
+        <div className={customerScope ? 'ms-client-boundary' : 'gf-ready'}>
+          <div className={customerScope ? 'ms-panel' : 'gf-card'}>
             <h1>Não foi possível verificar sua sessão</h1>
             <p role="alert">{sessionError}</p>
             <button
-              className="gf-button gf-primary"
+              className={
+                customerScope ? 'ms-client-button ms-client-primary' : 'gf-button gf-primary'
+              }
               onClick={() => setSessionRevision((n) => n + 1)}
             >
               Tentar novamente

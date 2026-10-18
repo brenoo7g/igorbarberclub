@@ -30,6 +30,7 @@ export interface Barber {
   photo_url?: string | null;
 }
 export interface PublicSite {
+  hours?: { days: WorkingDay[]; timezone: string; now: string } | null;
   company: {
     id: string;
     name: string;

@@ -83,6 +83,7 @@ import {
 import { dateAccess, minutes } from './schedule-domain.js';
 import { installPasswordRecovery } from './password-recovery.js';
 import { installGuestSessions, ownsAppointment, publicVisitor } from './guest-session.js';
+import { createClientAuth } from './client-auth.js';
 const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -191,6 +192,7 @@ export function createApp(
     }),
   );
   app.use('/api/auth/profile', express.json({ limit: '768kb' }));
+  app.use(/^\/api\/public\/[^/]+\/auth\/profile$/, express.json({ limit: '768kb' }));
   app.use('/api/admin/portfolio', express.json({ limit: '1500kb' }));
   app.use(express.json({ limit: '32kb' }));
   app.use(cookieParser());
@@ -309,6 +311,7 @@ export function createApp(
     res.json({ ok: true });
   });
   const dummyHash = bcrypt.hashSync(randomBytes(24).toString('hex'), 12);
+  const clientAuth = createClientAuth(db, { secret, secureCookies, authLimiter, dummyHash });
   app.get('/api/health', (_req, res) => res.json({ ok: true, database: db.dialect }));
   app.get('/api/config', (_req, res) =>
     res.json({
@@ -377,10 +380,19 @@ export function createApp(
     const reservations =
       (req.method === 'GET' && ['/appointments', '/auth/me'].includes(req.path)) ||
       (req.method === 'PATCH' && /^\/appointments\/[^/]+\/cancel$/.test(req.path)) ||
-      (req.method === 'POST' && req.path === '/auth/logout');
+      (req.method === 'POST' &&
+        /^\/auth\/(?:logout|login|register|forgot-password|reset-password)$/.test(req.path)) ||
+      (req.method === 'PATCH' && /^\/auth\/(?:profile|password)$/.test(req.path));
     req.companyContext = await resolvePublicCompany(db, req.params.companySlug, { reservations });
-    if (/^\/admin(?:\/|$)/i.test(req.path))
+    if (/^\/(?:admin|professional)(?:\/|$)/i.test(req.path))
       return res.status(404).json({ error: 'Rota não encontrada.' });
+    const company = await db.get('SELECT template_id FROM companies WHERE id=?', [
+      req.companyContext.companyId,
+    ]);
+    if (company.template_id === 'gradefy-minisite') {
+      req.miniClientMode = true;
+      await clientAuth.read(req);
+    }
     return dispatch(req, res, next);
   });
   app.use('/api', async (req, res, next) => {
@@ -391,11 +403,13 @@ export function createApp(
   });
   function createCompanyRouter(companyId) {
     const app = express.Router();
+    clientAuth.install(app, companyId);
     app.get('/site', async (_req, res) => res.json(await getPublicSite(db, companyId)));
 
     const visitors = installGuestSessions(app, db, companyId, { secureCookies, testGuestAccess });
     if (testGuestAccess)
       app.post('/auth/test-access', authLimiter, async (req, res) => {
+        if (req.miniClientMode) return res.status(404).json({ error: 'Rota não encontrada.' });
         const { email } = z.object({ email: emailSchema }).strict().parse(req.body);
         const result = await visitors.restoreTestAccess(email);
         if (!result) fail(404, 'Faça primeiro um agendamento de teste com esse e-mail.');
@@ -409,7 +423,7 @@ export function createApp(
         res.json({ visitor: publicVisitor(result.visitor) });
       });
     const bookingAuthenticated = (req, _res, next) =>
-      req.user || req.visitor
+      req.user || (!req.miniClientMode && req.visitor)
         ? next()
         : next(
             new HttpError(401, 'Acesse pelo navegador usado no agendamento ou entre na sua conta.'),
@@ -653,6 +667,12 @@ export function createApp(
       asGuest = false,
       internal = false,
     ) {
+      if (req.miniClientMode && (asGuest || !req.clientUser))
+        domainError(
+          401,
+          'CLIENT_LOGIN_REQUIRED',
+          'Entre como cliente para agendar neste estabelecimento.',
+        );
       const internalSchema = bookingSchema
         .extend({
           services: reschedule ? z.array(z.string().min(1)).min(1).max(100) : singleServiceSchema,

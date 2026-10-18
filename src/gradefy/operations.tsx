@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-import { Check, ArrowLeft, ArrowRight, Plus, Pencil, Clock, Scissors, Users } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Plus, Pencil, Clock, Scissors, Users } from 'lucide-react';
 import { useApp } from '../context';
 import { errorMessage, money, newIdempotencyKey } from '../lib';
 import { Button, ButtonLink, Card, Feedback, Input, Loading } from './components';
 import type { PendingBusiness } from './business-types';
+import './minisite-editor.css';
 
 type Step = PendingBusiness['currentStep'];
 interface Service {
@@ -130,7 +131,11 @@ export default function Operations() {
       setRevision((r) => r + 1);
       if (path === '/complete') {
         refreshBusiness();
-        navigate('/app/onboarding/complete');
+        navigate(
+          data?.company.template.code === 'gradefy-minisite'
+            ? `/app/onboarding/site?empresa=${encodeURIComponent(data.company.id)}`
+            : '/app/onboarding/complete',
+        );
       }
     } catch (failure) {
       setError(errorMessage(failure));
@@ -761,65 +766,117 @@ export default function Operations() {
     </div>
   );
 }
-export function Completed({ placeholder = false }: { placeholder?: boolean }) {
+export function Completed() {
   const { business } = useOutletContext<{ business: PendingBusiness | null }>();
+  const { api } = useApp();
+  const [site, setSite] = useState<import('./site-editor').State | null>(null),
+    [error, setError] = useState(''),
+    [revision, setRevision] = useState(0);
+  useEffect(() => {
+    if (!business || business.onboardingStatus !== 'completed') return;
+    const c = new AbortController();
+    setError('');
+    api<import('./site-editor').State>('/company-site', {
+      signal: c.signal,
+      headers: { 'X-Gradefy-Company-Id': business.id },
+    })
+      .then((s) => {
+        if (!c.signal.aborted) setSite(s);
+      })
+      .catch((e) => {
+        if (!c.signal.aborted) setError(errorMessage(e));
+      });
+    return () => c.abort();
+  }, [api, business?.id, business?.onboardingStatus, revision]);
   if (!business) return <Loading />;
   if (business.onboardingStatus !== 'completed')
     return (
       <div className="gf-ready">
         <Card>
           <h1>Revise sua configuração</h1>
-          <p>Configure serviços, profissionais e horários antes de iniciar o trial.</p>
           <ButtonLink to="/app/onboarding/operations">Retomar configuração</ButtonLink>
         </Card>
       </div>
     );
-  const active =
-    business.trial?.status === 'trialing' && Date.parse(business.trial.trial_ends_at) > Date.now();
+  const trial = business.trial,
+    active = site ? site.plan.subscriptionStatus === 'trialing' && site.plan.valid : null;
+  const customized = Boolean(
+    site &&
+    (site.images.logo ||
+      site.images.banner ||
+      site.gallery.length ||
+      site.settings.slogan ||
+      site.settings.working_days),
+  );
+  const mini = business.template.code === 'gradefy-minisite';
   return (
-    <div className="gf-ready">
-      <Card>
-        <span className="gf-ready-icon">
-          <Check size={28} />
-        </span>
-        <div className="gf-kicker">{business.name}</div>
-        <h1>{placeholder ? 'Personalização do seu site' : 'Sua empresa está configurada!'}</h1>
-        <p>
-          Plano {business.plan.name} · {business.template.name}
-        </p>
-        <Feedback success>
-          {active
-            ? '7 dias gratuitos ativos.'
-            : 'Configuração concluída. Seu período grátis terminou.'}
-        </Feedback>
-        {business.trial && (
-          <p>
-            Período:{' '}
-            {new Date(business.trial.trial_started_at).toLocaleString('pt-BR', {
-              timeZone: 'America/Sao_Paulo',
-            })}{' '}
-            até{' '}
-            {new Date(business.trial.trial_ends_at).toLocaleString('pt-BR', {
-              timeZone: 'America/Sao_Paulo',
-            })}{' '}
-            (horário de Brasília).
-          </p>
-        )}
-        <p>Empresa criada com sucesso. Seu site ainda não foi publicado.</p>
-        {placeholder ? (
-          <>
-            <p>A personalização estará disponível na Fase 7E.</p>
-            <ButtonLink to="/app/onboarding/complete" variant="secondary">
-              Voltar para minha empresa
-            </ButtonLink>
-          </>
-        ) : (
-          <ButtonLink to="/app/onboarding/site">Personalizar meu site</ButtonLink>
-        )}
-        <ButtonLink to="/app/conta" variant="secondary">
-          Voltar para minha conta
+    <div className="gf-plans-page gf-business-complete">
+      <div className="gf-kicker">{site?.company.name || business.name}</div>
+      <h1>Seu negócio está pronto!</h1>
+      <p>Confira seu site e publique quando quiser.</p>
+      <Feedback>{error}</Feedback>
+      {error && <Button onClick={() => setRevision((n) => n + 1)}>Tentar novamente</Button>}
+      <div className="gf-complete-grid">
+        <Card>
+          <p>Plano selecionado</p>
+          <strong>{business.plan.name}</strong>
+        </Card>
+        <Card>
+          <p>Site do estabelecimento</p>
+          <strong>{business.template.name}</strong>
+        </Card>
+        <Card>
+          <p>Período de teste</p>
+          <strong>
+            {active === null
+              ? 'Consultando…'
+              : active
+                ? 'Teste grátis ativo'
+                : site?.plan.valid
+                  ? 'Plano vigente'
+                  : 'Teste encerrado'}
+          </strong>
+          {trial && (
+            <p>
+              Até{' '}
+              {new Date(trial.trial_ends_at).toLocaleString('pt-BR', {
+                timeZone: site?.company.timezone || 'America/Sao_Paulo',
+              })}
+            </p>
+          )}
+        </Card>
+        <Card>
+          <p>Publicação</p>
+          <strong>
+            {site ? (site.company.sitePublished ? 'Publicado' : 'Rascunho') : 'Consultando…'}
+          </strong>
+        </Card>
+      </div>
+      <div className="gf-complete-actions">
+        <ButtonLink
+          to={
+            customized
+              ? `/preview/site/${business.id}`
+              : mini
+                ? `/app/onboarding/site?empresa=${business.id}`
+                : `/app/meu-site?empresa=${business.id}`
+          }
+        >
+          {mini
+            ? customized
+              ? 'Visualizar meu Mini Site'
+              : 'Personalizar meu Mini Site'
+            : customized
+              ? 'Visualizar meu site'
+              : 'Personalizar meu site'}
         </ButtonLink>
-      </Card>
+        <ButtonLink to={`/app/dashboard?empresa=${business.id}`} variant="secondary">
+          Ir para meu painel
+        </ButtonLink>
+      </div>
+      <p className="gf-mini-muted">
+        Salvar configurações não publica o site nem reinicia o período de teste.
+      </p>
     </div>
   );
 }

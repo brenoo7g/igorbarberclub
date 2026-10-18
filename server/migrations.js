@@ -87,6 +87,12 @@ export const migrations = Object.freeze([
     name: 'gradefy-session-address-invitations',
     file: '018-gradefy-session-address-invitations.sql',
   }),
+  Object.freeze({
+    version: 19,
+    name: 'gradefy-professional-availability',
+    file: '019-gradefy-professional-availability.sql',
+  }),
+  Object.freeze({ version: 20, name: 'gradefy-minisite', file: '020-gradefy-minisite.sql' }),
 ]);
 
 const foundationTables = [

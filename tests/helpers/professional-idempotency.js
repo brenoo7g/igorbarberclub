@@ -240,7 +240,10 @@ export async function assertProfessionalIdempotency(t, db, second = db) {
         await db.get('SELECT version FROM schema_migrations WHERE version=7'),
         undefined,
       );
-      assert.deepEqual(await runMigrations(db), [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+      assert.deepEqual(
+        await runMigrations(db),
+        [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      );
       assert.deepEqual(await db.all('SELECT * FROM idempotency_keys'), legacy);
       assert.deepEqual(await runMigrations(db), []);
       const original = await db.get('SELECT checksum FROM schema_migrations WHERE version=7');

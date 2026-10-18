@@ -3,6 +3,8 @@ import { getLegacyCompanyId } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { portfolioImage, cleanupAssets, verifyPublicImage } from './site-assets.js';
+import { MINI_SITE, galleryLimit } from './site-templates.js';
+import { lockResource } from './scheduling-locks.js';
 
 const details = z.object({
   title: z.string().trim().min(2).max(80),
@@ -49,10 +51,12 @@ export function installPortfolioRoutes(
 ) {
   requireCompanyId(companyId);
   app.get('/portfolio', async (req, res) => {
+    const company = await db.get('SELECT template_id FROM companies WHERE id=?', [companyId]);
     res.json(
       (
         await db.all(
-          'SELECT id,title,category,version FROM portfolio WHERE company_id=? ORDER BY sort_order,created_at DESC,id DESC',
+          'SELECT id,title,category,version FROM portfolio WHERE company_id=? ORDER BY sort_order,created_at DESC,id DESC' +
+            (company.template_id === MINI_SITE ? ' LIMIT 5' : ''),
           [companyId],
         )
       ).map((row) => metadata(row, req.companyContext.company)),
@@ -68,16 +72,25 @@ export function installPortfolioRoutes(
     const image = await normalizeImage(data.image);
     const row = { id: randomUUID(), title: data.title, category: data.category, version: 1 };
     await db.transaction(async (tx) => {
+      await lockResource(tx, companyId, 'site-editor', 'settings');
       if (tx.dialect === 'postgres') await tx.run('SELECT pg_advisory_xact_lock(789128)');
+      const company = await tx.get('SELECT template_id FROM companies WHERE id=?', [companyId]);
       const count = await tx.get('SELECT COUNT(*) AS total FROM portfolio WHERE company_id=?', [
         companyId,
       ]);
-      if (Number(count.total) >= 40)
-        fail(409, 'A galeria permite até 40 fotos. Remova uma foto antes de adicionar outra.');
+      if (Number(count.total) >= galleryLimit(company.template_id))
+        fail(
+          409,
+          `A galeria permite até ${galleryLimit(company.template_id)} fotos. Remova uma foto antes de adicionar outra.`,
+        );
       await tx.run(
         `INSERT INTO portfolio (company_id,id,title,category,image,version,created_at) VALUES (?,?,?,?,?,?,?)`,
         [companyId, row.id, row.title, row.category, image, row.version, new Date().toISOString()],
       );
+      if (company.template_id === MINI_SITE)
+        await tx.run('UPDATE company_settings SET site_version=site_version+1 WHERE company_id=?', [
+          companyId,
+        ]);
     });
     res.status(201).json(metadata(row, req.companyContext.company));
   });
@@ -88,6 +101,7 @@ export function installPortfolioRoutes(
       .parse(req.body);
     const image = data.image ? await normalizeImage(data.image) : null;
     const result = await db.transaction(async (tx) => {
+      await lockResource(tx, companyId, 'site-editor', 'settings');
       const row = await tx.get(
         `SELECT id,version FROM portfolio WHERE company_id=? AND id=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
         [companyId, req.params.id],
@@ -115,6 +129,10 @@ export function installPortfolioRoutes(
           );
         }
       }
+      await tx.run(
+        'UPDATE company_settings SET site_version=site_version+1 WHERE company_id=? AND EXISTS(SELECT 1 FROM companies WHERE id=? AND template_id=?)',
+        [companyId, companyId, MINI_SITE],
+      );
       return metadata(
         {
           ...row,
@@ -130,11 +148,16 @@ export function installPortfolioRoutes(
   });
   app.delete('/admin/portfolio/:id', authenticated, admin, async (req, res) => {
     await db.transaction(async (tx) => {
+      await lockResource(tx, companyId, 'site-editor', 'settings');
       const linked = await tx.get(
         'SELECT asset_id FROM portfolio_assets WHERE company_id=? AND portfolio_id=?',
         [companyId, req.params.id],
       );
       await tx.run('DELETE FROM portfolio WHERE company_id=? AND id=?', [companyId, req.params.id]);
+      await tx.run(
+        'UPDATE company_settings SET site_version=site_version+1 WHERE company_id=? AND EXISTS(SELECT 1 FROM companies WHERE id=? AND template_id=?)',
+        [companyId, companyId, MINI_SITE],
+      );
       if (linked)
         await tx.run(
           "UPDATE company_site_assets SET status='deleting' WHERE company_id=? AND id=?",

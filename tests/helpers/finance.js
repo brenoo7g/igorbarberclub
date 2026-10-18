@@ -58,7 +58,7 @@ export async function assertFinanceMigration(t, db) {
   await assert.rejects(runMigrations(broken), /injected finance migration/);
   for (const table of financialTables) await assert.rejects(db.all('SELECT * FROM ' + table));
   assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), journal);
-  assert.deepEqual(await runMigrations(db), [14, 15, 16, 17, 18]);
+  assert.deepEqual(await runMigrations(db), [14, 15, 16, 17, 18, 19, 20]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(await db.all('SELECT * FROM appointments ORDER BY company_id,id'), before);
   assert.deepEqual(

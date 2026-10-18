@@ -76,13 +76,13 @@ function usePlanCatalog() {
 export function Progress({ step = 0 }: { step?: number }) {
   return (
     <ol className="gf-onboarding-progress" aria-label="Progresso da configuração">
-      {['Plano', 'Segmento', 'Template', 'Seu negócio'].map((label, index) => (
+      {['Plano', 'Segmento', 'Seu negócio'].map((label, index) => (
         <li
           key={label}
-          aria-current={step === index ? 'step' : undefined}
-          className={step === index ? 'gf-step-current' : ''}
+          aria-current={Math.min(step, 2) === index ? 'step' : undefined}
+          className={Math.min(step, 2) === index ? 'gf-step-current' : ''}
         >
-          <span>{step > index ? <Check size={13} /> : index + 1}</span>
+          <span>{Math.min(step, 2) > index ? <Check size={13} /> : index + 1}</span>
           {label}
         </li>
       ))}

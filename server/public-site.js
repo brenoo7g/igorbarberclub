@@ -1,4 +1,7 @@
 import { requireCompanyId } from './company-context.js';
+import { supportsSite, MINI_SITE } from './site-templates.js';
+import { operationalSchema } from './operational-settings.js';
+import { currentTime } from './entitlements.js';
 
 // Only render URLs; never fetch arbitrary company URLs on the server.
 export function publicAsset(value) {
@@ -100,15 +103,31 @@ export async function getPublicSite(db, companyId, { preview = false } = {}) {
       (await db.get(`SELECT COUNT(*) AS n FROM ${table} WHERE company_id=?${filter}`, [companyId]))
         .n,
     );
+  if (company.template === MINI_SITE) {
+    // Only validated, explicitly configured company hours justify an open/closed label.
+    let days = null;
+    try {
+      const parsed = operationalSchema.shape.working_days.safeParse(
+        JSON.parse(row.working_days_json),
+      );
+      if (parsed.success) days = parsed.data;
+    } catch {}
+    return {
+      company,
+      settings,
+      counts: { ...counts, portfolio: Math.min(5, counts.portfolio) },
+      hours: days
+        ? { days, timezone: company.timezone, now: (await currentTime(db)).toISOString() }
+        : null,
+    };
+  }
   return { company, settings, counts };
 }
 
 // For a future publication workflow; reading optional content does not publish a business.
 export const publicationIssues = (site) => [
   ...(!site.company.name?.trim() ? ['company.name'] : []),
-  ...(site.company.template !== 'barber-classic' || site.company.niche !== 'barbershop'
-    ? ['company.template']
-    : []),
+  ...(!supportsSite(site.company.template, site.company.niche) ? ['company.template'] : []),
   ...(!site.counts.services ? ['services'] : []),
   ...(!site.counts.professionals ? ['professionals'] : []),
 ];

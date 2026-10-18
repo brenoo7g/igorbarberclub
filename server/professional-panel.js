@@ -5,6 +5,10 @@ import { currentTime, domainError } from './entitlements.js';
 import { addDays, dateInTimezone, clock } from './domain.js';
 import { readSchedule } from './schedule.js';
 import { readPolicies, intersectDay } from './operational-settings.js';
+import {
+  availabilityStatus,
+  installProfessionalAvailability,
+} from './professional-availability.js';
 
 export const professionalCompletionSchema = z
   .object({
@@ -64,6 +68,7 @@ export async function professionalAccess(tx, cid, actor, write = false) {
     professional: linkState === 'linked' ? p : null,
     linkState,
     message,
+    availability: p ? await availabilityStatus(tx, cid, p.id) : null,
   };
 }
 const listSchema = z
@@ -131,6 +136,7 @@ export function installProfessionalPanel(router, db, cid, { authenticated, updat
       domainError(409, 'COMPANY_CONTEXT_REQUIRED', 'Selecione a empresa para continuar.');
     next();
   });
+  installProfessionalAvailability(router, db, cid);
   router.get('/professional/agenda', async (req, res) => {
     const options = listSchema.parse(req.query);
     res.json(

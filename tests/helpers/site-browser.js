@@ -1,6 +1,9 @@
 ﻿import { expect } from '@playwright/test';
 
-export async function prepareSiteEditor(page) {
+export async function prepareSiteEditor(
+  page,
+  { templateCode = 'barber-classic', businessDetails = {} } = {},
+) {
   const email = `editor-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
   expect(
     (
@@ -24,7 +27,8 @@ export async function prepareSiteEditor(page) {
       region: 'RJ',
       planCode: 'individual',
       nicheCode: 'barbershop',
-      templateCode: 'barber-classic',
+      ...(templateCode ? { templateCode } : {}),
+      ...businessDetails,
     },
   });
   const { company } = await created.json();
@@ -68,6 +72,11 @@ export async function prepareSiteEditor(page) {
   ).toBe(200);
   await page.goto('/app/meu-site');
   await expect(page.getByRole('heading', { name: 'Meu Site', exact: true })).toBeVisible();
+  if (company.template.code === 'gradefy-minisite')
+    await page
+      .getByRole('navigation', { name: 'Seções do editor' })
+      .getByRole('button', { name: 'Identidade', exact: true })
+      .click();
   await expect(page.getByLabel('Nome público da empresa', { exact: true })).toHaveValue(
     'Espaço Editora',
   );

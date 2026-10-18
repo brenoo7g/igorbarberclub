@@ -1,0 +1,364 @@
+.gf-app.gf-journey-root {
+  --gf-muted: #b0b9e7;
+  --gf-border: #5960c34d;
+  background:
+    radial-gradient(ellipse at 0 0, #5023e138, transparent 38%),
+    radial-gradient(ellipse at 100% 90%, #193ce830, transparent 36%),
+    linear-gradient(#4c5ae00c 1px, transparent 1px),
+    linear-gradient(90deg, #4c5ae00c 1px, transparent 1px), #05091b;
+  background-size:
+    auto,
+    auto,
+    100px 100px,
+    100px 100px,
+    auto;
+}
+.gf-app.gf-journey-root > .gf-header,
+.gf-app.gf-journey-root > .gf-footer {
+  display: none;
+}
+.gf-journey-stage {
+  padding: clamp(24px, 5vw, 68px) 16px;
+}
+.gf-journey-card {
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto;
+  min-width: 0;
+  padding: clamp(22px, 4.5vw, 46px);
+  border: 1px solid #6965f5;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #11163aee, #080d24f5 55%, #101d46ee);
+  box-shadow:
+    inset 0 0 28px #414de42b,
+    0 0 32px #4331d02b,
+    0 18px 60px #01030f66;
+  display: grid;
+  gap: 24px;
+}
+.gf-journey-brand {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0 16px;
+}
+.gf-journey-heading {
+  text-align: center;
+  display: grid;
+  gap: 12px;
+}
+.gf-journey-heading .gf-kicker {
+  justify-content: center;
+  color: #c68bff;
+  font-size: 11px;
+}
+.gf-journey-heading h1 {
+  font-size: clamp(27px, 5vw, 43px);
+  line-height: 1.22;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.gf-app .gf-journey-heading p {
+  margin: 0;
+  line-height: 1.5;
+}
+.gf-journey-divider {
+  border: 0;
+  border-top: 1px solid var(--gf-border);
+  margin: 2px 0;
+}
+.gf-journey-state {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.gf-journey-state h2 {
+  font-size: clamp(20px, 4vw, 27px);
+  line-height: 1.4;
+  margin: 0;
+}
+.gf-journey-state h2 svg {
+  color: #5bf3b4;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+.gf-journey-state p {
+  font-size: 14px;
+  margin: 0;
+}
+.gf-journey-icon {
+  display: grid;
+  place-items: center;
+  color: #b3a2ff;
+  background: linear-gradient(135deg, #34389688, #19215d88);
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.gf-journey-state > .gf-journey-icon {
+  width: 76px;
+  height: 76px;
+  border: 1px solid #7454e8;
+  border-radius: 22px;
+  box-shadow: 0 0 22px #693dff26;
+}
+.gf-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.gf-detail-tile {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--gf-border);
+  border-radius: 16px;
+  background: #11163380;
+  text-align: left;
+}
+.gf-detail-tile > div {
+  min-width: 0;
+}
+.gf-detail-tile strong {
+  display: block;
+  color: var(--gf-text);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.gf-detail-label {
+  display: block;
+  color: var(--gf-muted);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.gf-detail-wide {
+  grid-column: 1 / -1;
+}
+.gf-journey-actions {
+  display: grid;
+  gap: 12px;
+}
+.gf-journey-card .gf-primary,
+.gf-invitation-dialog .gf-primary {
+  background: linear-gradient(105deg, #6245ff, #9654f2 70%, #be7cf8);
+  border-color: #a78bfa;
+  box-shadow: 0 3px 20px #7438f42b;
+}
+.gf-journey-card .gf-secondary,
+.gf-invitation-dialog .gf-secondary {
+  background: #0b103080;
+  border-color: #6e60d6;
+}
+.gf-journey-footer {
+  border-top: 1px solid var(--gf-border);
+  padding-top: 24px;
+  color: var(--gf-muted);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.gf-journey-footer span {
+  color: #ad70ff;
+  margin: 0 6px;
+}
+.gf-journey-card .gf-text-link {
+  color: #c48bff;
+  text-decoration: underline;
+}
+.gf-account-companies {
+  display: grid;
+  gap: 24px;
+}
+.gf-account-company {
+  display: grid;
+  gap: 16px;
+  border-bottom: 1px solid var(--gf-border);
+  padding-bottom: 24px;
+}
+.gf-account-company:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.gf-account-company .gf-detail-tile:first-child {
+  flex: 1.2;
+}
+.gf-journey-badges {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.gf-journey-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #5954d766;
+  background: #2420614d;
+  color: #dfd9ff;
+  border-radius: 14px;
+  padding: 9px 13px;
+  font-size: 13px;
+}
+.gf-journey-pending {
+  color: #ffd477;
+  background: #a7791520;
+  border-color: #a77f3f66;
+}
+.gf-invitation-dialog.modal {
+  --gf-border: #5960c34d;
+  --gf-muted: #b0b9e7;
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 0;
+  border: 1px solid #6965f5;
+  border-radius: 24px;
+  color: var(--gf-text);
+  background: linear-gradient(135deg, #13183c, #080d24 60%, #142247);
+  box-shadow:
+    inset 0 0 28px #414de42b,
+    0 0 40px #4331d038;
+}
+.gf-invitation-dialog::backdrop {
+  background: #020617cc;
+}
+.gf-invitation-dialog .modal-inner {
+  position: relative;
+  padding: clamp(20px, 4vw, 34px);
+}
+.gf-invitation-dialog .modal-heading {
+  margin-bottom: 18px;
+}
+.gf-invitation-dialog .modal-heading h2 {
+  text-align: center;
+  flex: 1;
+  font-size: clamp(25px, 4vw, 32px);
+}
+.gf-invitation-dialog .modal-heading .icon-button {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.gf-invitation-content {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.gf-invitation-content > h3 {
+  text-align: center;
+  font-size: 20px;
+  color: var(--gf-muted);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.gf-invitation-content p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.gf-invitation-content .gf-detail-tile {
+  padding: 12px;
+}
+.gf-copy-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.gf-copy-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #5757b3;
+  border-radius: 14px;
+  padding: 6px 8px 6px 12px;
+  background: #16183c99;
+  min-width: 0;
+}
+.gf-copy-control > svg {
+  color: #aba4ff;
+  flex-shrink: 0;
+}
+.gf-copy-control input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--gf-text);
+  font: 13px/1.6 var(--gf-font-body);
+  padding: 9px 0;
+}
+.gf-copy-control input.gf-copy-code {
+  font-family: monospace;
+  letter-spacing: 0.02em;
+}
+.gf-copy-control button {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid #6254c9;
+  border-radius: 12px;
+  background: #5141bc42;
+  color: #e5e0ff;
+}
+.gf-invite-alert {
+  display: flex;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #db3a83;
+  border-radius: 16px;
+  background: #ac20552b;
+  color: #fbc6df;
+}
+.gf-invite-alert > svg {
+  flex-shrink: 0;
+  color: #ff7bb9;
+}
+.gf-invite-alert strong {
+  color: #ff9dce;
+}
+.gf-app .gf-invite-alert p {
+  color: #e7b9e8;
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+@media (max-width: 480px) {
+  .gf-journey-stage {
+    padding: 20px 12px;
+  }
+  .gf-journey-card {
+    border-radius: 22px;
+    gap: 22px;
+    padding: 24px 18px;
+  }
+  .gf-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .gf-detail-tile {
+    padding: 14px;
+    gap: 12px;
+  }
+  .gf-journey-card .gf-button {
+    padding: 14px 12px;
+  }
+  .gf-journey-brand .gf-brand {
+    gap: 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gf-journey-root *,
+  .gf-invitation-dialog * {
+    scroll-behavior: auto;
+    animation: none;
+    transition: none;
+  }
+}

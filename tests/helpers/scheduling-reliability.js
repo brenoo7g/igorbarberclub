@@ -42,7 +42,10 @@ export async function assertReliabilityMigration(t, db) {
   assert.equal(JSON.stringify(await db.all('SELECT * FROM notifications')), before);
   await assert.rejects(db.all('SELECT * FROM idempotency_keys'));
   await assert.rejects(db.all('SELECT claim_token FROM notifications'));
-  assert.deepEqual(await runMigrations(db), [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+  assert.deepEqual(
+    await runMigrations(db),
+    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  );
   assert.deepEqual(await runMigrations(db), []);
   const version = await db.get('SELECT * FROM schema_migrations WHERE version=5');
   await db.run('UPDATE schema_migrations SET checksum=? WHERE version=5', ['0'.repeat(64)]);

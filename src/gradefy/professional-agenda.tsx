@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import {
   CalendarDays,
   CheckCheck,
@@ -34,6 +34,14 @@ type Item = {
   canComplete: boolean;
 };
 type State = {
+  availability: {
+    configured: boolean;
+    state: string;
+    pending: string[];
+    nextPath: string;
+    active: boolean;
+    servicesAssigned: boolean;
+  } | null;
   company: { id: string; name: string; timezone: string };
   professional: { id: string; name: string } | null;
   linkState: 'linked' | 'pending' | 'inactive';
@@ -126,9 +134,12 @@ function Navigation({
 }
 function Content({ companyId, companies, choose, refreshAccess }: ManagementProps) {
   const { api, logout } = useApp();
+  const location = useLocation();
   const [data, setData] = useState<State | null>(null),
     [error, setError] = useState(''),
-    [notice, setNotice] = useState(''),
+    [notice, setNotice] = useState<string>(
+      location.state?.scheduleSaved ? 'Sua agenda foi configurada!' : '',
+    ),
     [busy, setBusy] = useState(true),
     [date, setDate] = useState(''),
     [view, setView] = useState<'day' | 'week'>('day'),
@@ -251,6 +262,8 @@ function Content({ companyId, companies, choose, refreshAccess }: ManagementProp
   const todayCount = Object.values(data?.summary || {}).reduce((a, b) => a + b, 0);
   const confirmed = data?.summary?.confirmed || 0,
     completed = data?.summary?.completed || 0;
+  if (data?.availability && !data.availability.configured)
+    return <Navigate to={data.availability.nextPath} replace />;
   return (
     <div className="gf-dashboard gf-agenda gf-professional-agenda">
       <Navigation companyId={companyId} onExit={exit} showHours={data?.linkState === 'linked'} />
@@ -275,6 +288,42 @@ function Content({ companyId, companies, choose, refreshAccess }: ManagementProp
         )}
         <Feedback>{error}</Feedback>
         <Feedback success>{notice}</Feedback>
+        {notice === 'Sua agenda foi configurada!' &&
+          data?.availability &&
+          (!data.availability.active || !data.availability.servicesAssigned) && (
+            <p>Agora falta o estabelecimento concluir sua ativação para receber reservas.</p>
+          )}
+        {data?.availability?.configured && (
+          <Card>
+            <h2>
+              {data.availability.state === 'ready' && data.editable
+                ? 'Pronto para receber agendamentos'
+                : 'Agenda configurada'}
+            </h2>
+            {data.availability.pending.length > 0 && (
+              <>
+                <p>Aguardando configuração do estabelecimento:</p>
+                <ul>
+                  {data.availability.pending.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {!data.editable && (
+              <p>
+                A disponibilidade pode ser consultada. Fale com a gestão para verificar a assinatura
+                e o acesso.
+              </p>
+            )}
+            <ButtonLink
+              to={'/app/minha-agenda/configurar?empresa=' + encodeURIComponent(companyId)}
+              variant="secondary"
+            >
+              Configurar meus horários
+            </ButtonLink>
+          </Card>
+        )}
         {!data ? (
           busy ? (
             <Loading label="Carregando sua agenda…" />
@@ -460,7 +509,7 @@ function Content({ companyId, companies, choose, refreshAccess }: ManagementProp
                 <h2>Meus Horários</h2>
                 <p>
                   Expediente efetivo do estabelecimento e do seu cadastro. Pausas, folgas e
-                  bloqueios continuam valendo. Alterações são feitas pela gestão.
+                  bloqueios continuam valendo. Você pode configurar sua rotina no botão acima.
                 </p>
                 <div className="gf-professional-hours">
                   {data.hours?.effective.map((d) => (

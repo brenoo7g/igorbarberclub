@@ -5,6 +5,7 @@ import { lockResource, lockCatalog, lockBarbers } from './scheduling-locks.js';
 import { operationalSnapshot } from './operational-onboarding.js';
 import { readAsset } from './site-assets.js';
 import { publicAsset } from './public-site.js';
+import { supportsSite } from './site-templates.js';
 
 export const lockPublication = (tx, cid, shared = false) =>
   lockResource(tx, cid, 'site-publication', 'visibility', shared);
@@ -19,10 +20,10 @@ export async function validatePublication(tx, row, storage) {
   )
     domainError(409, 'INVALID_PUBLIC_IDENTITY', 'Revise o nome público e o endereço do site.');
   const template = await tx.get(
-    'SELECT t.id FROM companies c JOIN templates t ON t.id=c.template_id AND t.niche_id=c.niche_id AND t.active=1 JOIN niches n ON n.id=c.niche_id AND n.active=1 WHERE c.id=?',
+    'SELECT t.id,t.niche_id FROM companies c JOIN templates t ON t.id=c.template_id AND t.niche_id=c.niche_id AND t.active=1 JOIN niches n ON n.id=c.niche_id AND n.active=1 WHERE c.id=?',
     [cid],
   );
-  if (!template || template.id !== 'barber-classic')
+  if (!template || !supportsSite(template.id, template.niche_id))
     domainError(409, 'TEMPLATE_UNAVAILABLE', 'O template não está disponível para esta empresa.');
   const onboarding = await tx.get('SELECT status FROM company_onboarding WHERE company_id=?', [
     cid,

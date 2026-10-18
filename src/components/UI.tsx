@@ -144,10 +144,14 @@ export function Modal({
   title,
   onClose,
   children,
+  className = '',
+  brand,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
+  brand?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -162,7 +166,7 @@ export function Modal({
   }, []);
   return (
     <dialog
-      className="modal"
+      className={`modal ${className}`}
       ref={ref}
       aria-labelledby="modal-title"
       onCancel={(event) => {
@@ -174,6 +178,7 @@ export function Modal({
       }}
     >
       <div className="modal-inner">
+        {brand}
         <div className="modal-heading">
           <h2 id="modal-title">{title}</h2>
           <button type="button" className="icon-button" aria-label="Fechar" onClick={onClose}>

@@ -22,7 +22,6 @@ async function prepare(page) {
     .filter({ has: page.getByRole('radio', { name: 'Barbearia', exact: true }) })
     .click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
-  await page.getByRole('button', { name: 'Escolher este template' }).click();
   await expect(page).toHaveURL('/app/onboarding/setup');
   await expect(
     page.getByRole('heading', { name: 'Agora vamos configurar seu negócio.' }),
@@ -51,7 +50,7 @@ test('initial business form, responsive creation, owner-only durable resume with
   await expect(page.getByRole('radio', { name: 'Plano Individual', exact: true })).toBeChecked();
   await page.goto('/app/onboarding/setup');
   await expect(page.locator('.gf-business-choices')).toContainText(
-    'Individual · Barbearia · Barber Classic',
+    'Individual · Barbearia · Gradefy Mini Site',
   );
   await fill(page, `meu-espaco-${Date.now()}`);
   for (const width of [320, 390, 768, 1440]) {
@@ -71,7 +70,7 @@ test('initial business form, responsive creation, owner-only durable resume with
   expect(request.postDataJSON()).toMatchObject({
     planCode: 'individual',
     nicheCode: 'barbershop',
-    templateCode: 'barber-classic',
+    templateCode: 'gradefy-minisite',
   });
   await expect(
     page.getByRole('heading', { name: 'Seu negócio está em configuração.' }),
@@ -100,7 +99,7 @@ test('initial business form, responsive creation, owner-only durable resume with
     page.getByRole('heading', { name: 'Seu negócio está em configuração.' }),
   ).toBeVisible();
   await page.getByRole('link', { name: 'Retomar configuração' }).click();
-  await expect(page.locator('.gf-setup-summary')).toContainText('Barber Classic');
+  await expect(page.locator('.gf-setup-summary')).toContainText('Gradefy Mini Site');
   const { user } = await (await page.request.get('/api/auth/me?scope=gradefy')).json();
   await page.context().clearCookies();
   await page.goto('/app/onboarding/setup');

@@ -35,6 +35,7 @@ export function installGuestSessions(
     return res.cookie(cookieName, token, { ...options, maxAge: duration });
   };
   app.use('/', async (req, res, next) => {
+    if (req.miniClientMode) return next();
     const token = req.cookies[cookieName];
     if (typeof token === 'string' && /^[a-f0-9]{64}$/.test(token)) {
       req.visitorToken = token;
@@ -101,6 +102,7 @@ export function installGuestSessions(
     // Seed an opaque cookie before the first booking, without creating a profile.
     // Parallel bookings from the same browser then share an identity under the booking lock.
     prepare(req, res) {
+      if (req.miniClientMode) return;
       if (!req.user && (!req.visitorToken || (req.visitorSession && !req.visitor)))
         setCookie(res, randomBytes(32).toString('hex'));
     },

@@ -10,7 +10,7 @@ test('Gradefy bootstrap: repeat and concurrent calls create only one company and
   await Promise.all(Array.from({ length: 4 }, () => bootstrapIgorCompany(db)));
   assert.equal((await db.get('SELECT COUNT(*) AS count FROM companies')).count, 1);
   assert.equal((await db.get('SELECT COUNT(*) AS count FROM niches')).count, 1);
-  assert.equal((await db.get('SELECT COUNT(*) AS count FROM templates')).count, 1);
+  assert.equal((await db.get('SELECT COUNT(*) AS count FROM templates')).count, 2);
   assert.equal((await db.get('SELECT COUNT(*) AS count FROM company_settings')).count, 1);
   assert.deepEqual(
     (await db.all('SELECT id,max_professionals FROM plans ORDER BY id')).map((p) => [

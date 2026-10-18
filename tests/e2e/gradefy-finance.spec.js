@@ -6,7 +6,12 @@ async function login(page) {
   await page.goto('/app/login');
   await page.getByLabel('E-mail', { exact: true }).fill('business-browser-owner@example.com');
   await page.getByLabel('Senha', { exact: true }).fill('ClienteDemo2026!');
+  const authenticated = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/auth/login') && response.request().method() === 'POST',
+  );
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  expect((await authenticated).status()).toBe(200);
   await expect(page).toHaveURL('/app/dashboard');
 }
 async function responsive(page, name, modal = false) {

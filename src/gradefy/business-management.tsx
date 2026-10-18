@@ -348,6 +348,20 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
                               </div>
                               <Status active={p.active} />
                               <p>{p.specialty || 'Sem especialidade informada.'}</p>
+                              {p.availability && (
+                                <div className="gf-hint">
+                                  <strong>
+                                    {p.availability.state === 'setup'
+                                      ? 'Aguardando configuração da agenda'
+                                      : p.availability.state === 'waiting'
+                                        ? 'Agenda configurada · ação da gestão pendente'
+                                        : 'Pronto para receber agendamentos'}
+                                  </strong>
+                                  {p.availability.pending.map((message) => (
+                                    <p key={message}>{message}</p>
+                                  ))}
+                                </div>
+                              )}
                               <p>
                                 {services
                                   .filter((s) => p.services.includes(s.id))

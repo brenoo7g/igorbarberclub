@@ -67,13 +67,15 @@ test('Gradefy integrity: upgrade from checksummed 001 preserves all data and is 
   const before = await snapshotFoundation(db);
   assert.deepEqual(
     await runMigrations(db),
-    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   );
   const after = await snapshotFoundation(db);
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
   delete before.schema_migrations;
   expectProfessionalMetadata(before);
+  assert.equal(after.templates.filter((t) => t.id === 'gradefy-minisite').length, 1);
+  after.templates = after.templates.filter((t) => t.id !== 'gradefy-minisite');
   assert.deepEqual(after, before);
   const repeated = await snapshotFoundation(db);
   assert.deepEqual(await runMigrations(db), []);
@@ -130,6 +132,6 @@ test('Gradefy integrity: failure after SQLite table replacement rolls back schem
   assert.deepEqual(await db.all('SELECT type,name,sql FROM sqlite_schema ORDER BY name'), schema);
   assert.deepEqual(
     await runMigrations(db),
-    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   );
 });

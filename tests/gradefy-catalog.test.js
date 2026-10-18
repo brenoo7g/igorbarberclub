@@ -44,7 +44,7 @@ test('onboarding catalog is authenticated, real, active, implemented and read-on
     ['barbershop'],
   );
   assert.deepEqual(catalog.data.templates, [
-    { code: 'barber-classic', name: 'Barber Classic', nicheCode: 'barbershop' },
+    { code: 'gradefy-minisite', name: 'Gradefy Mini Site', nicheCode: 'barbershop' },
   ]);
   const snapshot = () =>
     Promise.all(
@@ -58,7 +58,11 @@ test('onboarding catalog is authenticated, real, active, implemented and read-on
       ].map((table) => db.all(`SELECT * FROM ${table} ORDER BY 1`)),
     );
   const before = await snapshot();
-  const valid = { planCode: 'individual', nicheCode: 'barbershop', templateCode: 'barber-classic' };
+  const valid = {
+    planCode: 'individual',
+    nicheCode: 'barbershop',
+    templateCode: 'gradefy-minisite',
+  };
   assert.equal((await call('/onboarding/template-selection', valid)).status, 401);
   assert.equal(
     (
@@ -75,6 +79,7 @@ test('onboarding catalog is authenticated, real, active, implemented and read-on
   for (const data of [
     { ...valid, nicheCode: 'salon' },
     { ...valid, templateCode: 'fake' },
+    { ...valid, templateCode: 'barber-classic' },
     { ...valid, planCode: 'fake' },
     { ...valid, companyId: 'igor-barber-club' },
   ])
@@ -94,8 +99,9 @@ test('onboarding catalog is authenticated, real, active, implemented and read-on
     "INSERT INTO templates(id,niche_id,name,created_at) VALUES('unimplemented','barbershop','Hidden','2026')",
   );
   assert.equal((await call('/onboarding/catalog', undefined, cookie)).data.templates.length, 1);
-  await db.run("UPDATE templates SET active=0 WHERE id='barber-classic'");
+  await db.run("UPDATE templates SET active=0 WHERE id IN ('barber-classic','gradefy-minisite')");
   assert.deepEqual((await call('/onboarding/catalog', undefined, cookie)).data, {
+    defaultTemplateCode: null,
     niches: [],
     templates: [],
   });

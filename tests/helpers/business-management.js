@@ -38,7 +38,7 @@ export async function assertClientMigration(t, db) {
   await assert.rejects(runMigrations(broken), /injected 013 failure/);
   await assert.rejects(db.all('SELECT * FROM company_clients'));
   assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), history);
-  assert.deepEqual(await runMigrations(db), [13, 14, 15, 16, 17, 18]);
+  assert.deepEqual(await runMigrations(db), [13, 14, 15, 16, 17, 18, 19, 20]);
   const clients = await db.all('SELECT * FROM company_clients ORDER BY id'),
     links = await db.all('SELECT * FROM client_appointments ORDER BY appointment_id');
   assert.equal(links.length, before.length);

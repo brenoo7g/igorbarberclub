@@ -1,0 +1,408 @@
+.ms-client-page,
+.ms-client-auth,
+.ms-client-boundary {
+  max-width: 1080px;
+  margin: auto;
+  padding: 32px 18px 56px;
+  color: #f8faff;
+  font-family: 'Mini Inter', sans-serif;
+}
+.ms-client-auth {
+  max-width: 520px;
+  padding-top: clamp(20px, 5vw, 60px);
+}
+.ms-client-card,
+.ms-client-dialog {
+  min-width: 0;
+  border: 1px solid #6558c66b;
+  border-radius: 22px;
+  padding: clamp(20px, 4vw, 32px);
+  background: linear-gradient(145deg, #111a37, #080f25 75%, #122346);
+  box-shadow: 0 8px 36px #0206194d;
+}
+.ms-client-card {
+  display: grid;
+  gap: 20px;
+}
+.ms-client-heading {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  margin-bottom: 28px;
+  min-width: 0;
+}
+.ms-client-card > .ms-client-heading {
+  margin-bottom: 4px;
+}
+.ms-client-heading img,
+.ms-client-monogram {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #a589ff;
+  background: #1b2556;
+}
+.ms-client-monogram {
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 23px;
+  color: #d9d0ff;
+}
+.ms-client-establishment {
+  color: #b4c4ec;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.ms-site .ms-client-heading h1 {
+  font-family: 'Mini Sora', sans-serif;
+  font-size: clamp(25px, 4.5vw, 38px);
+  line-height: 1.25;
+  letter-spacing: -0.04em;
+  margin: 0;
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.ms-site .ms-client-card h2,
+.ms-client-dialog h2 {
+  font-family: 'Mini Sora', sans-serif;
+  font-size: 19px;
+  line-height: 1.5;
+  letter-spacing: -0.025em;
+  text-transform: none;
+  margin: 0;
+}
+.ms-client-page p,
+.ms-client-card p,
+.ms-client-dialog p {
+  color: #b6c3e6;
+  line-height: 1.65;
+  font-size: 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.ms-client-form,
+.ms-client-form fieldset {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.ms-client-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.ms-client-field {
+  display: grid;
+  gap: 8px;
+  color: #d1d9f0;
+  font-size: 14px;
+  min-width: 0;
+}
+.ms-client-input {
+  display: flex;
+  align-items: center;
+  border: 1px solid #3c507c;
+  border-radius: 12px;
+  background: #050e24;
+  min-width: 0;
+}
+.ms-client-input input {
+  background: transparent;
+  color: #f8fafc;
+  padding: 14px;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.ms-client-input button {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  height: 48px;
+  min-width: 48px;
+  background: transparent;
+  color: #afc2ec;
+  border: 0;
+}
+.ms-client-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  min-height: 48px;
+  color: #e7ecff;
+  background: #0b1735;
+  border: 1px solid #6c63b9;
+  border-radius: 13px;
+  font:
+    600 14px/1.45 Inter,
+    sans-serif;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.ms-client-primary {
+  background: linear-gradient(
+    105deg,
+    var(--ms-primary, #6c5ce7),
+    #6554f2 60%,
+    var(--ms-accent, #00d4ff)
+  );
+  border-color: #9a8bff;
+  color: #fff;
+  box-shadow: 0 4px 18px #6944cf26;
+}
+.ms-client-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.ms-client-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.ms-client-danger {
+  color: #ffc1d4;
+  background: #4d173555;
+  border-color: #b94874;
+}
+.ms-client-link {
+  color: #b9abff;
+  font-size: 14px;
+  text-decoration: underline;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.ms-client-notice {
+  border: 1px solid #db5d865e;
+  color: #ffb8d1;
+  border-radius: 12px;
+  background: #96234b26;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.ms-client-success {
+  color: #9ff4ce;
+  border-color: #30b98977;
+  background: #11654826;
+}
+.ms-client-reassurance {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 12px !important;
+}
+.ms-client-reassurance svg {
+  flex-shrink: 0;
+  color: #8baaff;
+  margin-top: 3px;
+}
+.ms-client-services {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+}
+.ms-client-services .ms-client-card {
+  grid-template-rows: 1fr auto auto;
+}
+.ms-client-services .ms-client-card > strong {
+  font-size: 23px;
+  color: #d9d4ff;
+}
+.ms-client-kicker {
+  display: block;
+  color: #a6b7eb;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.ms-client-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  color: #b9c8ee;
+  font-size: 14px;
+  margin-top: 10px;
+}
+.ms-client-meta svg {
+  flex-shrink: 0;
+  color: #a18bff;
+}
+.ms-client-week {
+  margin: 22px 0;
+  gap: 0;
+}
+.ms-client-week > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 1px solid #34497b66;
+  font-size: 14px;
+}
+.ms-client-week > div:last-child {
+  border-bottom: 0;
+}
+.ms-client-week small {
+  grid-column: 1 / -1;
+  color: #bcc9ea;
+  line-height: 1.6;
+}
+.ms-client-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0;
+}
+.ms-client-toolbar .ms-client-button {
+  width: auto;
+  flex: 1;
+  min-width: min(160px, 100%);
+}
+.ms-client-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 16px 0;
+}
+.ms-client-tabs button {
+  padding: 12px 14px;
+  min-height: 46px;
+  border: 1px solid #405b93;
+  border-radius: 25px;
+  font-size: 14px;
+  background: #0c1732;
+  color: #d1ddfa;
+}
+.ms-client-tabs button[aria-pressed='true'] {
+  background: #6351dc;
+  border-color: #9a91ff;
+  color: #fff;
+}
+.ms-client-reservations {
+  display: grid;
+  gap: 18px;
+}
+.ms-reservation-card {
+  gap: 14px;
+}
+.ms-client-status {
+  color: #9df0cf;
+  border: 1px solid #339b7a88;
+  background: #124c3c55;
+  border-radius: 30px;
+  padding: 6px 10px;
+  width: max-content;
+  font-size: 12px;
+}
+.ms-client-status-cancelled,
+.ms-client-status-no_show {
+  color: #ffbdca;
+  border-color: #c24f70;
+  background: #511e3055;
+}
+.ms-client-empty {
+  text-align: center;
+  justify-items: center;
+  padding: 40px 20px;
+}
+.ms-client-empty > svg {
+  color: #a091f5;
+}
+.ms-client-dialog {
+  color: #f8fafc;
+  width: min(500px, calc(100vw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+.ms-client-dialog::backdrop {
+  background: #020719cc;
+}
+.ms-site .modal.ms-client-dialog {
+  padding: 0;
+}
+.ms-client-dialog .modal-inner > div:not(.modal-heading) {
+  display: grid;
+  gap: 18px;
+}
+.ms-client-dialog > div {
+  display: grid;
+  gap: 20px;
+}
+.ms-client-loading {
+  padding: 64px 20px;
+  text-align: center;
+  color: #bdc9ec;
+}
+.ms-top-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: #d2defb;
+}
+.ms-sub-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.ms-site .modal {
+  color: #f8fafc;
+  background: linear-gradient(135deg, #121a38, #071127);
+  border: 1px solid #6b5dba;
+  border-radius: 20px;
+}
+.ms-site .modal .modal-heading h2 {
+  font-family: 'Mini Sora', sans-serif;
+  text-transform: none;
+}
+.ms-site :focus-visible {
+  outline: 2px solid var(--ms-accent, #00d4ff);
+  outline-offset: 4px;
+}
+@media (max-width: 700px) {
+  .ms-top-nav {
+    display: none;
+  }
+  .ms-client-card {
+    padding: 22px 18px;
+    border-radius: 18px;
+  }
+  .ms-client-page {
+    padding: 24px 16px 44px;
+  }
+  .ms-client-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ms-client-toolbar .ms-client-button {
+    width: 100%;
+  }
+  .ms-client-week > div {
+    grid-template-columns: 1fr;
+  }
+  .ms-sub-header {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .ms-sub-header nav {
+    gap: 14px;
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-client-page *,
+  .ms-client-auth * {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
+  }
+}

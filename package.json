@@ -7,8 +7,8 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "concurrently -k -n API,WEB -c blue,magenta \"node --watch server/index.js\" \"vite --host 0.0.0.0\"",
-    "dev:test-access": "concurrently -k -n API,WEB -c blue,magenta \"node --watch server/index.js --guest-test-mode\" \"vite --host 0.0.0.0\"",
+    "dev": "concurrently -k -n API,WEB -c blue,magenta \"node scripts/dev-server.mjs\" \"vite --host 0.0.0.0\"",
+    "dev:test-access": "concurrently -k -n API,WEB -c blue,magenta \"node scripts/dev-server.mjs --guest-test-mode\" \"vite --host 0.0.0.0\"",
     "build": "tsc -b && npm run check:schedule && vite build",
     "check:schedule": "tsc --allowJs --checkJs --noEmit --target es2022 --module nodenext --moduleResolution nodenext --skipLibCheck server/schedule.js",
     "start": "node server/index.js",

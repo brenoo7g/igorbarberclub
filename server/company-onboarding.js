@@ -6,6 +6,7 @@ import { getOnboardingCatalog } from './onboarding-catalog.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { lockResource } from './scheduling-locks.js';
 import { companySlugSchema } from './company-slugs.js';
+import { MINI_SITE } from './site-templates.js';
 import {
   structuredAddress,
   validateAddress,
@@ -75,7 +76,7 @@ export const companyOnboardingSchema = z
     ...structuredAddress,
     planCode: z.enum(['individual', 'team']),
     nicheCode: z.string().min(1).max(80),
-    templateCode: z.string().min(1).max(80),
+    templateCode: z.string().min(1).max(80).default(MINI_SITE),
   })
   .strict()
   .superRefine(validateAddress);
@@ -148,7 +149,8 @@ export async function createOnboardingBusiness(db, userId, input, key = null) {
             'Você já tem um estabelecimento. Retome a configuração pela sua conta.',
           );
         await getAvailablePlan(tx, payload.planCode);
-        const catalog = await getOnboardingCatalog(tx);
+        // Preserve explicit legacy integrations; new Gradefy clients only see Mini Site.
+        const catalog = await getOnboardingCatalog(tx, { legacy: true });
         if (
           !catalog.niches.some((niche) => niche.code === payload.nicheCode) ||
           !catalog.templates.some(

@@ -12,6 +12,7 @@ import type { PendingBusiness } from './business-types';
 import { usePostalAddress } from './postal-address';
 
 interface Catalog {
+  defaultTemplateCode: string | null;
   niches: { code: string; name: string }[];
   templates: { code: string; name: string; nicheCode: string }[];
 }
@@ -97,7 +98,7 @@ export default function BusinessSetup() {
   const plan = data?.plans.find((item) => item.code === draft?.planCode);
   const niche = data?.catalog.niches.find((item) => item.code === draft?.nicheCode);
   const template = data?.catalog.templates.find(
-    (item) => item.code === draft?.templateCode && item.nicheCode === niche?.code,
+    (item) => item.code === data?.catalog.defaultTemplateCode && item.nicheCode === niche?.code,
   );
   function update(field: Field, value: string) {
     postal.markEdited(field);
@@ -191,7 +192,7 @@ export default function BusinessSetup() {
               <dd>{pending.niche.name}</dd>
             </div>
             <div>
-              <dt>Template</dt>
+              <dt>Site</dt>
               <dd>{pending.template.name}</dd>
             </div>
           </dl>
@@ -210,8 +211,8 @@ export default function BusinessSetup() {
         <Card>
           <Feedback>{error}</Feedback>
           <Button onClick={() => setRevision((value) => value + 1)}>Tentar novamente</Button>
-          <ButtonLink to="/app/onboarding/template" variant="secondary">
-            Voltar aos templates
+          <ButtonLink to="/app/onboarding/niche" variant="secondary">
+            Voltar ao segmento
           </ButtonLink>
         </Card>
       </div>
@@ -220,12 +221,12 @@ export default function BusinessSetup() {
     );
   if (!plan) return <Navigate to="/app/onboarding/plan" replace />;
   if (!niche) return <Navigate to="/app/onboarding/niche" replace />;
-  if (!template) return <Navigate to="/app/onboarding/template" replace />;
+  if (!template) return <Navigate to="/app/onboarding/niche" replace />;
   return (
     <div className="gf-plans-page gf-business-page">
-      <Link className="gf-back" to="/app/onboarding/template">
+      <Link className="gf-back" to="/app/onboarding/niche">
         <ArrowLeft size={17} />
-        Alterar template
+        Alterar segmento
       </Link>
       <Progress step={3} />
       <div className="gf-plans-heading">

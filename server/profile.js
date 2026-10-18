@@ -71,7 +71,11 @@ async function normalizeAvatar(value) {
   }
 }
 
-export function installProfileRoutes(app, db, { authenticated, login, authLimiter }) {
+export function installProfileRoutes(
+  app,
+  db,
+  { authenticated, login, authLimiter, prefix = '/api/auth', present = publicUser },
+) {
   async function lockedUser(tx, req) {
     const user = await tx.get(
       `SELECT * FROM users WHERE id=?${tx.dialect === 'postgres' ? ' FOR UPDATE' : ''}`,
@@ -81,7 +85,7 @@ export function installProfileRoutes(app, db, { authenticated, login, authLimite
       fail(401, 'Sua sessão expirou. Entre novamente para continuar.');
     return user;
   }
-  app.patch('/api/auth/profile', authenticated, authLimiter, async (req, res) => {
+  app.patch(`${prefix}/profile`, authenticated, authLimiter, async (req, res) => {
     const data = profileSchema.parse(req.body);
     const avatar =
       data.avatar === req.user.avatar ? data.avatar : await normalizeAvatar(data.avatar);
@@ -111,9 +115,9 @@ export function installProfileRoutes(app, db, { authenticated, login, authLimite
       throw error;
     }
     if (changedEmail) login(res, user);
-    res.json({ user: publicUser(user) });
+    res.json({ user: present(user) });
   });
-  app.patch('/api/auth/password', authenticated, authLimiter, async (req, res) => {
+  app.patch(`${prefix}/password`, authenticated, authLimiter, async (req, res) => {
     const data = z
       .object({
         currentPassword: z.string().min(1).max(72),
@@ -135,6 +139,6 @@ export function installProfileRoutes(app, db, { authenticated, login, authLimite
       return tx.get('SELECT * FROM users WHERE id=?', [current.id]);
     });
     login(res, user);
-    res.json({ user: publicUser(user) });
+    res.json({ user: present(user) });
   });
 }

@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
+import { availabilityStatus } from './professional-availability.js';
 import { currentTime, domainError } from './entitlements.js';
 import { lockResource } from './scheduling-locks.js';
 import { emailConfigured, sendTransactionalEmail } from './transactional-email.js';
@@ -316,6 +317,9 @@ export function installTeamRoutes(
           companyName: row.company_name,
           role: row.role,
           professionalId: link.barber_id,
+          ...(row.role === 'professional'
+            ? { nextPath: (await availabilityStatus(tx, row.company_id, link.barber_id)).nextPath }
+            : {}),
         };
       }
       if (member && (member.status === 'active' || member.role === 'owner'))
@@ -340,6 +344,9 @@ export function installTeamRoutes(
         companyName: row.company_name,
         role: row.role,
         ...(professionalId ? { professionalId } : {}),
+        ...(professionalId && row.role === 'professional'
+          ? { nextPath: (await availabilityStatus(tx, row.company_id, professionalId)).nextPath }
+          : {}),
       };
     });
     res.json(result);

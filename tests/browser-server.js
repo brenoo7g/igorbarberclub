@@ -65,6 +65,28 @@ const { installAgendaBrowserFixture } = await import('./helpers/agenda-browser.j
 await installAgendaBrowserFixture(db, recoveryHash);
 const { installProfessionalBrowserFixture } = await import('./helpers/professional-browser.js');
 await installProfessionalBrowserFixture(db, recoveryHash);
+const { installMinisiteBrowser } = await import('./helpers/minisite-browser.js');
+await installMinisiteBrowser(db, recoveryHash);
+// Dedicated Mini Site recovery identity; never reuses the legacy recovery fixture.
+await db.run(
+  "INSERT INTO users(id,name,email,phone,password_hash,role,created_at) VALUES('mini-recovery-browser','Cliente Recuperação Mini','mini-recovery@example.test','21999997777',?,'client',?)",
+  [recoveryHash, new Date().toISOString()],
+);
+await db.run(
+  'INSERT INTO password_recovery(id,user_id,email,session_version,token_hash,event,created_at,expires_at,next_attempt_at,status) VALUES(?,?,?,?,?,?,?,?,?,?)',
+  [
+    `minisite:${Buffer.from('minisite-browser').toString('base64url')}:agendar:browser-recovery`,
+    'mini-recovery-browser',
+    'mini-recovery@example.test',
+    0,
+    createHash('sha256').update('b'.repeat(64)).digest('hex'),
+    'reset',
+    new Date().toISOString(),
+    new Date(Date.now() + 1800000).toISOString(),
+    new Date().toISOString(),
+    'sent',
+  ],
+);
 createApp(db, { test: true, siteStorage: testSiteStorage() }).listen(4173, '127.0.0.1', () =>
   console.log('Browser test server listening on 4173'),
 );

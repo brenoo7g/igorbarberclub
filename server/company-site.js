@@ -3,13 +3,16 @@ import express from 'express';
 import { z } from 'zod';
 import { resolveCompanyContext, requireCompanyRole } from './company-access.js';
 import { lockResource, lockCatalog } from './scheduling-locks.js';
-import { domainError, lockEntitlements } from './entitlements.js';
+import { domainError, lockEntitlements, getCompanyEntitlements } from './entitlements.js';
 import { normalizeSiteImage, assetPrefix } from './site-storage.js';
 import { cleanupAssets, readAsset, portfolioImage } from './site-assets.js';
 import { publicAsset, getPublicSite } from './public-site.js';
 import { publicProfessionals } from './professionals.js';
 import { lockPublication, validatePublication } from './site-publication.js';
 import { invalidateStructuredAddress } from './postal-address.js';
+import { supportsSite, galleryLimit, MINI_SITE } from './site-templates.js';
+import { operationalSchema, lockOperational } from './operational-settings.js';
+import { agendaAccess } from './agenda.js';
 
 const version = z.number().int().nonnegative();
 const optionalText = (max) => z.string().trim().max(max);
@@ -45,6 +48,7 @@ export const siteEditorSchema = z
     region: optionalText(2).refine((v) => !v || /^[A-Z]{2}$/.test(v)),
     location_url: https,
     sections: z.object({ about: z.boolean(), gallery: z.boolean() }).strict(),
+    working_days: operationalSchema.shape.working_days.optional(),
   })
   .strict();
 const lockEditor = (tx, cid) => lockResource(tx, cid, 'site-editor', 'settings');
@@ -63,11 +67,11 @@ async function authorized(tx, req) {
   if (!['owner', 'manager'].includes(context.role))
     domainError(403, 'COMPANY_ROLE_DENIED', 'Sem permissão para editar este site.');
   const row = await tx.get(
-    "SELECT c.id,c.name,c.slug,c.site_published,c.template_id,s.* FROM companies c JOIN company_settings s ON s.company_id=c.id WHERE c.id=? AND c.status='active'",
+    "SELECT c.id,c.name,c.slug,c.site_published,c.template_id,c.niche_id,s.* FROM companies c JOIN company_settings s ON s.company_id=c.id WHERE c.id=? AND c.status='active'",
     [context.companyId],
   );
-  if (!row || row.template_id !== 'barber-classic')
-    domainError(409, 'TEMPLATE_UNAVAILABLE', 'O editor está disponível para Barber Classic.');
+  if (!row || !supportsSite(row.template_id, row.niche_id))
+    domainError(409, 'TEMPLATE_UNAVAILABLE', 'O template não está disponível neste editor.');
   return row;
 }
 function assertVersion(row, expected) {
@@ -105,7 +109,7 @@ export async function siteEditorImage(db, cid, value) {
 }
 export async function siteEditorSnapshot(db, cid, storage) {
   const row = await db.get(
-    'SELECT c.id,c.name,c.slug,c.site_published,s.* FROM companies c JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
+    'SELECT c.id,c.name,c.slug,c.timezone,c.template_id,c.site_published,s.* FROM companies c JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
     [cid],
   );
   let sections = { about: true, gallery: true };
@@ -117,14 +121,33 @@ export async function siteEditorSnapshot(db, cid, storage) {
     [cid],
   );
   return {
-    company: { id: cid, name: row.name, slug: row.slug, sitePublished: row.site_published === 1 },
+    company: {
+      id: cid,
+      name: row.name,
+      slug: row.slug,
+      template: row.template_id,
+      sitePublished: row.site_published === 1,
+      timezone: row.timezone,
+    },
+    galleryLimit: galleryLimit(row.template_id),
     settings: {
       ...Object.fromEntries(fields.map((f) => [f, row[f] ?? ''])),
       primary_color: row.primary_color,
       secondary_color: row.secondary_color,
       sections,
       version: row.site_version,
+      ...(row.template_id === MINI_SITE
+        ? { working_days: row.working_days_json ? JSON.parse(row.working_days_json) : null }
+        : {}),
     },
+    addressDetails: {
+      postal_code: row.postal_code,
+      street: row.street,
+      neighborhood: row.neighborhood,
+      address_number: row.address_number,
+      address_complement: row.address_complement,
+    },
+    plan: await getCompanyEntitlements(db, cid),
     images: {
       logo: await siteEditorImage(db, cid, row.logo_url),
       banner: await siteEditorImage(db, cid, row.hero_image_url),
@@ -167,9 +190,13 @@ export function installCompanySite(app, db, { authenticated, storage }) {
     );
     requireCompanyRole(req, _res, next);
   });
-  const transaction = (req, perform, visibility = false) =>
+  const transaction = (req, perform, visibility = false, hours = false) =>
     db.transaction(async (tx) => {
       await lockEditor(tx, req.companyContext.companyId);
+      if (hours) {
+        await lockEntitlements(tx, req.companyContext.companyId);
+        await lockOperational(tx, req.companyContext.companyId);
+      }
       if (visibility) {
         await lockPublication(tx, req.companyContext.companyId);
         // Professional mutations take this lock before membership rows: preserve that order.
@@ -212,7 +239,9 @@ export function installCompanySite(app, db, { authenticated, storage }) {
           [row.company_id],
         ),
         professionals: await publicProfessionals(tx, row.company_id),
-        portfolio: (await snapshot(req, tx)).gallery.map((g) => ({ ...g, category: 'Trabalhos' })),
+        portfolio: (await snapshot(req, tx)).gallery
+          .slice(0, row.template_id === MINI_SITE ? 5 : undefined)
+          .map((g) => ({ ...g, category: 'Trabalhos' })),
       })),
     );
   });
@@ -245,29 +274,44 @@ export function installCompanySite(app, db, { authenticated, storage }) {
   }
   app.put('/api/company-site', async (req, res) => {
     const data = siteEditorSchema.parse(req.body);
-    const saved = await transaction(req, async (tx, row) => {
-      assertVersion(row, data.version);
-      const cid = row.company_id;
-      if (
-        data.address !== (row.address || '') ||
-        data.city !== (row.city || '') ||
-        data.region !== (row.region || '')
-      )
-        await invalidateStructuredAddress(tx, cid);
-      await tx.run('UPDATE companies SET name=?,updated_at=? WHERE id=?', [
-        data.name,
-        new Date().toISOString(),
-        cid,
-      ]);
-      await tx.run(
-        `UPDATE company_settings SET ${fields.map((f) => `${f}=?`).join(',')},sections_json=? WHERE company_id=?`,
-        [...fields.map((f) => data[f]), JSON.stringify(data.sections), cid],
-      );
-      if (data.name !== row.name)
-        await tx.run('UPDATE company_settings SET wordmark_title=NULL WHERE company_id=?', [cid]);
-      await bump(tx, cid);
-      return snapshot(req, tx);
-    });
+    const saved = await transaction(
+      req,
+      async (tx, row) => {
+        assertVersion(row, data.version);
+        const cid = row.company_id;
+        if (
+          data.working_days !== undefined &&
+          JSON.stringify(data.working_days) !== (row.working_days_json || 'null')
+        ) {
+          await agendaAccess(tx, cid, req.user.id, true);
+          await tx.run(
+            'UPDATE company_settings SET working_days_json=?,operational_version=operational_version+1 WHERE company_id=?',
+            [data.working_days === null ? null : JSON.stringify(data.working_days), cid],
+          );
+        }
+        if (
+          data.address !== (row.address || '') ||
+          data.city !== (row.city || '') ||
+          data.region !== (row.region || '')
+        )
+          await invalidateStructuredAddress(tx, cid);
+        await tx.run('UPDATE companies SET name=?,updated_at=? WHERE id=?', [
+          data.name,
+          new Date().toISOString(),
+          cid,
+        ]);
+        await tx.run(
+          `UPDATE company_settings SET ${fields.map((f) => `${f}=?`).join(',')},sections_json=? WHERE company_id=?`,
+          [...fields.map((f) => data[f]), JSON.stringify(data.sections), cid],
+        );
+        if (data.name !== row.name)
+          await tx.run('UPDATE company_settings SET wordmark_title=NULL WHERE company_id=?', [cid]);
+        await bump(tx, cid);
+        return snapshot(req, tx);
+      },
+      false,
+      data.working_days !== undefined,
+    );
     res.json(saved);
   });
   app.get('/api/company-site/assets/:id/image', async (req, res) =>
@@ -302,10 +346,14 @@ export function installCompanySite(app, db, { authenticated, storage }) {
         if (
           Number(
             (await tx.get('SELECT COUNT(*) AS n FROM portfolio WHERE company_id=?', [cid])).n,
-          ) >= 40 &&
+          ) >= galleryLimit(row.template_id) &&
           purpose === 'gallery'
         )
-          domainError(409, 'GALLERY_LIMIT', 'A galeria permite até 40 fotos.');
+          domainError(
+            409,
+            'GALLERY_LIMIT',
+            `A galeria permite até ${galleryLimit(row.template_id)} fotos.`,
+          );
         if (
           Number(
             (
@@ -330,6 +378,17 @@ export function installCompanySite(app, db, { authenticated, storage }) {
         await storage.put(key, image.buffer);
         saved = await transaction(req, async (tx, row) => {
           assertVersion(row, expected);
+          if (
+            purpose === 'gallery' &&
+            Number(
+              (await tx.get('SELECT COUNT(*) AS n FROM portfolio WHERE company_id=?', [cid])).n,
+            ) >= galleryLimit(row.template_id)
+          )
+            domainError(
+              409,
+              'GALLERY_LIMIT',
+              `A galeria permite até ${galleryLimit(row.template_id)} fotos.`,
+            );
           await tx.run(
             "UPDATE company_site_assets SET status='ready' WHERE company_id=? AND id=? AND status='pending'",
             [cid, id],

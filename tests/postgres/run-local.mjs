@@ -157,9 +157,21 @@ try {
     try {
       command('pg_ctl', ['-D', cluster, '-w', '-t', '30', '-m', 'fast', 'stop']);
       stopped = true;
+      report.shutdownMode = 'fast';
     } catch (error) {
-      console.error(error.message);
-      exitCode = 1;
+      // This newly-created disposable cluster can be discarded after the tests.
+      // Windows antivirus/disk contention may stall the final checkpoint beyond 30 seconds.
+      console.warn(
+        'Disposable PostgreSQL fast shutdown timed out; stopping only this test cluster immediately.',
+      );
+      try {
+        command('pg_ctl', ['-D', cluster, '-w', '-t', '15', '-m', 'immediate', 'stop']);
+        stopped = true;
+        report.shutdownMode = 'immediate-after-fast-timeout';
+      } catch (stopError) {
+        console.error(stopError.message);
+        exitCode = 1;
+      }
     }
   }
   report.clusterStopped = stopped;

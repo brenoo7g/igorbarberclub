@@ -109,6 +109,85 @@ export async function readSchedule(db, companyId, barberId) {
   };
 }
 
+// Caller owns the barber lock; shared by management and the personal editor.
+export async function saveSchedule(tx, companyId, barberId, data, policies = null) {
+  const days = data.days.map((d) => ({
+    ...d,
+    breaks: [...d.breaks].sort((a, b) => a.start_time.localeCompare(b.start_time)),
+  }));
+  const current = await readSchedule(tx, companyId, barberId);
+  const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
+  const now = await currentTime(tx),
+    today = dateInTimezone(now, company.timezone);
+  if (current.settings.version !== data.version)
+    fail(409, 'A agenda foi alterada em outra aba. Atualize as configurações antes de salvar.');
+  const appointments = await tx.all(
+    "SELECT date,start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND status='confirmed' AND date>=? ORDER BY date,start_minute",
+    [companyId, barberId, today],
+  );
+  const conflict = appointments.find(
+    (a) =>
+      isFuture(a.date, a.end_minute, now, company.timezone) &&
+      !fitsWorkingDay(
+        policies
+          ? intersectDay(
+              days.find((d) => d.weekday === weekday(a.date)),
+              policies,
+              a.date,
+            )
+          : days.find((d) => d.weekday === weekday(a.date)),
+        a.start_minute,
+        a.end_minute,
+      ),
+  );
+  if (conflict)
+    fail(
+      409,
+      `Esta alteração afeta o agendamento de ${conflict.date.split('-').reverse().join('/')} às ${clock(conflict.start_minute)}. Remarque ou cancele esse atendimento antes de alterar o expediente.`,
+    );
+  await tx.run(
+    `INSERT INTO barber_settings (company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES (?,?,?,?,?) ON CONFLICT(barber_id) DO UPDATE SET agenda_mode=excluded.agenda_mode,max_days_ahead=excluded.max_days_ahead,version=excluded.version WHERE barber_settings.company_id=excluded.company_id`,
+    [companyId, barberId, data.agenda_mode, data.max_days_ahead, data.version + 1],
+  );
+  await tx.run('DELETE FROM barber_working_breaks WHERE company_id=? AND barber_id=?', [
+    companyId,
+    barberId,
+  ]);
+  await tx.run('DELETE FROM barber_working_hours WHERE company_id=? AND barber_id=?', [
+    companyId,
+    barberId,
+  ]);
+  for (const day of days) {
+    await tx.run(
+      `INSERT INTO barber_working_hours (company_id,barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES (?,?,?,?,?,?,?,?)`,
+      [
+        companyId,
+        barberId,
+        day.weekday,
+        day.active ? 1 : 0,
+        day.start_time,
+        day.end_time,
+        day.breaks[0]?.start_time || null,
+        day.breaks[0]?.end_time || null,
+      ],
+    );
+    for (let i = 1; i < day.breaks.length; i++)
+      await tx.run(
+        `INSERT INTO barber_working_breaks (company_id,barber_id,weekday,position,start_time,end_time) VALUES (?,?,?,?,?,?)`,
+        [companyId, barberId, day.weekday, i, day.breaks[i].start_time, day.breaks[i].end_time],
+      );
+  }
+  // An opened calendar week follows the new active days; never reinsert an existing cycle.
+  for (const released of current.released_weeks) {
+    const period = weekPeriod(days, released.week_start);
+    if (period)
+      await tx.run(
+        'UPDATE released_weeks SET start_date=?,end_date=? WHERE company_id=? AND barber_id=? AND week_start=?',
+        [period.start_date, period.end_date, companyId, barberId, released.week_start],
+      );
+  }
+}
+
 export function installScheduleRoutes(
   app,
   db,
@@ -183,86 +262,11 @@ export function installScheduleRoutes(
   });
   app.put('/admin/barbers/:id/schedule', authenticated, admin, async (req, res) => {
     const data = settingsSchema.parse(req.body);
-    const days = data.days.map((d) => ({
-      ...d,
-      breaks: [...d.breaks].sort((a, b) => a.start_time.localeCompare(b.start_time)),
-    }));
     await db.transaction(async (tx) => {
       await authorize(tx, req, true);
       await lockSchedule(tx, companyId, req.params.id);
       await exists(tx, req.params.id, true);
-      const current = await readSchedule(tx, companyId, req.params.id);
-      const company = await tx.get('SELECT timezone FROM companies WHERE id=?', [companyId]);
-      const now = await currentTime(tx),
-        today = dateInTimezone(now, company.timezone);
-      if (current.settings.version !== data.version)
-        fail(409, 'A agenda foi alterada em outra aba. Atualize as configurações antes de salvar.');
-      const appointments = await tx.all(
-        "SELECT date,start_minute,end_minute FROM appointments WHERE company_id=? AND barber_id=? AND status='confirmed' AND date>=? ORDER BY date,start_minute",
-        [companyId, req.params.id, today],
-      );
-      const conflict = appointments.find(
-        (a) =>
-          isFuture(a.date, a.end_minute, now, company.timezone) &&
-          !fitsWorkingDay(
-            days.find((d) => d.weekday === weekday(a.date)),
-            a.start_minute,
-            a.end_minute,
-          ),
-      );
-      if (conflict)
-        fail(
-          409,
-          `Esta alteração afeta o agendamento de ${conflict.date.split('-').reverse().join('/')} às ${clock(conflict.start_minute)}. Remarque ou cancele esse atendimento antes de alterar o expediente.`,
-        );
-      await tx.run(
-        `INSERT INTO barber_settings (company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES (?,?,?,?,?) ON CONFLICT(barber_id) DO UPDATE SET agenda_mode=excluded.agenda_mode,max_days_ahead=excluded.max_days_ahead,version=excluded.version WHERE barber_settings.company_id=excluded.company_id`,
-        [companyId, req.params.id, data.agenda_mode, data.max_days_ahead, data.version + 1],
-      );
-      await tx.run('DELETE FROM barber_working_breaks WHERE company_id=? AND barber_id=?', [
-        companyId,
-        req.params.id,
-      ]);
-      await tx.run('DELETE FROM barber_working_hours WHERE company_id=? AND barber_id=?', [
-        companyId,
-        req.params.id,
-      ]);
-      for (const day of days) {
-        await tx.run(
-          `INSERT INTO barber_working_hours (company_id,barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES (?,?,?,?,?,?,?,?)`,
-          [
-            companyId,
-            req.params.id,
-            day.weekday,
-            day.active ? 1 : 0,
-            day.start_time,
-            day.end_time,
-            day.breaks[0]?.start_time || null,
-            day.breaks[0]?.end_time || null,
-          ],
-        );
-        for (let i = 1; i < day.breaks.length; i++)
-          await tx.run(
-            `INSERT INTO barber_working_breaks (company_id,barber_id,weekday,position,start_time,end_time) VALUES (?,?,?,?,?,?)`,
-            [
-              companyId,
-              req.params.id,
-              day.weekday,
-              i,
-              day.breaks[i].start_time,
-              day.breaks[i].end_time,
-            ],
-          );
-      }
-      // An opened calendar week follows the new active days; never reinsert an existing cycle.
-      for (const released of current.released_weeks) {
-        const period = weekPeriod(days, released.week_start);
-        if (period)
-          await tx.run(
-            'UPDATE released_weeks SET start_date=?,end_date=? WHERE company_id=? AND barber_id=? AND week_start=?',
-            [period.start_date, period.end_date, companyId, req.params.id, released.week_start],
-          );
-      }
+      await saveSchedule(tx, companyId, req.params.id, data);
     });
     res.json({ ok: true });
   });

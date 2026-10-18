@@ -6,8 +6,10 @@ import { useApp } from '../context';
 import { ApiError, errorMessage } from '../lib';
 import { useCompanies } from './company-access';
 import { Button, ButtonLink, Card, Feedback, Input, Loading } from './components';
+import MiniSiteEditor from './minisite-editor';
+import type { WorkingDay } from '../types';
 
-interface Settings {
+export interface Settings {
   version: number;
   slogan: string;
   description: string;
@@ -21,18 +23,41 @@ interface Settings {
   region: string;
   location_url: string;
   sections: { about: boolean; gallery: boolean };
+  working_days?: WorkingDay[] | null;
 }
-interface State {
-  company: { id: string; name: string; slug: string; sitePublished: boolean };
+export interface State {
+  company: {
+    id: string;
+    name: string;
+    slug: string;
+    sitePublished: boolean;
+    template: string;
+    timezone: string;
+  };
+  addressDetails: {
+    postal_code: string | null;
+    street: string | null;
+    neighborhood: string | null;
+    address_number: string | null;
+    address_complement: string | null;
+  };
+  plan: {
+    valid: boolean;
+    planCode: string | null;
+    subscriptionStatus: string | null;
+    trialEndsAt: string | null;
+    reason: string | null;
+  };
+  galleryLimit: number;
   settings: Settings;
   images: { logo: string | null; banner: string | null };
   gallery: { id: string; title: string; image: string; version: number }[];
   storage: { configured: boolean; maxBytes: number; formats: string[]; cleanupPending: number };
   operations: { services: number; professionals: number };
 }
-type Form = Settings & { name: string };
+export type Form = Settings & { name: string };
 const labels: {
-  key: keyof Omit<Settings, 'version' | 'sections' | 'description'> | 'name';
+  key: keyof Omit<Settings, 'version' | 'sections' | 'description' | 'working_days'> | 'name';
   label: string;
   max: number;
 }[] = [
@@ -46,7 +71,7 @@ const labels: {
   { key: 'region', label: 'Estado (UF)', max: 2 },
   { key: 'location_url', label: 'Link de localização', max: 500 },
 ];
-export default function SiteEditor() {
+export default function SiteEditor({ onboarding = false }: { onboarding?: boolean }) {
   const { user, loading, api } = useApp();
   const { companies, business, error: accessError, retry } = useCompanies();
   const [query, setQuery] = useSearchParams();
@@ -61,6 +86,8 @@ export default function SiteEditor() {
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const submitting = useRef(false);
+  const currentCompany = useRef(companyId);
+  currentCompany.current = companyId;
   useEffect(() => {
     if (!user || !companies || !companyId) return;
     let active = true;
@@ -113,6 +140,7 @@ export default function SiteEditor() {
   async function mutate(path: string, options: RequestInit, preserveForm = true) {
     if (submitting.current || !data) return;
     submitting.current = true;
+    const savingCompany = companyId;
     setBusy(true);
     setError('');
     setMessage('');
@@ -122,6 +150,7 @@ export default function SiteEditor() {
         ...options,
         headers: { 'X-Gradefy-Company-Id': companyId, ...options.headers },
       });
+      if (currentCompany.current !== savingCompany) return;
       setData(next);
       setForm((previous) =>
         preserveForm && previous
@@ -139,6 +168,7 @@ export default function SiteEditor() {
               : 'Alterações salvas.',
       );
     } catch (e) {
+      if (currentCompany.current !== savingCompany) return;
       setError(errorMessage(e));
       if (e instanceof ApiError)
         setFieldErrors(Object.fromEntries(e.details.map((d) => [d.field, d.message])));
@@ -179,6 +209,31 @@ export default function SiteEditor() {
       body: JSON.stringify({ version: data.settings.version, ids }),
     });
   }
+  if (companyId && data && data.company.id !== companyId) return <Loading />;
+  if (data?.company.template === 'gradefy-minisite' && form)
+    return (
+      <MiniSiteEditor
+        key={companyId}
+        {...{
+          data,
+          form,
+          busy,
+          error,
+          message,
+          fieldErrors,
+          onboarding,
+          allowed: allowed || [],
+          companyId,
+        }}
+        onCompany={(id) => setQuery({ empresa: id })}
+        change={change}
+        save={save}
+        mutate={mutate}
+        upload={upload}
+        move={move}
+        reload={() => setRevision((r) => r + 1)}
+      />
+    );
   return (
     <div className="gf-plans-page gf-site-editor">
       <Link className="gf-back" to="/app/conta">
@@ -188,7 +243,7 @@ export default function SiteEditor() {
       <div className="gf-plans-heading">
         <div className="gf-kicker">SEU NEGÓCIO, SUA IDENTIDADE</div>
         <h1>Meu Site</h1>
-        <p>Personalize o Barber Classic com as informações da sua empresa.</p>
+        <p>Personalize o site com as informações da sua empresa.</p>
       </div>
       {allowed.length > 1 && (
         <div className="gf-field">
@@ -381,28 +436,48 @@ export default function SiteEditor() {
                   <Input
                     label="Cor principal"
                     type="color"
-                    value={form.primary_color || '#335CFF'}
+                    value={
+                      form.primary_color ||
+                      (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF')
+                    }
                     onChange={(e) => change('primary_color', e.target.value)}
                     error={fieldErrors.primary_color}
                   />
                   <Input
                     label="Cor secundária"
                     type="color"
-                    value={form.secondary_color || '#EF3340'}
+                    value={
+                      form.secondary_color ||
+                      (data.company.template === 'gradefy-minisite' ? '#00D4FF' : '#EF3340')
+                    }
                     onChange={(e) => change('secondary_color', e.target.value)}
                     error={fieldErrors.secondary_color}
                   />
                 </div>
                 <div
                   className="gf-color-sample"
-                  style={{ borderColor: form.primary_color || '#335CFF' }}
+                  style={{
+                    borderColor:
+                      form.primary_color ||
+                      (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF'),
+                  }}
                 >
-                  <span style={{ background: form.secondary_color || '#EF3340' }} />
+                  <span
+                    style={{
+                      background:
+                        form.secondary_color ||
+                        (data.company.template === 'gradefy-minisite' ? '#00D4FF' : '#EF3340'),
+                    }}
+                  />
                   <strong>{form.name}</strong>
                   <p>Amostra das cores do seu site</p>
                   <span
                     className="gf-sample-cta"
-                    style={{ background: form.primary_color || '#335CFF' }}
+                    style={{
+                      background:
+                        form.primary_color ||
+                        (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF'),
+                    }}
                   >
                     Agendar horário
                   </span>
@@ -443,20 +518,28 @@ export default function SiteEditor() {
                       { key: 'about', label: 'Mostrar seção sobre a empresa' },
                       { key: 'gallery', label: 'Mostrar galeria de trabalhos' },
                     ] as const
-                  ).map(({ key, label }) => (
-                    <label key={key} className="gf-check">
-                      <input
-                        type="checkbox"
-                        checked={form.sections[key]}
-                        onChange={(e) =>
-                          change('sections', { ...form.sections, [key]: e.target.checked })
-                        }
-                      />
-                      {label}
-                    </label>
-                  ))}
+                  )
+                    .filter(
+                      ({ key }) => data.company.template !== 'gradefy-minisite' || key !== 'about',
+                    )
+                    .map(({ key, label }) => (
+                      <label key={key} className="gf-check">
+                        <input
+                          type="checkbox"
+                          checked={form.sections[key]}
+                          onChange={(e) =>
+                            change('sections', { ...form.sections, [key]: e.target.checked })
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
                 </div>
-                <p>Os textos e o layout do Barber Classic são preservados.</p>
+                <p>
+                  {data.company.template === 'gradefy-minisite'
+                    ? 'O Mini Site exibe sua identidade, ações rápidas, até cinco fotos e horários. Os serviços ficam no catálogo acessível pelo card Ver serviços.'
+                    : 'Os textos e o layout do Barber Classic são preservados.'}
+                </p>
               </Card>
             </fieldset>
             <Button type="submit" busy={busy}>
@@ -517,13 +600,17 @@ export default function SiteEditor() {
             </div>
           </Card>
           <Card className="gf-site-media">
-            <h2>Galeria</h2>
-            <p>{data.gallery.length}/40 fotos. Reordene com as setas.</p>
+            <h2>{data.company.template === 'gradefy-minisite' ? 'Portfólio' : 'Galeria'}</h2>
+            <p>
+              {data.gallery.length}/{data.galleryLimit} fotos. Reordene com as setas.
+            </p>
             <Input
               label="Adicionar fotografia"
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              disabled={busy || !data.storage.configured || data.gallery.length >= 40}
+              disabled={
+                busy || !data.storage.configured || data.gallery.length >= data.galleryLimit
+              }
               onChange={(e) => {
                 upload('gallery', e.target.files?.[0]);
                 e.target.value = '';

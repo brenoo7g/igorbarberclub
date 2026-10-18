@@ -17,6 +17,8 @@ npm run dev
 
 No PowerShell com execução de scripts desabilitada, use `npm.cmd` e `npx.cmd`.
 
+Os comandos `dev` e `dev:test-access` monitoram alterações reais nos arquivos de código/SQL de `server/` e no `.env` (ou `DOTENV_CONFIG_PATH`). O monitor ignora acessos de leitura, alterações sem mudança de conteúdo, `node_modules`, banco local, logs e arquivos do frontend. Isso evita reinicializações em loop do `node --watch` no Windows. Alterações no frontend continuam sendo tratadas pelo HMR do Vite. Após atualizar esses comandos, encerre o processo antigo com Ctrl+C e execute `npm run dev` novamente. Dependências instaladas/atualizadas também exigem reiniciar o comando.
+
 - Site: http://localhost:5173
 - API: http://localhost:3001/api/health
 - Administração: http://localhost:5173/admin

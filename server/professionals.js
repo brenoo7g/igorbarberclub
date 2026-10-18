@@ -11,6 +11,7 @@ import {
 import { dateInTimezone, isFuture } from './domain.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { publicAsset } from './public-site.js';
+import { availabilityStatus } from './professional-availability.js';
 import {
   lockProfessionalAccess,
   setProfessionalLink,
@@ -102,6 +103,7 @@ export async function professional(db, companyId, id) {
   if (!row) domainError(404, 'PROFESSIONAL_NOT_FOUND', 'Profissional não encontrado.');
   return {
     ...row,
+    availability: await availabilityStatus(db, companyId, id),
     upcoming_appointments: await upcomingAppointments(db, companyId, id),
     services: (
       await db.all(
