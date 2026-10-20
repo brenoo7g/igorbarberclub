@@ -95,6 +95,7 @@ export interface WeekShare extends ReleasedWeek {
   whatsapp_url: string;
 }
 export interface Appointment {
+  cancellation_reason?: string;
   id: string;
   user_id: string | null;
   barber_id: string;

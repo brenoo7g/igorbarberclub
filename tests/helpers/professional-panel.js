@@ -41,7 +41,7 @@ export async function assertProfessionalPanelMigration(t, db) {
   );
   await assert.rejects(db.all('SELECT * FROM professional_activity_events'));
   assert.equal(await db.get('SELECT version FROM schema_migrations WHERE version=17'), undefined);
-  assert.deepEqual(await runMigrations(db), [17, 18, 19, 20]);
+  assert.deepEqual(await runMigrations(db), [17, 18, 19, 20, 21]);
   assert.deepEqual(await runMigrations(db), []);
   for (const [table, rows] of Object.entries(snapshot))
     assert.deepEqual(await db.all('SELECT * FROM ' + table + ' ORDER BY 1,2'), rows);

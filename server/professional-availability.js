@@ -10,6 +10,7 @@ import { intersectDay, lockOperational, readPolicies } from './operational-setti
 import { fitsWorkingDay, minutes } from './schedule-domain.js';
 import { dateInTimezone, isFuture, weekday, addDays } from './domain.js';
 import { idempotent, requestKey } from './idempotency.js';
+import { installAgendaBlocks } from './agenda-blocks.js';
 
 export const ownAgendaPath = (cid, configure = false) =>
   '/app/minha-agenda' + (configure ? '/configurar' : '') + '?empresa=' + encodeURIComponent(cid);
@@ -154,6 +155,10 @@ function validateCompanyDays(days, policies) {
 }
 
 export function installProfessionalAvailability(router, db, cid) {
+  installAgendaBlocks(router, db, cid, {
+    scope: 'professional',
+    authorize: (tx, req, write) => access(tx, cid, req.user.id, write),
+  });
   router.get('/professional/availability', async (req, res) => {
     if (Object.keys(req.query).length)
       domainError(400, 'INVALID_FILTER', 'Esta consulta usa somente o seu cadastro vinculado.');

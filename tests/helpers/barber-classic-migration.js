@@ -41,6 +41,8 @@ export function expectBarberClassicMetadata(before) {
         working_days_json: null,
       });
   for (const row of before.appointments || []) if (!('notes' in row)) row.notes = '';
+  for (const row of before.appointments || [])
+    if (!('cancellation_reason' in row)) row.cancellation_reason = '';
   for (const row of before.company_settings || [])
     if (!('site_version' in row)) Object.assign(row, { site_version: 0, sections_json: null });
   for (const row of before.portfolio || []) if (!('sort_order' in row)) row.sort_order = 0;

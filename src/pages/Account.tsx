@@ -204,6 +204,9 @@ export default function Account() {
                   {a.barber_name}
                 </p>
                 <strong>{money(a.total)}</strong>
+                {a.status === 'cancelled' && a.cancellation_reason && (
+                  <p>Motivo do cancelamento: {a.cancellation_reason}</p>
+                )}
               </div>
               {tab === 'upcoming' && (
                 <div className="appointment-actions">

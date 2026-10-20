@@ -46,7 +46,11 @@ export async function setProfessionalLink(
   actor,
   userId,
   next,
-  { expected, confirm, professionalRole = true } = {},
+  {
+    expected,
+    confirm,
+    professionalRole = true,
+  } = /** @type {{expected?: string|null, confirm?: boolean, professionalRole?: boolean}} */ ({}),
 ) {
   await requireLinkOwner(tx, cid, actor);
   const member = await tx.get(

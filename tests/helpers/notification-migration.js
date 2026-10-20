@@ -9,7 +9,7 @@ export const notificationLeaseColumns = [
 // Upgrade fixtures have never been claimed; new nullable fields must start NULL.
 export function assertUnclaimedMigration(rows) {
   for (const row of rows)
-    for (const field of notificationLeaseColumns)
+    for (const field of [...notificationLeaseColumns, 'provider_message_id', 'submitted_at'])
       if (field in row) {
         assert.equal(row[field], null);
         delete row[field];

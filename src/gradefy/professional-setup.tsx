@@ -20,6 +20,7 @@ import { Button, ButtonLink, Card, Feedback, Input, Loading, GradefyLogo } from 
 import { CompanySelector, ManagementAccess } from './management';
 import type { ManagementProps } from './management';
 import './professional-setup.css';
+import { AgendaBlockPanel } from './agenda-blocks';
 
 type Snapshot = {
   company: { id: string; name: string; timezone: string };
@@ -62,9 +63,6 @@ function Setup({ companyId, companies, choose }: ManagementProps) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [revision, setRevision] = useState(0),
-    [blockDate, setBlockDate] = useState(''),
-    [start, setStart] = useState('14:00'),
-    [end, setEnd] = useState('15:00'),
     [blockNotice, setBlockNotice] = useState(''),
     [baseline, setBaseline] = useState(''),
     [expanded, setExpanded] = useState<Record<number, boolean>>({});
@@ -79,8 +77,7 @@ function Setup({ companyId, companies, choose }: ManagementProps) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
   const working = useRef(false),
-    attempt = useRef<{ payload: string; key: string } | null>(null),
-    blockAttempt = useRef<{ payload: string; key: string } | null>(null);
+    attempt = useRef<{ payload: string; key: string } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -109,7 +106,6 @@ function Setup({ companyId, companies, choose }: ManagementProps) {
         setDays(initialDays);
         setMode(initialMode);
         setBaseline(JSON.stringify({ days: initialDays, mode: initialMode }));
-        setBlockDate(r.today);
         attempt.current = null;
       })
       .catch((e) => {
@@ -217,33 +213,6 @@ function Setup({ companyId, companies, choose }: ManagementProps) {
         replace: true,
         state: { scheduleSaved: true },
       });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      working.current = false;
-      setBusy(false);
-    }
-  }
-  async function block() {
-    if (working.current || !data) return;
-    const payload = JSON.stringify({ date: blockDate, start, end });
-    if (blockAttempt.current?.payload !== payload)
-      blockAttempt.current = { payload, key: newIdempotencyKey() };
-    working.current = true;
-    setBusy(true);
-    setError('');
-    setBlockNotice('');
-    try {
-      await api('/professional/blocks', {
-        method: 'POST',
-        headers: { 'X-Gradefy-Company-Id': companyId, 'Idempotency-Key': blockAttempt.current.key },
-        body: payload,
-      });
-      setBlockNotice('Bloqueio pessoal salvo. Este intervalo não receberá novas reservas.');
-      const updated = await api<Snapshot>('/professional/availability', {
-        headers: { 'X-Gradefy-Company-Id': companyId },
-      });
-      setData((old) => (old ? { ...old, blocks: updated.blocks } : old));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -697,56 +666,42 @@ function Setup({ companyId, companies, choose }: ManagementProps) {
             </details>
           </section>
           {data.status.configured && (
-            <Card>
-              <h2>Bloqueio pessoal</h2>
-              <p>
-                Reserve um intervalo futuro da sua agenda já salva. Você pode remover seus bloqueios
-                pessoais; bloqueios da gestão permanecem protegidos.
-              </p>
-              <Feedback success>{blockNotice}</Feedback>
-              <div className="gf-own-times">
-                <Input
-                  type="date"
-                  label="Data do bloqueio pessoal"
-                  value={blockDate}
-                  min={data.today}
-                  disabled={busy || !data.editable}
-                  onChange={(e) => setBlockDate(e.target.value)}
-                />
-                <Input
-                  type="time"
-                  label="Início do bloqueio pessoal"
-                  value={start}
-                  disabled={busy || !data.editable}
-                  onChange={(e) => setStart(e.target.value)}
-                />
-                <Input
-                  type="time"
-                  label="Fim do bloqueio pessoal"
-                  value={end}
-                  disabled={busy || !data.editable}
-                  onChange={(e) => setEnd(e.target.value)}
-                />
-              </div>
-              <Button disabled={!data.editable} busy={busy} onClick={() => void block()}>
-                Criar bloqueio pessoal
-              </Button>
-              {data.blocks.map((b) => (
-                <div className="gf-own-actions" key={b.id}>
-                  <span>
-                    {b.date.split('-').reverse().join('/')} · {clock(b.start_minute)} —{' '}
-                    {clock(b.end_minute)}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    disabled={busy || !data.editable}
-                    onClick={() => void removeBlock(b.id)}
-                  >
-                    Remover bloqueio pessoal
-                  </Button>
-                </div>
-              ))}
-            </Card>
+            <div>
+              <AgendaBlockPanel
+                companyId={companyId}
+                scope="professional"
+                today={data.today}
+                editable={data.editable}
+                onChanged={() => {
+                  void api<Snapshot>('/professional/availability', {
+                    headers: { 'X-Gradefy-Company-Id': companyId },
+                  })
+                    .then((updated) =>
+                      setData((old) => (old ? { ...old, blocks: updated.blocks } : old)),
+                    )
+                    .catch((e) => setError(errorMessage(e)));
+                }}
+              />
+              <Card>
+                <h3>Bloqueios pessoais salvos</h3>
+                <Feedback success>{blockNotice}</Feedback>
+                {data.blocks.map((b) => (
+                  <div className="gf-own-actions" key={b.id}>
+                    <span>
+                      {b.date.split('-').reverse().join('/')} · {clock(b.start_minute)} —{' '}
+                      {clock(b.end_minute)}
+                    </span>
+                    <Button
+                      variant="secondary"
+                      disabled={busy || !data.editable}
+                      onClick={() => void removeBlock(b.id)}
+                    >
+                      Remover bloqueio pessoal
+                    </Button>
+                  </div>
+                ))}
+              </Card>
+            </div>
           )}
           {data.status.configured ? (
             <ButtonLink to={agenda} variant="secondary">

@@ -785,6 +785,17 @@ export function createApp(
               data.barberId,
               ...(current ? [current.barber_id] : []),
             );
+            if (current) {
+              // A block can cancel while this request waits for the existing barber lock.
+              // Never move the historical dates or emit a reschedule for a cancelled row.
+              const fresh = await tx.get('SELECT * FROM appointments WHERE company_id=? AND id=?', [
+                companyId,
+                id,
+              ]);
+              if (!fresh || fresh.status !== 'confirmed')
+                fail(409, 'Este atendimento foi cancelado ou finalizado. Atualize sua agenda.');
+              current = fresh;
+            }
             now = await currentTime(tx);
             today = dateInTimezone(now, company.timezone);
             const policies = await readPolicies(tx, companyId);

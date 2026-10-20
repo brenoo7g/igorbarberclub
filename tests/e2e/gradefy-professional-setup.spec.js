@@ -184,14 +184,20 @@ test('personal block creation/removal uses the saved routine and keeps company c
   const data = await (await page.request.get('/api/professional/availability', { headers })).json();
   let date = addDays(data.today, 1);
   while (new Date(date + 'T12:00Z').getUTCDay() !== 2) date = addDays(date, 1);
-  await page.getByLabel('Data do bloqueio pessoal', { exact: true }).fill(date);
+  await page.getByLabel('Data inicial do bloqueio', { exact: true }).fill(date);
   await page.getByLabel('Início do bloqueio pessoal', { exact: true }).fill('14:00');
   await page.getByLabel('Fim do bloqueio pessoal', { exact: true }).fill('15:00');
-  await page.getByRole('button', { name: 'Criar bloqueio pessoal', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Bloqueio pessoal salvo');
+  await page.getByRole('button', { name: 'Revisar bloqueio', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('0 agendamento(s) afetado(s).');
+  await page
+    .getByRole('button', { name: 'Confirmar bloqueio e cancelar reservas', exact: true })
+    .click();
+  await expect(page.getByRole('status')).toContainText('Bloqueio realizado');
   page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Remover bloqueio pessoal', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Bloqueio pessoal removido');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Bloqueio pessoal removido' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Remover bloqueio pessoal', exact: true }),
   ).toHaveCount(0);

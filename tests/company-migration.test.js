@@ -41,6 +41,10 @@ async function snapshot(db, tables) {
         if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
         if (table === 'portfolio' && row.sort_order === 0) delete row.sort_order;
         if (table === 'appointments' && row.notes === '') delete row.notes;
+        if (table === 'appointments' && 'cancellation_reason' in row) {
+          assert.equal(row.cancellation_reason, '');
+          delete row.cancellation_reason;
+        }
       }
   }
   return result;
@@ -226,7 +230,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
     fail = false;
     assert.deepEqual(
       await runMigrations(db),
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
     );
     assert.deepEqual(await runMigrations(db), []);
   } finally {

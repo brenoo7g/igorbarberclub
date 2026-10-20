@@ -41,7 +41,7 @@ export async function assertProfessionalAvailabilityMigration(t, db) {
     await db.all('SELECT * FROM idempotency_keys ORDER BY company_id,actor_hash'),
     keys,
   );
-  assert.deepEqual(await runMigrations(db), [19, 20]);
+  assert.deepEqual(await runMigrations(db), [19, 20, 21]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(
     await db.all('SELECT * FROM schema_migrations WHERE version<19 ORDER BY version'),

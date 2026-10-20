@@ -18,6 +18,7 @@ import { Button, ButtonLink, Card, Feedback, Loading } from './components';
 import { CompanySelector, ManagementAccess } from './management';
 import type { ManagementProps } from './management';
 import { agendaDateLabel, monday } from './agenda-display';
+import { AgendaBlockPanel } from './agenda-blocks';
 import './dashboard.css';
 import './agenda.css';
 import './professional-agenda.css';
@@ -155,7 +156,6 @@ function Content({ companyId, companies, choose, refreshAccess }: ManagementProp
   useEffect(() => {
     const c = new AbortController();
     setBusy(true);
-    setData(null);
     setError('');
     const q = new URLSearchParams({ view, page: String(page) });
     if (date) q.set('from', date);
@@ -168,6 +168,7 @@ function Content({ companyId, companies, choose, refreshAccess }: ManagementProp
       })
       .catch((e) => {
         if (!c.signal.aborted) {
+          setData(null);
           setError(errorMessage(e));
           if (e instanceof ApiError && e.status === 403) refreshAccess?.();
         }
@@ -504,6 +505,13 @@ function Content({ companyId, companies, choose, refreshAccess }: ManagementProp
                 </Button>
               </nav>
             )}
+            <AgendaBlockPanel
+              companyId={companyId}
+              scope="professional"
+              today={data.today}
+              editable={data.editable}
+              onChanged={() => setRevision((n) => n + 1)}
+            />
             <section id="meus-horarios">
               <Card>
                 <h2>Meus Horários</h2>

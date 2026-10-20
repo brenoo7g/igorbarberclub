@@ -242,7 +242,7 @@ export async function assertProfessionalIdempotency(t, db, second = db) {
       );
       assert.deepEqual(
         await runMigrations(db),
-        [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
       );
       assert.deepEqual(await db.all('SELECT * FROM idempotency_keys'), legacy);
       assert.deepEqual(await runMigrations(db), []);

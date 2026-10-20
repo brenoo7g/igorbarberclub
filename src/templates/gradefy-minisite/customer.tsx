@@ -527,6 +527,9 @@ function Reservations() {
         <div className="ms-client-reservations">
           {visible.map((a) => (
             <article className="ms-client-card ms-reservation-card" key={a.id}>
+              {a.status === 'cancelled' && a.cancellation_reason && (
+                <p>Motivo do cancelamento: {a.cancellation_reason}</p>
+              )}
               <span className={'ms-client-status ms-client-status-' + a.status}>
                 {statusLabels[a.status]}
               </span>
@@ -589,6 +592,9 @@ function Reservations() {
               {(cancel || detail)!.barber_name}
             </p>
             <strong>{money((cancel || detail)!.total)}</strong>
+            {detail?.cancellation_reason && (
+              <p>Motivo do cancelamento: {detail.cancellation_reason}</p>
+            )}
             <Notice>{error}</Notice>
             {cancel && (
               <button

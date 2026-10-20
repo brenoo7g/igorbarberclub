@@ -51,7 +51,7 @@ export async function assertMinisite(t, db, second = db) {
       );
       assert.equal(await db.get("SELECT id FROM templates WHERE id='gradefy-minisite'"), undefined);
       assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), journal);
-      assert.deepEqual(await runMigrations(db), [20]);
+      assert.deepEqual(await runMigrations(db), [20, 21]);
       assert.deepEqual(await runMigrations(db), []);
       assert.equal(
         Number((await db.get("SELECT COUNT(*) AS n FROM templates WHERE id='gradefy-minisite'")).n),

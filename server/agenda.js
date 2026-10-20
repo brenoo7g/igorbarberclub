@@ -4,6 +4,7 @@ import { getLegacyCompanyId } from './company-context.js';
 import { currentTime, domainError, getCompanyEntitlements } from './entitlements.js';
 import { addDays, dateInTimezone, isFuture } from './domain.js';
 import { ensureCompanyClients } from './clients.js';
+import { installAgendaBlocks } from './agenda-blocks.js';
 
 export const agendaDate = z
   .string()
@@ -98,6 +99,10 @@ export function installAgendaRoutes(
     if (!req.get('X-Gradefy-Company-Id'))
       domainError(409, 'COMPANY_CONTEXT_REQUIRED', 'Selecione a empresa para continuar.');
     next();
+  });
+  installAgendaBlocks(router, db, cid, {
+    scope: 'management',
+    authorize: (tx, req, write) => agendaAccess(tx, cid, req.user.id, write),
   });
   router.get('/admin/agenda', async (req, res) => {
     const options = listSchema.parse(req.query);

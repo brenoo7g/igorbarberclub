@@ -31,7 +31,7 @@ export async function assertSessionAddressMigration(t, db) {
   for (const c of addressColumns)
     await assert.rejects(db.get('SELECT ' + c + ' FROM company_settings'));
   assert.equal(await db.get('SELECT version FROM schema_migrations WHERE version=18'), undefined);
-  assert.deepEqual(await runMigrations(db), [18, 19, 20]);
+  assert.deepEqual(await runMigrations(db), [18, 19, 20, 21]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(await db.all('SELECT * FROM company_settings ORDER BY company_id'), original);
   assert.deepEqual(

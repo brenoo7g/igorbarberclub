@@ -131,6 +131,10 @@ async function snapshot(raw, tables) {
         if (table === 'barbers' && row.photo_url === null) delete row.photo_url;
         if (table === 'portfolio' && row.sort_order === 0) delete row.sort_order;
         if (table === 'appointments' && row.notes === '') delete row.notes;
+        if (table === 'appointments' && 'cancellation_reason' in row) {
+          assert.equal(row.cancellation_reason, '');
+          delete row.cancellation_reason;
+        }
       }
     if (table === 'notifications') assertUnclaimedMigration(rows);
     result[table] = rows.sort((a, b) =>
@@ -304,6 +308,8 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'professional_users',
       'professional_activity_events',
       'professional_personal_blocks',
+      'agenda_block_operations',
+      'agenda_block_cancellations',
       'company_onboarding',
       'company_clients',
       'client_appointments',
@@ -337,6 +343,8 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'professional_users',
           'professional_activity_events',
           'professional_personal_blocks',
+          'agenda_block_operations',
+          'agenda_block_cancellations',
           'company_onboarding',
           'company_clients',
           'client_appointments',
@@ -658,13 +666,16 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;
   delete before.schema_migrations;
   expectProfessionalMetadata(before);
-  for (const row of before.appointments || []) if (row.notes === '') delete row.notes;
+  for (const row of before.appointments || []) {
+    if (row.notes === '') delete row.notes;
+    if (row.cancellation_reason === '') delete row.cancellation_reason;
+  }
   for (const row of before.barbers || []) if (row.photo_url === null) delete row.photo_url;
   for (const row of before.portfolio || []) if (row.sort_order === 0) delete row.sort_order;
   assert.equal(after.templates.filter((row) => row.id === 'gradefy-minisite').length, 1);
@@ -876,4 +887,14 @@ test('40 Gradefy 7F.4A PostgreSQL Mini Site lifecycle, images and existing booki
   t.after(() => second.close());
   const { assertMinisite } = await import('../helpers/minisite.js');
   await assertMinisite(t, db, second);
+});
+
+test('41 Gradefy 7F.4A.4 PostgreSQL explicit block cancellation, outbox and cross-connection races', async (t) => {
+  const { db, url } = await makeCase(t, 'block_cancellation');
+  const second = await createDatabase(url);
+  t.after(() => second.close());
+  const { assertBlockCancellations, assertBlockCancellationMigration } =
+    await import('../helpers/block-cancellations.js');
+  await assertBlockCancellationMigration(t, db);
+  await assertBlockCancellations(t, db, second);
 });

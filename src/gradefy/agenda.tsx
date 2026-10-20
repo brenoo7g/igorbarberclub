@@ -20,6 +20,7 @@ import type { ManagementProps } from './management';
 import type { AgendaCatalog, AgendaDetail, AgendaState } from './agenda-types';
 import { BusinessNav } from './business-nav';
 import { PaymentPanel } from './finance-payment';
+import { AgendaBlockPanel } from './agenda-blocks';
 import './dashboard.css';
 import './agenda.css';
 import { agendaDateLabel, monday } from './agenda-display';
@@ -140,6 +141,14 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
                 A agenda está disponível para consulta. A assinatura atual não permite alterações.
               </Feedback>
             )}
+            <AgendaBlockPanel
+              companyId={companyId}
+              scope="management"
+              today={data.today}
+              editable={data.editable}
+              professionals={data.professionals}
+              onChanged={() => setRevision((n) => n + 1)}
+            />
             <Card className="gf-agenda-toolbar">
               <div className="gf-agenda-navigation">
                 <div className="gf-agenda-views" role="group" aria-label="Visualização da agenda">
@@ -514,6 +523,9 @@ function AppointmentDetails({
                 <dd>{detail.timezone}</dd>
               </div>
             </dl>
+            {detail.item.cancellation_reason && (
+              <p>Motivo do cancelamento: {detail.item.cancellation_reason}</p>
+            )}
             {detail.item.notes && (
               <div className="gf-agenda-notes">
                 <h3>Observações</h3>

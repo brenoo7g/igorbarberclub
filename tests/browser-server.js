@@ -67,6 +67,8 @@ const { installProfessionalBrowserFixture } = await import('./helpers/profession
 await installProfessionalBrowserFixture(db, recoveryHash);
 const { installMinisiteBrowser } = await import('./helpers/minisite-browser.js');
 await installMinisiteBrowser(db, recoveryHash);
+const { installBlockBrowser } = await import('./helpers/block-browser.js');
+await installBlockBrowser(db, recoveryHash);
 // Dedicated Mini Site recovery identity; never reuses the legacy recovery fixture.
 await db.run(
   "INSERT INTO users(id,name,email,phone,password_hash,role,created_at) VALUES('mini-recovery-browser','Cliente Recuperação Mini','mini-recovery@example.test','21999997777',?,'client',?)",
