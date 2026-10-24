@@ -7,6 +7,12 @@ import { lockResource } from './scheduling-locks.js';
 import { idempotent, requestKey } from './idempotency.js';
 import { dateInTimezone, clock } from './domain.js';
 
+function nextMonth(date) {
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  return `${month === 12 ? year + 1 : year}-${String(month === 12 ? 1 : month + 1).padStart(2, '0')}-01`;
+}
+
 export const clientSchema = z
   .object({
     name: z.string().trim().min(2).max(100),
@@ -147,12 +153,63 @@ export function installClientRoutes(router, db, cid, { appointmentList }) {
           (await tx.get('SELECT COUNT(*) AS n FROM company_clients WHERE ' + where, args)).n,
         );
         const items = await tx.all(
-          'SELECT id,name,phone,email,version FROM company_clients WHERE ' +
+          'SELECT id,name,phone,email,version,created_at FROM company_clients WHERE ' +
             where +
             ' ORDER BY name,id LIMIT 30 OFFSET ?',
           [...args, (page - 1) * 30],
         );
-        return { items, total, page, pageSize: 30, editable: access.editable };
+        const now = await currentTime(tx);
+        const today = dateInTimezone(now, access.company.timezone);
+        const localTime = new Intl.DateTimeFormat('en-GB', {
+          timeZone: access.company.timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hourCycle: 'h23',
+        }).format(now);
+        const localSecond =
+          Number(localTime.slice(0, 2)) * 3600 +
+          Number(localTime.slice(3, 5)) * 60 +
+          Number(localTime.slice(6, 8));
+        const registered = Number(
+          (await tx.get('SELECT COUNT(*) AS n FROM company_clients WHERE company_id=?', [cid])).n,
+        );
+        const newThisMonth = Number(
+          (
+            await tx.get(
+              'SELECT COUNT(*) AS n FROM company_clients WHERE company_id=? AND created_at>=? AND created_at<?',
+              [cid, today.slice(0, 7) + '-01', nextMonth(today)],
+            )
+          ).n,
+        );
+        const futureClients = Number(
+          (
+            await tx.get(
+              `SELECT COUNT(DISTINCT ca.client_id) AS n FROM client_appointments ca
+           JOIN appointments a ON a.company_id=ca.company_id AND a.id=ca.appointment_id
+           WHERE ca.company_id=? AND a.status='confirmed' AND (a.date>? OR (a.date=? AND a.start_minute*60>=?))`,
+              [cid, today, today, localSecond],
+            )
+          ).n,
+        );
+        const completedVisits = Number(
+          (
+            await tx.get(
+              `SELECT COUNT(*) AS n FROM client_appointments ca
+           JOIN appointments a ON a.company_id=ca.company_id AND a.id=ca.appointment_id
+           WHERE ca.company_id=? AND a.status='completed'`,
+              [cid],
+            )
+          ).n,
+        );
+        return {
+          items,
+          total,
+          page,
+          pageSize: 30,
+          editable: access.editable,
+          stats: { registered, newThisMonth, futureClients, completedVisits },
+        };
       }),
     );
   });

@@ -100,7 +100,7 @@ export async function assertProfessionalsMigration(t, db) {
   await assert.rejects(db.all('SELECT * FROM barber_services'));
   assert.deepEqual(
     await runMigrations(db),
-    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
   );
   const after = await snapshot();
   expectProfessionalMetadata(before);

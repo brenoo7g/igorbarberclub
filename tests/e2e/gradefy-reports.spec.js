@@ -34,8 +34,8 @@ test('real reports share financial totals, accessible charts, server periods and
   await login(page);
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
-    .locator('.gf-dashboard-quick')
-    .getByRole('link', { name: 'Relatórios Abrir gestão', exact: true })
+    .locator('.gf-business-nav-desktop')
+    .getByRole('link', { name: 'Relatórios', exact: true })
     .click();
   await expect(page).toHaveURL('/app/relatorios?empresa=' + cid);
   await page.getByLabel('Período', { exact: true }).selectOption('last30');

@@ -1,4 +1,7 @@
 import { installServiceRoutes } from './services.js';
+import { emailConfigured } from './transactional-email.js';
+import { installEmailWebhooks } from './email-webhooks.js';
+import { installEmailCenter } from './email-center.js';
 import { createSiteStorage } from './site-storage.js';
 import { installCompanySite } from './company-site.js';
 import { installDashboard } from './dashboard.js';
@@ -191,6 +194,7 @@ export function createApp(
       },
     }),
   );
+  installEmailWebhooks(app, db);
   app.use('/api/auth/profile', express.json({ limit: '768kb' }));
   app.use(/^\/api\/public\/[^/]+\/auth\/profile$/, express.json({ limit: '768kb' }));
   app.use('/api/admin/portfolio', express.json({ limit: '1500kb' }));
@@ -321,7 +325,7 @@ export function createApp(
       close,
       timezone: 'America/Sao_Paulo',
       notifications: {
-        email: !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM),
+        email: emailConfigured(),
         whatsapp: !!(
           process.env.TWILIO_ACCOUNT_SID &&
           process.env.TWILIO_AUTH_TOKEN &&
@@ -1109,7 +1113,10 @@ export function createApp(
                 professional: fresh.barber_id,
                 appointment: fresh.id,
               });
-            if (status === 'cancelled') await enqueueNotification(tx, companyId, a.id, 'cancelled');
+            if (status === 'cancelled')
+              await enqueueNotification(tx, companyId, a.id, 'cancelled', {
+                cancellationSource: 'business',
+              });
             return { ok: true };
           },
         );
@@ -1205,6 +1212,7 @@ export function createApp(
     app.get('/admin/metrics', async (_req, res) => {
       res.json(await getCompanyMetrics(db, companyId, dateInBrazil()));
     });
+    installEmailCenter(app, db, companyId);
     app.get('/admin/notifications', async (_req, res) =>
       res.json(
         await db.all(

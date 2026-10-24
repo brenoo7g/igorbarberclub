@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './helpers/email-fixtures.js';
 import { getLegacyCompanyId } from '../server/company-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -225,7 +226,7 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   assert.match(
     appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato', getLegacyCompanyId())
       .text,
-    /entre em contato com a barbearia/,
+    /entre em contato com o estabelecimento/,
   );
   assert.doesNotMatch(
     appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato', getLegacyCompanyId())
@@ -249,6 +250,7 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   process.env.EMAIL_FROM = 'Test <test@example.com>';
   delete process.env.TWILIO_CONTENT_SID;
   const calls = [];
+  await authorizeMockEmail(t, db, { enrollExisting: true });
   const realFetch = globalThis.fetch;
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     if (url === 'https://api.resend.com/emails') {

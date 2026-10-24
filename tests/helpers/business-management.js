@@ -38,7 +38,7 @@ export async function assertClientMigration(t, db) {
   await assert.rejects(runMigrations(broken), /injected 013 failure/);
   await assert.rejects(db.all('SELECT * FROM company_clients'));
   assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), history);
-  assert.deepEqual(await runMigrations(db), [13, 14, 15, 16, 17, 18, 19, 20, 21]);
+  assert.deepEqual(await runMigrations(db), [13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
   const clients = await db.all('SELECT * FROM company_clients ORDER BY id'),
     links = await db.all('SELECT * FROM client_appointments ORDER BY appointment_id');
   assert.equal(links.length, before.length);
@@ -298,6 +298,11 @@ export async function assertBusinessManagement(t, db, second = db) {
       assert.equal(Number((await db.get('SELECT COUNT(*) AS n FROM users')).n), users);
       const list = await req('/admin/clients?q=99888-7777');
       assert.equal(list.data.total, 2);
+      assert.equal(list.data.stats.registered, 2);
+      assert.equal(list.data.stats.newThisMonth, 2);
+      assert.equal(list.data.stats.futureClients, 0);
+      assert.equal(list.data.stats.completedVisits, 0);
+      assert.ok(list.data.items.every((c) => typeof c.created_at === 'string'));
       assert.ok(list.data.items.every((c) => !('notes' in c) && !('source_id' in c)));
       assert.equal((await req('/admin/clients?q=Cadastro')).data.total, 1);
       assert.equal((await req('/admin/clients?q=%25')).data.total, 0);
@@ -340,6 +345,11 @@ export async function assertBusinessManagement(t, db, second = db) {
       assert.equal(result.status, 201, JSON.stringify(result.data));
       booking = result.data;
       assert.equal(booking.client_id, client.id);
+      assert.equal((await req('/admin/clients')).data.stats.futureClients, 1);
+      assert.equal(
+        (await req('/admin/clients', { cid: 'business-b' })).data.stats.futureClients,
+        0,
+      );
       assert.equal(booking.guest_name, clientData.name);
       assert.equal(await count('notifications'), 1); // Optional email: only WhatsApp is enqueued.
       const before = await db.get('SELECT * FROM appointments WHERE id=?', [booking.id]);

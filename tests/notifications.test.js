@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './helpers/email-fixtures.js';
 import { getLegacyCompanyId } from '../server/company-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,6 +21,7 @@ test('notification worker: disabled channels cannot starve email; provider contr
   process.env.RESEND_API_KEY = 'test-placeholder-never-sent';
   process.env.EMAIL_FROM = 'Test <test@example.com>';
   delete process.env.TWILIO_CONTENT_SID;
+  await authorizeMockEmail(t, db);
   let stop = () => {};
   t.after(async () => {
     stop();

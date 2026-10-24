@@ -119,7 +119,14 @@ export function createClientAuth(db, { secret, secureCookies, authLimiter, dummy
       res.clearCookie(cookie, options);
       res.json({ ok: true });
     });
-    installProfileRoutes(client, db, { authenticated, login, authLimiter, prefix: '', present });
+    installProfileRoutes(client, db, {
+      authenticated,
+      login,
+      authLimiter,
+      prefix: '',
+      present,
+      clientCompanyId: companyId,
+    });
     installPasswordRecovery(client, db, {
       secret,
       secureCookies,

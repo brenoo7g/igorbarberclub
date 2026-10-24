@@ -41,7 +41,7 @@ export async function assertTeamMigration(t, db) {
   await assert.rejects(runMigrations(broken), /injected team migration failure/);
   for (const table of teamTables) await assert.rejects(db.all('SELECT * FROM ' + table));
   assert.deepEqual(await db.all('SELECT * FROM schema_migrations ORDER BY version'), journal);
-  assert.deepEqual(await runMigrations(db), [15, 16, 17, 18, 19, 20, 21]);
+  assert.deepEqual(await runMigrations(db), [15, 16, 17, 18, 19, 20, 21, 22]);
   assert.deepEqual(await runMigrations(db), []);
   for (const [table, records] of Object.entries(snapshot))
     assert.deepEqual(await db.all('SELECT * FROM ' + table + ' ORDER BY 1,2'), records);

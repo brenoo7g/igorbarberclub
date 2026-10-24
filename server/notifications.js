@@ -2,7 +2,12 @@ import { requireCompanyId, publicCompanyPath } from './company-context.js';
 import { randomUUID } from 'node:crypto';
 import { cleanIdempotency } from './idempotency.js';
 import { clock } from './domain.js';
-import { sendTransactionalEmail } from './transactional-email.js';
+import {
+  deliverTransactionalEmail,
+  emailConfigured,
+  emailDeliveryScope,
+} from './transactional-email.js';
+import { emailTemplate } from './email-templates.js';
 import { z } from 'zod';
 
 export async function enqueueNotification(db, companyId, appointmentId, event, options = {}) {
@@ -13,7 +18,7 @@ export async function enqueueNotification(db, companyId, appointmentId, event, o
   );
   if (!appointment) throw Object.assign(new Error('Agendamento não encontrado.'), { status: 404 });
   const brand = await db.get(
-    'SELECT c.name,c.slug,s.city,s.region FROM companies c LEFT JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
+    'SELECT c.name,c.slug,c.timezone,s.city,s.region FROM companies c LEFT JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
     [companyId],
   );
   const services = await db.all(
@@ -32,6 +37,8 @@ export async function enqueueNotification(db, companyId, appointmentId, event, o
     total: appointment.total,
     duration: appointment.end_minute - appointment.start_minute,
     reference: appointment.id,
+    cancellationSource:
+      options.cancellationSource || (options.blockCancellationReason ? 'business' : 'customer'),
     ...(options.blockCancellationReason
       ? {
           blockCancellationReason: options.blockCancellationReason,
@@ -54,7 +61,7 @@ export async function enqueueNotification(db, companyId, appointmentId, event, o
     const invalid =
       options.blockCancellationReason && !z.string().email().safeParse(appointment.email).success;
     await db.run(
-      `INSERT INTO notifications (company_id,id,appointment_id,channel,event,payload,created_at,next_attempt_at,status,error) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO notifications (company_id,id,appointment_id,channel,event,payload,created_at,next_attempt_at,status,error,email_delivery_scope) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         companyId,
         id,
@@ -66,6 +73,7 @@ export async function enqueueNotification(db, companyId, appointmentId, event, o
         now,
         invalid ? 'failed' : 'pending',
         invalid ? 'Cliente sem e-mail válido. Entre em contato manualmente.' : null,
+        emailDeliveryScope(),
       ],
     );
     if (channel === 'email') emailId = id;
@@ -75,84 +83,72 @@ export async function enqueueNotification(db, companyId, appointmentId, event, o
 
 export function appointmentEmail(payload, event, url, companyId) {
   requireCompanyId(companyId);
-  const brand = payload.brand || { name: 'Barbearia' };
-  if (event === 'cancelled' && payload.blockCancellationReason) {
-    const date = payload.date.split('-').reverse().join('/');
-    const text = [
-      `Olá, ${payload.name}!`,
-      '',
-      `Infelizmente, precisamos cancelar seu agendamento no estabelecimento ${brand.name}.`,
-      '',
-      `Motivo: ${payload.blockCancellationReason}`,
-      '',
-      'Agendamento cancelado:',
-      `Serviço: ${payload.services}`,
-      `Profissional: ${payload.barber}`,
-      `Data: ${date}`,
-      `Horário: ${payload.time}`,
-      '',
-      'Pedimos desculpas pelo inconveniente.',
-      'Gostaríamos muito de atendê-lo em outro momento. Acesse nosso site e escolha um novo dia e horário disponível.',
-      '',
-      'Agendar novo horário:',
-      url,
-      '',
-      'Agradecemos sua compreensão!',
-      `Equipe ${brand.name}`,
-      '',
-      'Enviado pelo Gradefy.',
-    ].join('\n');
-    const escape = (value) =>
-      String(value).replace(
-        /[&<>"']/g,
-        (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
-      );
-    return {
-      subject: `Seu agendamento foi cancelado — ${brand.name}`,
-      text,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#172033"><p>${escape('Olá, ' + payload.name + '!')}</p><p>${escape('Infelizmente, precisamos cancelar seu agendamento no estabelecimento ' + brand.name + '.')}</p><p><strong>Motivo:</strong> ${escape(payload.blockCancellationReason)}</p><h2>Agendamento cancelado</h2><ul><li>Serviço: ${escape(payload.services)}</li><li>Profissional: ${escape(payload.barber)}</li><li>Data: ${escape(date)}</li><li>Horário: ${escape(payload.time)}</li></ul><p>Pedimos desculpas pelo inconveniente.</p><p>Gostaríamos muito de atendê-lo em outro momento. Acesse nosso site e escolha um novo dia e horário disponível.</p><p><a href="${escape(url)}" style="display:inline-block;background:#6c5ce7;color:white;padding:16px 24px;border-radius:12px">Agendar novo horário</a></p><p>Agradecemos sua compreensão!<br>Equipe ${escape(brand.name)}</p><small>Enviado pelo Gradefy.</small></div>`,
-    };
-  }
-  const label =
-    { confirmed: 'confirmado', cancelled: 'cancelado', rescheduled: 'remarcado' }[event] ||
-    'atualizado';
-  const introduction =
-    {
-      confirmed: `Seu agendamento na ${brand.name} foi realizado com sucesso!`,
-      cancelled: `Seu agendamento na ${brand.name} foi cancelado.`,
-      rescheduled: `Seu agendamento na ${brand.name} foi remarcado com sucesso!`,
-    }[event] || `Seu agendamento na ${brand.name} foi atualizado.`;
-  const lines = [
-    `Olá, ${payload.name}!`,
-    '',
-    introduction,
-    '',
-    `Serviço(s): ${payload.services}`,
-    `Data: ${payload.date.split('-').reverse().join('/')}`,
-    `Horário: ${payload.time} (horário de Brasília)`,
+  const brand = payload.brand || { name: 'Estabelecimento' };
+  const business =
+    event === 'cancelled' &&
+    (payload.blockCancellationReason || payload.cancellationSource === 'business');
+  const subject = business
+    ? 'Aviso importante: seu agendamento foi cancelado'
+    : {
+        confirmed: 'Seu hor\u00e1rio est\u00e1 confirmado!',
+        rescheduled: 'Seu agendamento foi atualizado',
+        cancelled: 'Seu agendamento foi cancelado',
+      }[event] || 'Seu agendamento foi atualizado';
+  const details = [
+    ['Estabelecimento', brand.name],
+    ['Servi\u00e7o(s)', payload.services],
+    ['Data', String(payload.date).split('-').reverse().join('/')],
+    ['Hor\u00e1rio', payload.time],
   ];
-  // Old queued events have no price/professional snapshot. Do not invent their historical data.
-  if (payload.barber) lines.push(`Profissional: ${payload.barber}`);
+  if (payload.barber) details.push(['Profissional', payload.barber]);
   if (Number.isInteger(payload.duration))
-    lines.push(`Duração estimada: ${payload.duration} minutos`);
+    details.push(['Dura\u00e7\u00e3o estimada', payload.duration + ' minutos']);
   if (Number.isInteger(payload.total))
-    lines.push(
-      `Valor total: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(payload.total / 100)}`,
+    details.push([
+      'Valor total',
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+        payload.total / 100,
+      ),
+    ]);
+  if (payload.reference) details.push(['C\u00f3digo do agendamento', payload.reference]);
+  const paragraphs = [
+    event === 'confirmed'
+      ? 'Seu agendamento em ' + brand.name + ' foi realizado com sucesso!'
+      : event === 'rescheduled'
+        ? 'Seu agendamento em ' +
+          brand.name +
+          ' foi remarcado com sucesso! Confira o novo dia e hor\u00e1rio.'
+        : 'Seu agendamento em ' + brand.name + ' foi cancelado.',
+  ];
+  if (business) {
+    paragraphs.push(
+      'Pedimos desculpas pelo inconveniente. Gostar\u00edamos muito de atend\u00ea-lo em outro momento.',
     );
-  if (event !== 'cancelled') lines.push('Pagamento na barbearia.');
-  if (payload.reference) lines.push(`Código do agendamento: ${payload.reference}`);
-  lines.push(
-    '',
-    payload.guestSession
-      ? 'Para consultar, cancelar ou remarcar, abra Meus agendamentos no mesmo navegador usado na reserva. Se perdeu esse acesso, entre em contato com a barbearia e informe o código do agendamento:'
-      : payload.guest
-        ? 'Para cancelar ou remarcar, entre em contato com a barbearia e informe o código do agendamento:'
-        : 'Para consultar seus horários, cancelar ou remarcar, entre na sua conta:',
-    url,
-    '',
-    [brand.name, [brand.city, brand.region].filter(Boolean).join(', ')].filter(Boolean).join(' · '),
-  );
-  return { subject: `Agendamento ${label} — ${brand.name}`, text: lines.join('\n') };
+    if (payload.blockCancellationReason)
+      paragraphs.push('Motivo: ' + payload.blockCancellationReason);
+  }
+  if (event !== 'cancelled') paragraphs.push('Pagamento no estabelecimento.');
+  if (brand.timezone) paragraphs.push('Fuso hor\u00e1rio: ' + brand.timezone + '.');
+  if (!payload.guest && event !== 'cancelled')
+    paragraphs.push('Para consultar seus hor\u00e1rios, cancelar ou remarcar, entre na sua conta:');
+  if (payload.guest)
+    paragraphs.push(
+      payload.guestSession
+        ? 'Abra Meus agendamentos no mesmo navegador usado na reserva. Se perdeu esse acesso, entre em contato com o estabelecimento e informe o c\u00f3digo do agendamento.'
+        : 'Para cancelar ou remarcar, entre em contato com o estabelecimento e informe o c\u00f3digo do agendamento.',
+    );
+  return emailTemplate({
+    subject: subject + ' \u2014 ' + brand.name,
+    title: subject,
+    greeting: 'Ol\u00e1, ' + payload.name + '!',
+    paragraphs,
+    details,
+    action: {
+      label: event === 'cancelled' ? 'Agendar novo hor\u00e1rio' : 'Acompanhar minha reserva',
+      url,
+    },
+    footer: [brand.name, brand.city, brand.region].filter(Boolean).join(' \u00b7 '),
+  });
 }
 
 export const NOTIFICATION_MAX_ATTEMPTS = 5;
@@ -170,13 +166,13 @@ async function deliveryEnvelope(tx, companyId, row) {
   if (!recipient) throw new Error('Destinatário do agendamento não encontrado.');
   Object.assign(p, recipient);
   const company = await tx.get(
-    'SELECT c.name,c.slug,s.city,s.region FROM companies c LEFT JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
+    'SELECT c.name,c.slug,c.timezone,s.city,s.region FROM companies c LEFT JOIN company_settings s ON s.company_id=c.id WHERE c.id=?',
     [companyId],
   );
   if (!company) throw new Error('Empresa do evento não encontrada.');
   p.brand ||= company;
   const url = new URL(
-    `${publicCompanyPath(companyId, company.slug)}/${p.blockCancellationReason ? 'agendar' : p.guest && !p.guestSession ? '#contato' : 'minha-conta'}`,
+    `${publicCompanyPath(companyId, company.slug)}/${row.event === 'cancelled' ? 'agendar' : p.guest && !p.guestSession ? '#contato' : 'minha-conta'}`,
     process.env.APP_URL || 'http://localhost:5173',
   ).href;
   if (row.channel === 'email') {
@@ -279,7 +275,7 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
     try {
       await cleanIdempotency(db, companyId);
       const channels = [];
-      if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM) channels.push('email');
+      if (emailConfigured()) channels.push('email');
       if (
         process.env.TWILIO_ACCOUNT_SID &&
         process.env.TWILIO_AUTH_TOKEN &&
@@ -297,7 +293,12 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
         try {
           let response;
           if (row.channel === 'email') {
-            response = await sendTransactionalEmail(row.delivery_payload, row.id);
+            response = await deliverTransactionalEmail(
+              db,
+              { companyId, sourceId: row.id, kind: 'appointment', scope: row.email_delivery_scope },
+              row.delivery_payload,
+              row.id,
+            );
           } else {
             response = await fetch(
               `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
@@ -329,11 +330,14 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
           const uncertain =
             row.channel === 'whatsapp' &&
             (e.uncertain || ['TimeoutError', 'TypeError', 'AbortError'].includes(e.name));
-          status = uncertain
-            ? 'review'
-            : row.attempts >= NOTIFICATION_MAX_ATTEMPTS
-              ? 'failed'
-              : 'pending';
+          status =
+            e.code === 'EMAIL_POLICY_BLOCKED'
+              ? 'review'
+              : uncertain
+                ? 'review'
+                : row.attempts >= NOTIFICATION_MAX_ATTEMPTS
+                  ? 'failed'
+                  : 'pending';
           error = e.message;
         }
         // A late worker cannot acknowledge/fail a lease now owned by another worker.
@@ -350,6 +354,11 @@ export function createNotificationProcessor(db, companyId, { batchSize = 20 } = 
             row.claim_token,
           ],
         );
+        if (row.channel === 'email' && status === 'pending')
+          await db.run(
+            "UPDATE email_deliveries SET status='pending' WHERE company_id=? AND source_id=? AND kind='appointment' AND status='failed'",
+            [companyId, row.id],
+          );
       }
     } catch (e) {
       console.error('Falha no processamento de notificações:', e.code || e.name);

@@ -50,14 +50,28 @@ export async function installBusinessBrowserFixture(db, passwordHash) {
       );
     }
   }
-  for (const [id, offset, status] of [
-    ['business-browser-completed', -2, 'completed'],
-    ['business-browser-cancelled', -1, 'cancelled'],
+  for (const [id, offset, status, name, phone, email] of [
+    [
+      'business-browser-completed',
+      -2,
+      'completed',
+      'Ana Martins',
+      '21988887777',
+      'ana-browser@example.com',
+    ],
+    [
+      'business-browser-cancelled',
+      -1,
+      'cancelled',
+      'Bruna Martins',
+      '21988886666',
+      'bruna-browser@example.com',
+    ],
   ]) {
     const cid = 'business-browser-team';
     await db.run(
-      "INSERT INTO appointments(id,company_id,barber_id,date,start_minute,end_minute,total,status,guest_name,guest_phone,guest_email,created_at) VALUES(?,?,?, ?,540,580,4500,?,'Ana Martins','21988887777','ana-browser@example.com',?)",
-      [id, cid, cid + '-pro', addDays(today, offset), status, stamp],
+      'INSERT INTO appointments(id,company_id,barber_id,date,start_minute,end_minute,total,status,guest_name,guest_phone,guest_email,created_at) VALUES(?,?,?, ?,540,580,4500,?,?,?, ?,?)',
+      [id, cid, cid + '-pro', addDays(today, offset), status, name, phone, email, stamp],
     );
     await db.run(
       "INSERT INTO appointment_services(company_id,appointment_id,service_id,name,price,duration) VALUES(?,?,?,'Corte clássico',4500,40)",

@@ -43,6 +43,7 @@ export default function GradefyShell() {
     '/app/minha-agenda',
     '/app/minha-agenda/configurar',
   ].includes(useLocation().pathname);
+  const businessPage = management && !pathname.startsWith('/app/minha-agenda');
   useEffect(() => {
     const title = document.title;
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
@@ -59,7 +60,10 @@ export default function GradefyShell() {
   return (
     <div
       className={
-        'gf-app' + (management ? ' gf-management' : '') + (journey ? ' gf-journey-root' : '')
+        'gf-app' +
+        (management ? ' gf-management' : '') +
+        (businessPage ? ' gf-enterprise-layout' : '') +
+        (journey ? ' gf-journey-root' : '')
       }
       style={variables}
     >

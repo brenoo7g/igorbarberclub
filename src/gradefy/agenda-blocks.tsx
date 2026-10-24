@@ -68,6 +68,12 @@ const reasons = [
 const dateLabel = (date: string) => date.split('-').reverse().join('/');
 const notificationLabels: Record<string, string> = {
   sent: 'Aceita pelo provedor',
+  accepted: 'Aceita pelo provedor',
+  delivered: 'Entregue ao servidor de e-mail',
+  delayed: 'Entrega atrasada: verificar',
+  rejected: 'Rejeitada: contato manual necessário',
+  suppressed: 'Suprimida: contato manual necessário',
+  complained: 'Marcada como spam: contato manual necessário',
   pending: 'Pendente / aguardando nova tentativa',
   sending: 'Envio em processamento',
   failed: 'Falha: requer atenção',

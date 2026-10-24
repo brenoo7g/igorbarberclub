@@ -69,6 +69,12 @@ export interface ClientList {
   page: number;
   pageSize: number;
   editable: boolean;
+  stats?: {
+    registered: number;
+    newThisMonth: number;
+    futureClients: number;
+    completedVisits: number;
+  };
 }
 export interface ClientDetail {
   timezone: string;
@@ -82,9 +88,14 @@ export interface ClientDetail {
 }
 export interface BusinessAccess {
   plan: { name: string; priceCents: number } | null;
-  company: { id: string; name: string; timezone: string };
+  company: { id: string; name: string; timezone: string; site_published: number };
   editable: boolean;
-  entitlement: { planCode: string | null; maxProfessionals: number | null; valid: boolean };
+  entitlement: {
+    planCode: string | null;
+    maxProfessionals: number | null;
+    valid: boolean;
+    subscriptionStatus: string | null;
+  };
 }
 export interface WorkingDay {
   weekday: number;

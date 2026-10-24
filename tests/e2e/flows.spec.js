@@ -184,8 +184,9 @@ test('admin login, metrics, calendar views, service CRUD and restricted client a
   await page.getByRole('button', { name: 'Mês', exact: true }).click();
   await expect(page.locator('.calendar-cell')).toHaveCount(42);
   const freeDate = new Date();
-  freeDate.setDate(freeDate.getDate() + 32);
-  if (freeDate.getDay() === 0) freeDate.setDate(freeDate.getDate() + 1);
+  // The submitted date is ISO/UTC: choose its weekday in UTC too, including after 21h in Brazil.
+  freeDate.setUTCDate(freeDate.getUTCDate() + 32);
+  if (freeDate.getUTCDay() === 0) freeDate.setUTCDate(freeDate.getUTCDate() + 1);
   const freeDay = freeDate.toISOString().slice(0, 10);
   await page.getByRole('button', { name: 'Dia', exact: true }).click();
   await page.getByLabel('Data da agenda').fill(freeDay);

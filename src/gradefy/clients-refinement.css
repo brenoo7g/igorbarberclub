@@ -1,0 +1,306 @@
+/* Desktop refinement of the existing, tenant-scoped client management view. */
+@media (min-width: 801px) {
+  .gf-business-clients .gf-dashboard-main {
+    padding-top: 12px;
+  }
+  .gf-business-clients .gf-management-topbar {
+    padding-bottom: 9px;
+  }
+  .gf-business-clients .gf-management-topbar h1 {
+    margin-bottom: 3px;
+    font-size: 28px;
+  }
+  .gf-business-clients .gf-management-topbar p {
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .gf-business-clients .gf-client-kpis {
+    gap: 15px;
+    margin-block: 14px 12px;
+  }
+  .gf-business-clients .gf-client-kpis .gf-card {
+    position: relative;
+    min-height: 104px;
+    overflow: hidden;
+    border-color: #2c4781;
+    background:
+      radial-gradient(circle at 9% 0%, #45339a50, transparent 53%),
+      linear-gradient(135deg, #0d2148, #081630 85%);
+    box-shadow:
+      inset 0 1px #ffffff1c,
+      0 13px 34px #000b2366;
+  }
+  .gf-business-clients .gf-client-kpis .gf-card::after {
+    content: '';
+    position: absolute;
+    inset: auto 12px 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #956aff8c, transparent);
+  }
+  .gf-business-clients .gf-client-kpis span {
+    color: #d4def3;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .gf-business-clients .gf-client-kpis strong {
+    font-size: 29px;
+    color: #fff;
+    text-shadow: 0 2px 13px #596ef44d;
+  }
+  .gf-business-clients .gf-client-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 23%);
+    gap: 18px;
+  }
+  .gf-business-clients .gf-client-main-panel {
+    padding: 18px;
+    border-color: #294578;
+    background:
+      radial-gradient(circle at 0% 0%, #193a7450, transparent 37%),
+      linear-gradient(145deg, #0a1d3e, #07142d 80%);
+    box-shadow:
+      inset 0 1px #ffffff12,
+      0 16px 38px #000a1f69;
+  }
+  .gf-business-clients .gf-client-panel-heading h2 {
+    font-size: 23px;
+    letter-spacing: -0.025em;
+  }
+  .gf-business-clients .gf-client-panel-heading p {
+    color: #bdccec;
+    font-size: 14px;
+  }
+  .gf-business-clients .gf-client-panel-heading .gf-button {
+    min-height: 45px;
+    background: linear-gradient(105deg, #8b46f6, #5147ed);
+    box-shadow: 0 8px 23px #6c3df050;
+  }
+  .gf-business-clients .gf-client-main-panel .gf-business-search {
+    margin-top: 13px;
+    padding: 5px;
+    border-color: #294374;
+    background: #0a1a38;
+  }
+  .gf-business-clients .gf-client-main-panel .gf-business-search > .gf-button {
+    min-height: 42px;
+  }
+  .gf-business-clients .gf-business-search input {
+    font-size: 14px;
+  }
+  .gf-business-clients .gf-client-result-count {
+    margin: 15px 0;
+    color: #c7d5ef;
+    font-size: 13px;
+  }
+  .gf-business-clients .gf-client-table-wrap {
+    border-color: #2b4775;
+    background: #071832;
+  }
+  .gf-business-clients .gf-client-table {
+    table-layout: fixed;
+    font-size: 14px;
+  }
+  .gf-business-clients .gf-client-table th {
+    padding: 14px 13px;
+    border-bottom: 1px solid #2c4d87;
+    background: linear-gradient(110deg, #142953, #0d2147);
+    color: #d3e0f8;
+    font-size: 13px;
+    letter-spacing: 0.01em;
+  }
+  .gf-business-clients .gf-client-table th:nth-child(1) {
+    width: 28%;
+  }
+  .gf-business-clients .gf-client-table th:nth-child(2) {
+    width: 19%;
+  }
+  .gf-business-clients .gf-client-table th:nth-child(3) {
+    width: 25%;
+  }
+  .gf-business-clients .gf-client-table th:nth-child(4) {
+    width: 18%;
+  }
+  .gf-business-clients .gf-client-table th:nth-child(5) {
+    width: 10%;
+  }
+  .gf-business-clients .gf-client-table td {
+    height: 60px;
+    padding: 8px 13px;
+    border-top-color: #1e3762;
+    color: #e1e9fa;
+  }
+  .gf-business-clients .gf-client-table tbody tr:nth-child(even) td {
+    background: #0a1d3c;
+  }
+  .gf-business-clients .gf-client-table tbody tr:hover td {
+    background: #172d5b;
+  }
+  .gf-business-clients .gf-client-table-person {
+    min-width: 0;
+  }
+  .gf-business-clients .gf-client-table-person > span {
+    width: 35px;
+    height: 35px;
+    border: 1px solid #9388f294;
+    background: linear-gradient(135deg, #8a50ed, #2554a9);
+    box-shadow: 0 3px 14px #704bea42;
+  }
+  .gf-business-clients .gf-client-table-person > div {
+    min-width: 0;
+  }
+  .gf-business-clients .gf-client-table-person h2 {
+    overflow: hidden;
+    color: #fff;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gf-business-clients .gf-client-table-person small {
+    display: block;
+    margin-top: 3px;
+    color: #a8bce2;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .gf-business-clients .gf-client-table td > a {
+    overflow: hidden;
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gf-business-clients .gf-client-table td:last-child {
+    text-align: center;
+  }
+  .gf-business-clients .gf-client-action-trigger {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 34px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: #c9d9fb;
+    cursor: pointer;
+  }
+  .gf-business-clients .gf-client-action-trigger:hover,
+  .gf-business-clients .gf-client-action-trigger:focus-visible,
+  .gf-business-clients .gf-client-action-trigger[aria-expanded='true'] {
+    border-color: #7058ec;
+    background: #1b3063;
+    color: #fff;
+  }
+  .gf-business-clients .gf-client-side .gf-card {
+    border-color: #2b477a;
+    background:
+      radial-gradient(circle at 100% 0%, #2c368a44, transparent 54%),
+      linear-gradient(145deg, #0c2044, #08152e);
+  }
+  .gf-business-clients .gf-client-side h2 {
+    font-size: 18px;
+  }
+  .gf-business-clients .gf-client-side p {
+    color: #c3d0eb;
+    font-size: 13px;
+  }
+  .gf-business-clients .gf-client-side .gf-button,
+  .gf-business-clients .gf-client-side a,
+  .gf-business-clients .gf-client-side-note button {
+    min-height: 53px;
+    padding-inline: 13px;
+    border-color: #2b4c86;
+    background: linear-gradient(110deg, #142b5c, #10234b);
+    color: #f4f7ff;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .gf-business-clients .gf-client-side .gf-button > svg:first-child,
+  .gf-business-clients .gf-client-side a > svg:first-child {
+    box-sizing: content-box;
+    padding: 7px;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #293e92, #153574);
+    color: #a6bcff;
+  }
+  .gf-business-clients .gf-client-side-note > svg {
+    box-sizing: content-box;
+    padding: 10px;
+    border-radius: 10px;
+    background: #39247c;
+    color: #bb9bff;
+  }
+  .gf-business-clients .gf-client-side-note button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 12px;
+    border: 1px solid #31538b;
+    border-radius: 10px;
+    background: #10254e;
+  }
+  .gf-business-clients .gf-client-selected {
+    border-color: #7256d5;
+    background: linear-gradient(135deg, #1c235c, #0c2041);
+  }
+  .gf-business-clients .gf-client-selected > span {
+    display: block;
+    margin-bottom: 7px;
+    color: #a8c6fa;
+    font-size: 12px;
+  }
+  .gf-business-clients .gf-client-selected h2 {
+    overflow-wrap: anywhere;
+  }
+  .gf-business-clients .gf-client-details-modal .modal {
+    border-color: #5069ad;
+    background: linear-gradient(145deg, #132552, #071731 80%);
+  }
+}
+@media (min-width: 801px) {
+  .gf-client-action-menu {
+    position: fixed;
+    z-index: 1100;
+    display: grid;
+    gap: 3px;
+    width: 210px;
+    padding: 7px;
+    border: 1px solid #6055ba;
+    border-radius: 11px;
+    background: linear-gradient(145deg, #162657, #0c1a3b);
+    box-shadow: 0 16px 42px #000a27bc;
+  }
+  .gf-client-action-menu button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 42px;
+    padding: 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #ecf2ff;
+    font: 600 12px var(--gf-font-body);
+    text-align: left;
+    cursor: pointer;
+  }
+  .gf-client-action-menu button:hover,
+  .gf-client-action-menu button:focus-visible {
+    outline: 2px solid #9979fb;
+    background: #26356c;
+  }
+  .gf-client-action-menu svg {
+    flex: none;
+    color: #b6a4ff;
+  }
+}
+@media (min-width: 801px) and (max-width: 1365px) {
+  .gf-business-clients .gf-client-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gf-business-clients .gf-client-table {
+    min-width: 740px;
+  }
+  .gf-business-clients .gf-client-kpis .gf-card {
+    min-height: 96px;
+  }
+}

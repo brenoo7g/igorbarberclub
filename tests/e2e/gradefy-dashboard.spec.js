@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { money } from '../../src/lib.ts';
 
 async function login(page, email = 'dashboard-owner@example.com') {
   await page.goto('/app/login');
@@ -7,142 +6,116 @@ async function login(page, email = 'dashboard-owner@example.com') {
   await page.getByLabel('Senha', { exact: true }).fill('ClienteDemo2026!');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
-const metric = (page, title) =>
-  page
-    .locator('.gf-dashboard-metric')
-    .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
 
-test('real dashboard selects companies explicitly, shows scoped appointments/trial/site and works on mobile/desktop', async ({
+test('desktop dashboard uses scoped data, real links, calendar and preserves mobile', async ({
   page,
 }) => {
   const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (error) => errors.push(error.message));
   await login(page);
   await expect(page).toHaveURL('/app/dashboard');
-  await expect(
-    page.getByRole('heading', { name: 'Escolha sua empresa', exact: true }),
-  ).toBeVisible();
-  await expect(page.locator('.gf-dashboard-kpis')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Escolha sua empresa' })).toBeVisible();
+  await expect(page.locator('.gf-header .gf-brand')).toBeVisible();
   await page.getByLabel('Empresa', { exact: true }).selectOption('dashboard-horizonte');
-  await expect(page.locator('.gf-dashboard-business')).toContainText('Barbearia Horizonte');
-  await expect(metric(page, 'Agendamentos de hoje').locator('strong')).toHaveText('2');
-  await expect(metric(page, 'Atendimentos concluídos').locator('strong')).toHaveText('1');
+  const desktop = page.locator('.gf-desktop-dashboard');
+  await expect(desktop.locator('.gf-desktop-company')).toContainText('Barbearia Horizonte');
   const snapshot = await (
     await page.request.get('/api/dashboard', {
       headers: { 'X-Gradefy-Company-Id': 'dashboard-horizonte' },
     })
   ).json();
-  await expect(metric(page, 'Valor previsto').locator('strong')).toHaveText(
-    money(snapshot.metrics.expectedValueCents),
+  await expect(desktop.locator('.gf-desktop-metrics')).toContainText('Agendamentos hoje');
+  await expect(desktop.locator('.gf-desktop-metrics')).toContainText('Faturamento do mês');
+  await expect(desktop.locator('.gf-desktop-metrics')).toContainText('Clientes ativos');
+  await expect(desktop.locator('.gf-desktop-metrics')).toContainText('Taxa de ocupação');
+  await expect(desktop.locator('.gf-desktop-metrics')).toContainText('Dados indisponíveis');
+  await expect(desktop.locator('.gf-desktop-timeline li')).toHaveCount(4);
+  await expect(desktop.locator('.gf-desktop-timeline')).toContainText('Reserva Cancelada');
+  await expect(desktop.locator('.gf-desktop-timeline')).toContainText('Concluído');
+  await expect(desktop.locator('.gf-desktop-team')).toContainText('Equipe de hoje');
+  await expect(desktop.locator('.gf-desktop-finance')).toContainText('Recebimentos registrados');
+  await expect(desktop.locator('.gf-desktop-services')).toContainText('Serviços mais realizados');
+  await expect(desktop.locator('.gf-desktop-finance')).toContainText('R$');
+  await expect(desktop.locator('.gf-desktop-payments')).toContainText('Resumo de pagamentos');
+  await desktop.getByRole('searchbox', { name: 'Buscar nesta agenda' }).fill('Pedro');
+  await expect(desktop.locator('.gf-desktop-timeline li')).toHaveCount(1);
+  await desktop.getByRole('searchbox', { name: 'Buscar nesta agenda' }).clear();
+  await expect(desktop.locator('.gf-desktop-services')).not.toContainText('Carregando');
+  await expect(desktop).not.toContainText('Cliente Confidencial Boreal');
+  await expect(desktop.getByText('Teste grátis · 2 dias restantes', { exact: true })).toBeVisible();
+  await expect(desktop.locator('.gf-desktop-plan')).toContainText('não publicado');
+  const target = snapshot.nextAppointment.date;
+  await desktop.getByText('Filtrar agenda', { exact: true }).click();
+  await desktop.getByLabel('Data da agenda').fill(target);
+  await expect(desktop.locator('.gf-desktop-timeline li')).toHaveCount(
+    target === snapshot.clock.today ? 4 : 1,
   );
-  await expect(metric(page, 'Valor previsto')).toContainText('Não indica pagamento recebido.');
-  await expect(metric(page, 'Próximo atendimento')).toContainText(
-    snapshot.nextAppointment.clientName,
-  );
-  await expect(page.locator('.gf-day-appointment')).toHaveCount(4);
-  await expect(
-    page.locator('.gf-day-appointment').filter({ hasText: 'Reserva Cancelada' }),
-  ).toContainText('Cancelado');
-  await expect(
-    page.locator('.gf-day-appointment').filter({ hasText: 'Pedro Rocha' }),
-  ).toContainText('Concluído');
-  await expect(
-    page.getByText('Teste grátis ativo · 2 dias restantes', { exact: true }),
-  ).toBeVisible();
-  await expect(page.locator('.gf-dashboard-site')).toContainText('Não publicado');
-  await expect(
-    page.locator('.gf-dashboard-site').getByRole('link', { name: 'Abrir site' }),
-  ).toHaveCount(0);
-  await expect(page.locator('.gf-dashboard-business img')).toBeVisible();
-  await expect(page.locator('body')).not.toContainText('Cliente Confidencial Boreal');
-  for (const width of [320, 390, 768, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
+  await desktop.getByLabel('Data da agenda').fill(snapshot.clock.today);
+  await desktop.getByRole('button', { name: 'Próximo mês' }).click();
+  await expect(desktop.locator('.gf-desktop-calendar')).toContainText('novembro');
+  await desktop.getByRole('button', { name: 'Mês anterior' }).click();
+  await expect(desktop.locator('.gf-desktop-calendar')).toContainText('outubro');
+
+  for (const width of [1024, 1280, 1366, 1440, 1920, 320, 390, 768]) {
+    const height =
+      { 1280: 720, 1366: 768, 1440: 900, 1920: 1080 }[width] || (width < 801 ? 850 : 900);
+    await page.setViewportSize({ width, height });
+    await expect(
+      page.locator(width > 800 ? '.gf-desktop-dashboard' : '.gf-dashboard-top'),
+    ).toBeVisible();
+    if (width > 800) {
+      await expect(desktop.locator('.gf-desktop-finance')).not.toContainText('Carregando');
+      await expect(desktop.locator('.gf-desktop-services')).not.toContainText('Carregando');
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    if (width === 390 || width === 1440)
+    if ([1024, 1280, 1366, 1440, 1920, 320, 390].includes(width))
       await page.screenshot({
-        path: `test-results/gradefy-dashboard-${width}.png`,
+        path: `test-results/gradefy-dashboard-desktop-phase-${width}.png`,
         fullPage: true,
       });
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page
-    .locator('.gf-dashboard-sidebar')
-    .getByRole('link', { name: 'Financeiro', exact: true })
-    .click();
-  await expect(page).toHaveURL('/app/financeiro?empresa=dashboard-horizonte');
-  await expect(page.getByRole('heading', { name: 'Financeiro', exact: true })).toBeVisible();
-  await page.goto('/app/dashboard?empresa=dashboard-horizonte');
-  await page.getByRole('link', { name: 'Personalizar site', exact: true }).click();
-  await expect(page).toHaveURL('/app/meu-site?empresa=dashboard-horizonte');
-  await expect(page.getByLabel('Nome público da empresa', { exact: true })).toHaveValue(
-    'Barbearia Horizonte',
-  );
+  await expect(desktop).toBeVisible();
+  await desktop.getByRole('link', { name: 'Ver agenda completa' }).click();
+  await expect(page).toHaveURL('/app/agenda?empresa=dashboard-horizonte');
   await page.goto('/app/dashboard?empresa=dashboard-horizonte');
   await page.reload();
   await expect(page.getByLabel('Empresa', { exact: true })).toHaveValue('dashboard-horizonte');
-  await page.getByLabel('Período dos indicadores', { exact: true }).selectOption('day');
-  await expect(metric(page, 'Valor previsto').locator('strong')).toHaveText('R$ 75,00');
-  await page
-    .getByLabel('Data da agenda', { exact: true })
-    .fill(
-      snapshot.nextAppointment.date === snapshot.clock.today
-        ? new Date(Date.parse(snapshot.clock.today + 'T12:00Z') + 86400000)
-            .toISOString()
-            .slice(0, 10)
-        : snapshot.nextAppointment.date,
-    );
-  await expect(page.locator('.gf-day-appointment')).toHaveCount(1);
-  await expect(page.locator('.gf-day-appointment')).toContainText('Camila Santos');
   await page.getByLabel('Empresa', { exact: true }).selectOption('dashboard-boreal');
-  await expect(page.locator('.gf-dashboard-business')).toContainText('Studio Boreal');
-  await expect(page.getByText('Teste grátis encerrado', { exact: true })).toBeVisible();
-  await expect(page.locator('.gf-dashboard-site')).toContainText('Publicado');
-  await expect(
-    page.locator('.gf-dashboard-site').getByRole('link', { name: 'Abrir site', exact: true }),
-  ).toHaveAttribute('href', '/dashboard-boreal');
-  await expect(page.locator('body')).not.toContainText('Ana Martins');
+  await expect(desktop.locator('.gf-desktop-company')).toContainText('Studio Boreal');
+  await expect(desktop.locator('.gf-desktop-plan')).toContainText('Teste grátis encerrado');
+  await expect(desktop).not.toContainText('Ana Martins');
   await page.getByLabel('Empresa', { exact: true }).selectOption('dashboard-vazio');
-  await expect(
-    page.getByRole('heading', { name: 'Nenhum agendamento nesta data', exact: true }),
-  ).toBeVisible();
-  await expect(metric(page, 'Agendamentos de hoje').locator('strong')).toHaveText('0');
-  await expect(metric(page, 'Próximo atendimento')).toContainText(
-    'Nenhum atendimento futuro confirmado',
-  );
-  await expect(metric(page, 'Valor previsto').locator('strong')).toHaveText('R$ 0,00');
+  await expect(desktop).toContainText('Nenhum agendamento nesta data');
+  await expect(desktop.locator('.gf-desktop-metrics')).toContainText('R$ 0,00');
   await page.goto('/app/dashboard?empresa=igor-barber-club');
   await expect(page.getByRole('alert')).toContainText('Sem acesso à empresa selecionada');
-  await expect(page.locator('.gf-dashboard-kpis')).toHaveCount(0);
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('NÃO É SÓ');
   expect(errors).toEqual([]);
 });
 
-test('manager auto selection, connection recovery, session expiry and configured login landing', async ({
-  page,
-}) => {
+test('manager recovers from API failure and expired session', async ({ page }) => {
   await login(page, 'dashboard-manager@example.com');
-  await expect(page).toHaveURL('/app/dashboard');
-  await expect(page.locator('.gf-dashboard-business')).toContainText('Barbearia Horizonte');
+  const desktop = page.locator('.gf-desktop-dashboard');
+  await expect(desktop.locator('.gf-desktop-company')).toContainText('Barbearia Horizonte');
   await expect(page.getByLabel('Empresa', { exact: true })).toHaveCount(0);
-  await page.goto('/app');
-  await expect(page).toHaveURL('/app/dashboard');
   await page.route('**/api/dashboard?**', (route) => route.abort('failed'));
   await page.reload();
   await expect(
-    page.getByRole('heading', { name: 'Não foi possível carregar seu painel', exact: true }),
+    page.getByRole('heading', { name: 'Não foi possível carregar seu painel' }),
   ).toBeVisible();
-  await expect(page.locator('.gf-day-appointment')).toHaveCount(0);
+  await expect(desktop.locator('.gf-desktop-timeline li')).toHaveCount(0);
   await page.unroute('**/api/dashboard?**');
-  await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
-  await expect(page.locator('.gf-day-appointment')).toHaveCount(4);
+  await page.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(desktop.locator('.gf-desktop-timeline li')).toHaveCount(4);
   await page.route('**/api/dashboard?**', (route) =>
     route.fulfill({ status: 401, json: { error: 'Entre novamente.' } }),
   );
   await page.context().clearCookies();
-  await page.getByRole('button', { name: 'Atualizar painel', exact: true }).click();
+  await page.getByRole('button', { name: 'Atualizar dashboard' }).click();
   await expect(page).toHaveURL('/app/login');
 });
 
@@ -178,5 +151,5 @@ test('no-company and pending onboarding resume; anonymous cannot view dashboard'
   expect(company.status()).toBe(201);
   await page.goto('/app/dashboard');
   await expect(page).toHaveURL('/app/onboarding/operations');
-  await expect(page.getByRole('heading', { name: 'Seus serviços', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Seus serviços' })).toBeVisible();
 });

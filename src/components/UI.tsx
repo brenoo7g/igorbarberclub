@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { SiteLink as Link, useSite } from '../site-context';
@@ -154,6 +154,7 @@ export function Modal({
   brand?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     dialog?.showModal();
@@ -168,7 +169,7 @@ export function Modal({
     <dialog
       className={`modal ${className}`}
       ref={ref}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -180,7 +181,7 @@ export function Modal({
       <div className="modal-inner">
         {brand}
         <div className="modal-heading">
-          <h2 id="modal-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button type="button" className="icon-button" aria-label="Fechar" onClick={onClose}>
             <X size={20} />
           </button>

@@ -129,6 +129,7 @@ for (const [index, width] of [390, 1440].entries())
       expect(operations.find((o) => o.public_reason === reason).notifications.attention).toBe(1);
       const ownerPage = await owner.newPage();
       await ownerPage.goto('/app/agenda?empresa=' + cid);
+      await ownerPage.getByRole('button', { name: 'Bloquear agenda' }).click();
       const item = ownerPage.locator('.gf-block-operation').filter({ hasText: reason });
       await item.locator('summary').click();
       await expect(item).toContainText('Provedor de e-mail não configurado');
@@ -156,6 +157,7 @@ test('management previews a full week without silently changing reservations', a
     ).status(),
   ).toBe(200);
   await page.goto('/app/agenda?empresa=' + cid);
+  await page.getByRole('button', { name: 'Bloquear agenda' }).click();
   await page.getByLabel('Profissional do bloqueio').selectOption('minisite-person');
   await page.getByLabel('Dia inteiro', { exact: true }).check();
   const today = (await (await page.request.get('/api/admin/agenda', { headers })).json()).today;

@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './email-fixtures.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import bcrypt from 'bcryptjs';
@@ -427,6 +428,7 @@ export async function assertMultitenantAccess(t, db) {
           else process.env[key] = value;
       });
       const ids = [];
+      await authorizeMockEmail(t, db, { enrollExisting: true });
       t.mock.method(globalThis, 'fetch', async (_url, options) => {
         ids.push(options.headers['Idempotency-Key']);
         return new Response('{}', { status: 202 });

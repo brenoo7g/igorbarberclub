@@ -1,5 +1,7 @@
 // Disposable schema reconstruction only. Never imported by application startup.
+import { reconstructBeforeEmailDelivery } from './email-migration.js';
 export async function reconstructBeforeBlockCancellation(db) {
+  await reconstructBeforeEmailDelivery(db);
   if (!(await db.get('SELECT version FROM schema_migrations WHERE version=21'))) return;
   await db.run('DROP TABLE agenda_block_cancellations');
   await db.run('DROP TABLE agenda_block_operations');

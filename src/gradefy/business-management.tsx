@@ -10,6 +10,10 @@ import {
   Search,
   CalendarDays,
   RefreshCw,
+  ArrowRight,
+  UserPlus,
+  CheckCheck,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { errorMessage, money, newIdempotencyKey, statusLabels } from '../lib';
@@ -31,6 +35,19 @@ import type {
 import './dashboard.css';
 import './agenda.css';
 import './business-management.css';
+import { ManagementTopbar, subscriptionLabel } from './management-topbar';
+import { ClientActions } from './client-actions';
+import './management-desktop.css';
+import './clients-desktop.css';
+import './clients-refinement.css';
+function displayPhone(value: string) {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 11)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return value;
+}
 type Kind = 'clients' | 'services' | 'professionals';
 const names = { clients: 'Clientes', services: 'Serviços', professionals: 'Profissionais' },
   singular = { clients: 'cliente', services: 'serviço', professionals: 'profissional' };
@@ -65,8 +82,12 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
     [detail, setDetail] = useState(params.get('cliente') || ''),
     [schedule, setSchedule] = useState(params.get('horarios') || ''),
     [confirm, setConfirm] = useState<Service | Professional | null>(null),
+    [selectedClientId, setSelectedClientId] = useState(''),
+    [detailIntent, setDetailIntent] = useState<'view' | 'edit'>('view'),
     [mutating, setMutating] = useState(false);
   const working = useRef(false);
+  const selectedClient = clients?.items.find((item) => item.id === selectedClientId);
+  useEffect(() => setSelectedClientId(''), [companyId]);
   useEffect(() => {
     const c = new AbortController();
     setBusy(true);
@@ -114,6 +135,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
   function close() {
     setForm(null);
     setDetail('');
+    setDetailIntent('view');
     setSchedule('');
     setParams({ empresa: companyId }, { replace: true });
   }
@@ -122,6 +144,10 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
     setNotice(message);
     setRevision((r) => r + 1);
     window.dispatchEvent(new Event('gradefy-agenda-changed'));
+  }
+  function showClient(id: string, intent: 'view' | 'edit' = 'view') {
+    setDetailIntent(intent);
+    setDetail(id);
   }
   async function toggle() {
     if (!confirm || working.current) return;
@@ -166,10 +192,37 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
   const Icon = kind === 'clients' ? UserRound : kind === 'services' ? Scissors : UsersRound;
   const activeCount = professionals.filter((p) => p.active === 1).length;
   return (
-    <div className="gf-dashboard gf-business">
-      <BusinessNav companyId={companyId} />
+    <div
+      className={
+        'gf-dashboard gf-business' +
+        (kind === 'clients' ? ' gf-premium-page gf-business-clients' : '')
+      }
+    >
+      <BusinessNav
+        companyId={companyId}
+        companyName={access?.company.name}
+        planName={access?.plan?.name}
+        showPlanPromo={kind === 'clients' && Boolean(access?.plan)}
+        subscriptionLabel={subscriptionLabel(access?.entitlement)}
+        sitePublished={access?.company.site_published === 1}
+      />
       <div className="gf-dashboard-main" aria-busy={busy}>
-        <div className="gf-agenda-heading">
+        {kind === 'clients' && (
+          <ManagementTopbar
+            companyId={companyId}
+            companyName={access?.company.name || companies.find((c) => c.id === companyId)?.name}
+            description="Acompanhe o relacionamento com os clientes do seu estabelecimento."
+            searchValue={q}
+            searchPlaceholder="Buscar clientes..."
+            onSearch={(value) => {
+              setQ(value);
+              setPage(1);
+            }}
+          />
+        )}
+        <div
+          className={'gf-agenda-heading' + (kind === 'clients' ? ' gf-clients-mobile-heading' : '')}
+        >
           <div>
             <div className="gf-kicker">SEU NEGÓCIO BEM CUIDADO</div>
             <h1>{names[kind]}</h1>
@@ -224,184 +277,346 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
                 </p>
               </Card>
             )}
-            <Card className="gf-business-search">
-              <Input
-                label={
-                  kind === 'clients' ? 'Buscar por nome, telefone ou e-mail' : 'Buscar por nome'
-                }
-                value={q}
-                icon={<Search size={18} />}
-                maxLength={100}
-                onChange={(e) => {
-                  setQ(e.target.value);
-                  setPage(1);
-                }}
-              />
-              {kind !== 'clients' && (
-                <div className="gf-field">
-                  <label htmlFor="resource-status">Status</label>
-                  <select
-                    id="resource-status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                  >
-                    <option value="">Todos</option>
-                    <option value="1">Ativos</option>
-                    <option value="0">Inativos</option>
-                  </select>
-                </div>
-              )}
-              <Button
-                variant="secondary"
-                aria-label="Atualizar cadastros"
-                disabled={busy}
-                onClick={() => setRevision((r) => r + 1)}
-              >
-                <RefreshCw size={18} />
-              </Button>
-            </Card>
-            {busy ? (
-              <Loading label="Carregando dados…" />
-            ) : kind === 'clients' ? (
-              <>
-                <div className="gf-business-grid">
-                  {clients?.items.map((c) => (
-                    <Card key={c.id} className="gf-business-record">
-                      <div className="gf-business-record-heading">
-                        <UserRound />
-                        <h2>{c.name}</h2>
-                      </div>
-                      <p>{c.phone}</p>
-                      {c.email && <p>{c.email}</p>}
-                      <Button variant="secondary" onClick={() => setDetail(c.id)}>
-                        Ver cliente e histórico
-                      </Button>
-                    </Card>
-                  ))}
-                </div>
-                {!clients?.items.length && <Empty icon={<Icon />} />}
-                <Pagination page={page} total={clients?.total || 0} onPage={setPage} />
-              </>
-            ) : (
-              <>
-                <div className="gf-business-grid">
-                  {visible.map((item) =>
-                    kind === 'services'
-                      ? (() => {
-                          const s = item as Service;
-                          const enabled = professionals.filter((p) => p.services.includes(s.id));
-                          return (
-                            <Card key={s.id} className="gf-business-record">
-                              <div className="gf-business-record-heading">
-                                <Scissors />
-                                <h2>{s.name}</h2>
-                              </div>
-                              <Status active={s.active} />
-                              <p>{s.description || 'Sem descrição.'}</p>
-                              <strong className="gf-business-value">
-                                {money(s.price)} <small>· {s.duration} min</small>
-                              </strong>
-                              <p>
-                                {enabled.length
-                                  ? enabled
-                                      .map((p) => p.name + (p.active ? '' : ' (inativo)'))
-                                      .join(', ')
-                                  : 'Nenhum profissional associado.'}
-                              </p>
-                              <div className="gf-business-actions">
-                                <Button
-                                  variant="secondary"
-                                  disabled={!access.editable}
-                                  onClick={() => setForm({ service: s })}
-                                >
-                                  <Pencil size={16} />
-                                  Editar serviço
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  disabled={!access.editable}
-                                  onClick={() => setConfirm(s)}
-                                >
-                                  {s.active ? 'Desativar' : 'Ativar'}
-                                </Button>
-                              </div>
-                            </Card>
-                          );
-                        })()
-                      : (() => {
-                          const p = item as Professional;
-                          return (
-                            <Card key={p.id} className="gf-business-record">
-                              <div className="gf-business-record-heading">
-                                {p.photo_url ? (
-                                  <img
-                                    src={p.photo_url}
-                                    alt=""
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                    }}
-                                  />
-                                ) : (
-                                  <UsersRound />
-                                )}
-                                <h2>{p.name}</h2>
-                              </div>
-                              <Status active={p.active} />
-                              <p>{p.specialty || 'Sem especialidade informada.'}</p>
-                              {p.availability && (
-                                <div className="gf-hint">
-                                  <strong>
-                                    {p.availability.state === 'setup'
-                                      ? 'Aguardando configuração da agenda'
-                                      : p.availability.state === 'waiting'
-                                        ? 'Agenda configurada · ação da gestão pendente'
-                                        : 'Pronto para receber agendamentos'}
-                                  </strong>
-                                  {p.availability.pending.map((message) => (
-                                    <p key={message}>{message}</p>
-                                  ))}
-                                </div>
-                              )}
-                              <p>
-                                {services
-                                  .filter((s) => p.services.includes(s.id))
-                                  .map((s) => s.name + (s.active ? '' : ' (inativo)'))
-                                  .join(', ') || 'Sem serviços associados.'}
-                              </p>
-                              <p className="gf-hint">
-                                {p.user_id
-                                  ? 'Conta vinculada ao cadastro profissional.'
-                                  : 'Profissional sem conta de login.'}
-                              </p>
-                              <div className="gf-business-actions">
-                                <Button
-                                  variant="secondary"
-                                  disabled={!access.editable}
-                                  onClick={() => setForm({ professional: p })}
-                                >
-                                  <Pencil size={16} />
-                                  Editar profissional
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  disabled={!access.editable}
-                                  onClick={() => setConfirm(p)}
-                                >
-                                  {p.active ? 'Desativar' : 'Reativar'}
-                                </Button>
-                                <Button variant="secondary" onClick={() => setSchedule(p.id)}>
-                                  <CalendarDays size={16} />
-                                  Configurar horários
-                                </Button>
-                              </div>
-                            </Card>
-                          );
-                        })(),
-                  )}
-                </div>
-                {!visible.length && <Empty icon={<Icon />} />}
-              </>
+            {kind === 'clients' && clients && !busy && (
+              <div className="gf-client-kpis" aria-label="Indicadores de clientes">
+                <Card>
+                  <UsersRound size={24} />
+                  <span>Clientes cadastrados</span>
+                  <strong>{clients.stats?.registered ?? '—'}</strong>
+                </Card>
+                <Card>
+                  <UserPlus size={24} />
+                  <span>Novos neste mês</span>
+                  <strong>{clients.stats?.newThisMonth ?? '—'}</strong>
+                </Card>
+                <Card>
+                  <CalendarDays size={24} />
+                  <span>Com reserva futura</span>
+                  <strong>{clients.stats?.futureClients ?? '—'}</strong>
+                </Card>
+                <Card>
+                  <CheckCheck size={24} />
+                  <span>Visitas concluídas</span>
+                  <strong>{clients.stats?.completedVisits ?? '—'}</strong>
+                </Card>
+              </div>
             )}
+            <div className={kind === 'clients' ? 'gf-client-workspace' : undefined}>
+              <div className={kind === 'clients' ? 'gf-client-main-panel' : undefined}>
+                {kind === 'clients' && (
+                  <div className="gf-client-panel-heading">
+                    <div>
+                      <h2>Clientes</h2>
+                      <p>Gerencie os cadastros de {access.company.name}.</p>
+                    </div>
+                    <Button disabled={!access.editable || busy} onClick={() => setForm({})}>
+                      <Plus size={17} />
+                      Novo cliente
+                    </Button>
+                  </div>
+                )}
+                <Card className="gf-business-search">
+                  <Input
+                    label={
+                      kind === 'clients' ? 'Buscar por nome, telefone ou e-mail' : 'Buscar por nome'
+                    }
+                    value={q}
+                    placeholder={
+                      kind === 'clients' ? 'Buscar por nome, telefone ou e-mail' : undefined
+                    }
+                    icon={<Search size={18} />}
+                    maxLength={100}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      setPage(1);
+                    }}
+                  />
+                  {kind !== 'clients' && (
+                    <div className="gf-field">
+                      <label htmlFor="resource-status">Status</label>
+                      <select
+                        id="resource-status"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        <option value="1">Ativos</option>
+                        <option value="0">Inativos</option>
+                      </select>
+                    </div>
+                  )}
+                  <Button
+                    variant="secondary"
+                    aria-label="Atualizar cadastros"
+                    disabled={busy}
+                    onClick={() => setRevision((r) => r + 1)}
+                  >
+                    <RefreshCw size={18} />
+                  </Button>
+                </Card>
+                {kind === 'clients' && clients && !busy && (
+                  <p className="gf-client-result-count">
+                    {clients.total}{' '}
+                    {clients.total === 1 ? 'cliente encontrado' : 'clientes encontrados'}
+                    {q ? ' para a busca atual' : ''}
+                  </p>
+                )}
+                {busy ? (
+                  <Loading label="Carregando dados…" />
+                ) : kind === 'clients' ? (
+                  <>
+                    <div className="gf-client-table-wrap">
+                      <table className="gf-client-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Cliente</th>
+                            <th scope="col">Telefone</th>
+                            <th scope="col">E-mail</th>
+                            <th scope="col">Cadastrado em</th>
+                            <th scope="col">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clients?.items.map((c) => (
+                            <tr key={c.id} className="gf-business-record">
+                              <td>
+                                <div className="gf-client-table-person">
+                                  <span aria-hidden="true">{c.name.slice(0, 1).toUpperCase()}</span>
+                                  <div>
+                                    <h2>{c.name}</h2>
+                                    <small>
+                                      {c.created_at
+                                        ? `Cliente desde ${c.created_at.slice(0, 7).split('-').reverse().join('/')}`
+                                        : 'Cadastro sem data'}
+                                    </small>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <a href={'tel:' + c.phone}>{displayPhone(c.phone)}</a>
+                              </td>
+                              <td>
+                                {c.email ? (
+                                  <a href={'mailto:' + c.email}>{c.email}</a>
+                                ) : (
+                                  <span className="gf-client-muted">Não informado</span>
+                                )}
+                              </td>
+                              <td>
+                                {c.created_at
+                                  ? c.created_at.slice(0, 10).split('-').reverse().join('/')
+                                  : '—'}
+                              </td>
+                              <td>
+                                <ClientActions
+                                  name={c.name}
+                                  editable={access.editable}
+                                  onSelect={() => setSelectedClientId(c.id)}
+                                  onView={() => showClient(c.id)}
+                                  onEdit={() => showClient(c.id, 'edit')}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="gf-business-grid">
+                      {clients?.items.map((c) => (
+                        <Card key={c.id} className="gf-business-record">
+                          <div className="gf-business-record-heading">
+                            <UserRound />
+                            <h2>{c.name}</h2>
+                          </div>
+                          <p>{c.phone}</p>
+                          {c.email && <p>{c.email}</p>}
+                          <Button variant="secondary" onClick={() => setDetail(c.id)}>
+                            Ver cliente e histórico
+                          </Button>
+                        </Card>
+                      ))}
+                    </div>
+                    {!clients?.items.length && <Empty icon={<Icon />} />}
+                    <Pagination page={page} total={clients?.total || 0} onPage={setPage} />
+                  </>
+                ) : (
+                  <>
+                    <div className="gf-business-grid">
+                      {visible.map((item) =>
+                        kind === 'services'
+                          ? (() => {
+                              const s = item as Service;
+                              const enabled = professionals.filter((p) =>
+                                p.services.includes(s.id),
+                              );
+                              return (
+                                <Card key={s.id} className="gf-business-record">
+                                  <div className="gf-business-record-heading">
+                                    <Scissors />
+                                    <h2>{s.name}</h2>
+                                  </div>
+                                  <Status active={s.active} />
+                                  <p>{s.description || 'Sem descrição.'}</p>
+                                  <strong className="gf-business-value">
+                                    {money(s.price)} <small>· {s.duration} min</small>
+                                  </strong>
+                                  <p>
+                                    {enabled.length
+                                      ? enabled
+                                          .map((p) => p.name + (p.active ? '' : ' (inativo)'))
+                                          .join(', ')
+                                      : 'Nenhum profissional associado.'}
+                                  </p>
+                                  <div className="gf-business-actions">
+                                    <Button
+                                      variant="secondary"
+                                      disabled={!access.editable}
+                                      onClick={() => setForm({ service: s })}
+                                    >
+                                      <Pencil size={16} />
+                                      Editar serviço
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      disabled={!access.editable}
+                                      onClick={() => setConfirm(s)}
+                                    >
+                                      {s.active ? 'Desativar' : 'Ativar'}
+                                    </Button>
+                                  </div>
+                                </Card>
+                              );
+                            })()
+                          : (() => {
+                              const p = item as Professional;
+                              return (
+                                <Card key={p.id} className="gf-business-record">
+                                  <div className="gf-business-record-heading">
+                                    {p.photo_url ? (
+                                      <img
+                                        src={p.photo_url}
+                                        alt=""
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                        }}
+                                      />
+                                    ) : (
+                                      <UsersRound />
+                                    )}
+                                    <h2>{p.name}</h2>
+                                  </div>
+                                  <Status active={p.active} />
+                                  <p>{p.specialty || 'Sem especialidade informada.'}</p>
+                                  {p.availability && (
+                                    <div className="gf-hint">
+                                      <strong>
+                                        {p.availability.state === 'setup'
+                                          ? 'Aguardando configuração da agenda'
+                                          : p.availability.state === 'waiting'
+                                            ? 'Agenda configurada · ação da gestão pendente'
+                                            : 'Pronto para receber agendamentos'}
+                                      </strong>
+                                      {p.availability.pending.map((message) => (
+                                        <p key={message}>{message}</p>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <p>
+                                    {services
+                                      .filter((s) => p.services.includes(s.id))
+                                      .map((s) => s.name + (s.active ? '' : ' (inativo)'))
+                                      .join(', ') || 'Sem serviços associados.'}
+                                  </p>
+                                  <p className="gf-hint">
+                                    {p.user_id
+                                      ? 'Conta vinculada ao cadastro profissional.'
+                                      : 'Profissional sem conta de login.'}
+                                  </p>
+                                  <div className="gf-business-actions">
+                                    <Button
+                                      variant="secondary"
+                                      disabled={!access.editable}
+                                      onClick={() => setForm({ professional: p })}
+                                    >
+                                      <Pencil size={16} />
+                                      Editar profissional
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      disabled={!access.editable}
+                                      onClick={() => setConfirm(p)}
+                                    >
+                                      {p.active ? 'Desativar' : 'Reativar'}
+                                    </Button>
+                                    <Button variant="secondary" onClick={() => setSchedule(p.id)}>
+                                      <CalendarDays size={16} />
+                                      Configurar horários
+                                    </Button>
+                                  </div>
+                                </Card>
+                              );
+                            })(),
+                      )}
+                    </div>
+                    {!visible.length && <Empty icon={<Icon />} />}
+                  </>
+                )}
+              </div>
+              {kind === 'clients' && (
+                <aside className="gf-client-side" aria-label="Ações de clientes">
+                  <Card>
+                    <h2>Ações rápidas</h2>
+                    <p>Cadastre clientes, abra seus históricos ou organize um novo horário.</p>
+                    <Button disabled={!access.editable} onClick={() => setForm({})}>
+                      <UserPlus size={17} />
+                      Cadastrar cliente <ArrowRight size={15} />
+                    </Button>
+                    <Link to={'/app/agenda?empresa=' + encodeURIComponent(companyId) + '&novo=1'}>
+                      <CalendarDays size={17} />
+                      Novo agendamento <ArrowRight size={15} />
+                    </Link>
+                  </Card>
+                  <Card className="gf-client-side-note">
+                    <ShieldCheck size={22} />
+                    <h2>Histórico confiável</h2>
+                    <p>
+                      Abra um cadastro para consultar reservas e atendimentos vinculados a ele.
+                      Dados de outras empresas não são exibidos.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .querySelector<HTMLInputElement>(
+                            '.gf-business-clients .gf-business-search input',
+                          )
+                          ?.focus()
+                      }
+                    >
+                      Buscar cadastro <ArrowRight size={16} />
+                    </button>
+                  </Card>
+                  {selectedClient && (
+                    <Card className="gf-client-selected">
+                      <span>Cliente selecionado</span>
+                      <h2>{selectedClient.name}</h2>
+                      <p>{displayPhone(selectedClient.phone)}</p>
+                      <Button variant="secondary" onClick={() => showClient(selectedClient.id)}>
+                        <UserRound size={17} /> Ver histórico <ArrowRight size={15} />
+                      </Button>
+                      {access.editable && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => showClient(selectedClient.id, 'edit')}
+                        >
+                          <Pencil size={17} /> Editar dados <ArrowRight size={15} />
+                        </Button>
+                      )}
+                    </Card>
+                  )}
+                </aside>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -421,6 +636,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
         <ClientDetails
           id={detail}
           companyId={companyId}
+          autoEdit={detailIntent === 'edit'}
           close={close}
           edit={(c) => {
             setDetail('');
@@ -795,11 +1011,13 @@ function Text({
 function ClientDetails({
   id,
   companyId,
+  autoEdit,
   close,
   edit,
 }: {
   id: string;
   companyId: string;
+  autoEdit: boolean;
   close: () => void;
   edit: (c: Client) => void;
 }) {
@@ -821,13 +1039,16 @@ function ClientDetails({
       { headers: { 'X-Gradefy-Company-Id': companyId }, signal: c.signal },
     )
       .then((d) => {
-        if (!c.signal.aborted) setData(d);
+        if (!c.signal.aborted) {
+          if (autoEdit && d.editable) edit(d.client);
+          else setData(d);
+        }
       })
       .catch((e) => {
         if (!c.signal.aborted) setError(errorMessage(e));
       });
     return () => c.abort();
-  }, [api, companyId, id, page, status, revision]);
+  }, [api, companyId, id, page, status, revision, autoEdit]);
   const registered =
     data?.client.created_at && Number.isFinite(Date.parse(data.client.created_at))
       ? new Intl.DateTimeFormat('pt-BR', {
@@ -837,6 +1058,12 @@ function ClientDetails({
           year: 'numeric',
         }).format(new Date(data.client.created_at))
       : null;
+  const phoneDigits = data?.client.phone.replace(/\D/g, '') || '';
+  const whatsappNumber = /^\d{10,11}$/.test(phoneDigits)
+    ? '55' + phoneDigits
+    : /^55\d{10,11}$/.test(phoneDigits)
+      ? phoneDigits
+      : '';
   const link = (a: ClientDetail['history'][number]) => (
     <Link
       className="gf-business-history-row"
@@ -867,7 +1094,7 @@ function ClientDetails({
     </Link>
   );
   return (
-    <div className="gf-agenda-modal">
+    <div className="gf-agenda-modal gf-client-details-modal">
       <Modal title="Cliente e histórico" onClose={close}>
         <Feedback>{error}</Feedback>
         {!data ? (
@@ -878,10 +1105,37 @@ function ClientDetails({
           )
         ) : (
           <>
-            <h3>{data.client.name}</h3>
-            <p>{data.client.phone}</p>
-            {data.client.email && <p>{data.client.email}</p>}
-            {registered && <p>Cadastrado em {registered}</p>}
+            <div className="gf-client-detail-head">
+              <span aria-hidden="true">{data.client.name.slice(0, 1).toUpperCase()}</span>
+              <div>
+                <h3>{data.client.name}</h3>
+                {registered && <p>Cadastrado em {registered}</p>}
+              </div>
+            </div>
+            <div className="gf-client-detail-contact">
+              <p>
+                <small>Telefone</small>
+                <a href={'tel:' + phoneDigits}>{data.client.phone}</a>
+              </p>
+              <p>
+                <small>E-mail</small>
+                {data.client.email ? (
+                  <a href={'mailto:' + data.client.email}>{data.client.email}</a>
+                ) : (
+                  'Não informado'
+                )}
+              </p>
+            </div>
+            {whatsappNumber && (
+              <a
+                className="gf-client-whatsapp"
+                href={'https://wa.me/' + whatsappNumber}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Abrir conversa no WhatsApp <ArrowRight size={15} />
+              </a>
+            )}
             {data.client.notes && (
               <div className="gf-agenda-notes">
                 <h3>Observações internas</h3>

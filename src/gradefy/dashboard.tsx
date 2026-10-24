@@ -26,6 +26,8 @@ import { Button, ButtonLink, Card, Feedback, Loading } from './components';
 import type { DashboardState } from './dashboard-types';
 import { businessLinks, BusinessNav } from './business-nav';
 import './dashboard.css';
+import { EmailNotifications } from './email-notifications';
+import { DesktopDashboard } from './dashboard-desktop';
 
 const briefDate = (date: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -44,7 +46,18 @@ const pending = [
   },
 ];
 export default function Dashboard() {
-  return <ManagementAccess>{(props) => <DashboardContent {...props} />}</ManagementAccess>;
+  const [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 801px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 801px)');
+    const update = () => setDesktop(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  return (
+    <ManagementAccess>
+      {(props) => (desktop ? <DesktopDashboard {...props} /> : <DashboardContent {...props} />)}
+    </ManagementAccess>
+  );
 }
 function DashboardContent({
   companyId,
@@ -274,6 +287,7 @@ function DashboardContent({
                 {panel.key === 'settings' && <ButtonLink to={editor}>Personalizar site</ButtonLink>}
               </Card>
             )}
+            <EmailNotifications companyId={companyId} />
             <div className="gf-dashboard-period">
               <div>
                 <h2>Seu negócio em números</h2>

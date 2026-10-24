@@ -43,7 +43,7 @@ export async function assertOperationalMigration(db) {
   await assert.rejects(runMigrations(faulty), /injected 010 failure/);
   await assert.rejects(db.all('SELECT site_published FROM companies'));
   assert.equal(await db.get('SELECT version FROM schema_migrations WHERE version=10'), undefined);
-  assert.deepEqual(await runMigrations(db), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+  assert.deepEqual(await runMigrations(db), [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(
     await db.all(

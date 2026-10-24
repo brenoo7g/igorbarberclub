@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './email-fixtures.js';
 import { reconstructPhaseFive } from './professionals-migration.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -44,7 +45,7 @@ export async function assertReliabilityMigration(t, db) {
   await assert.rejects(db.all('SELECT claim_token FROM notifications'));
   assert.deepEqual(
     await runMigrations(db),
-    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
   );
   assert.deepEqual(await runMigrations(db), []);
   const version = await db.get('SELECT * FROM schema_migrations WHERE version=5');
@@ -583,6 +584,8 @@ export async function assertSchedulingReliability(t, db, second = db, repetition
   process.env.RESEND_API_KEY = 'placeholder';
   process.env.EMAIL_FROM = 'test@example.test';
   delete process.env.TWILIO_CONTENT_SID;
+  await authorizeMockEmail(t, db);
+  process.env.EMAIL_TEST_ALLOWLIST += ',reliability@example.test';
   t.after(() => {
     for (const key of ['RESEND_API_KEY', 'EMAIL_FROM', 'TWILIO_CONTENT_SID']) {
       if (previousEnv[key] === undefined) delete process.env[key];

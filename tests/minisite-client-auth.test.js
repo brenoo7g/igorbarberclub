@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './helpers/email-fixtures.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -317,6 +318,7 @@ test('Mini Site explicit customer session, real booking, administrative isolatio
         process.env.RESEND_API_KEY = 'test-only';
         process.env.EMAIL_FROM = 'Test <test@example.test>';
         process.env.APP_URL = 'http://127.0.0.1:5173';
+        await authorizeMockEmail(t, db);
         globalThis.fetch = async (url, options) =>
           String(url) === 'https://api.resend.com/emails'
             ? (sent.push(JSON.parse(options.body)), new Response('{}', { status: 200 }))
@@ -342,7 +344,8 @@ test('Mini Site explicit customer session, real booking, administrative isolatio
         );
         await app.locals.processPasswordEmails();
         assert.equal(sent.length, 1);
-        assert.match(sent[0].subject, /Barbearia Horizonte/);
+        assert.match(sent[0].subject, /Gradefy/);
+        assert.match(sent[0].text, /Barbearia Horizonte/);
         assert.doesNotMatch(sent[0].text, /Igor Barber Club/);
         const job = await db.get(
           "SELECT * FROM password_recovery WHERE user_id=? AND event='reset'",

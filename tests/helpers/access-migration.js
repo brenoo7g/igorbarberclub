@@ -86,7 +86,7 @@ export async function assertAccessMigration(t, db) {
   await assert.rejects(db.run(addCompany));
   assert.deepEqual(
     await runMigrations(db),
-    [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+    [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
   );
   const after = await snapshot();
   assert.deepEqual(after.schema_migrations.slice(0, 3), before.schema_migrations);

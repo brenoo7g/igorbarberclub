@@ -67,7 +67,7 @@ test('onboarding is protected and existing Igor owner stays in the existing acce
   await expect(page).toHaveURL('/app/login');
   await login(page, 'admin@igorbarberclub.com.br', 'IgorDemo2026!');
   await expect(page).toHaveURL('/app/dashboard');
-  await expect(page.locator('.gf-dashboard-business')).toContainText('Igor Barber Club');
+  await expect(page.locator('.gf-desktop-company')).toContainText('Igor Barber Club');
   await page.goto('/app/onboarding/next');
   await expect(page).toHaveURL('/app/dashboard');
   expect(

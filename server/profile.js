@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
+import { emailDeliveryScope } from './transactional-email.js';
 
 export const publicUser = (user) =>
   user
@@ -74,7 +76,14 @@ async function normalizeAvatar(value) {
 export function installProfileRoutes(
   app,
   db,
-  { authenticated, login, authLimiter, prefix = '/api/auth', present = publicUser },
+  {
+    authenticated,
+    login,
+    authLimiter,
+    prefix = '/api/auth',
+    present = publicUser,
+    clientCompanyId,
+  },
 ) {
   async function lockedUser(tx, req) {
     const user = await tx.get(
@@ -135,6 +144,24 @@ export function installProfileRoutes(
       await tx.run(
         'UPDATE users SET password_hash=?,session_version=session_version+1 WHERE id=?',
         [hash, current.id],
+      );
+      const now = new Date().toISOString();
+      const namespace = clientCompanyId
+        ? `minisite:${Buffer.from(clientCompanyId).toString('base64url')}:reservas:`
+        : 'gradefy-';
+      await tx.run(
+        'INSERT INTO password_recovery(id,user_id,email,session_version,event,created_at,expires_at,next_attempt_at,email_delivery_scope) VALUES(?,?,?,?,?,?,?,?,?)',
+        [
+          namespace + randomUUID(),
+          current.id,
+          current.email,
+          current.session_version + 1,
+          'changed',
+          now,
+          new Date(Date.now() + 86400000).toISOString(),
+          now,
+          emailDeliveryScope(),
+        ],
       );
       return tx.get('SELECT * FROM users WHERE id=?', [current.id]);
     });

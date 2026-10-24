@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './email-fixtures.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
@@ -528,6 +529,7 @@ export async function assertApplicationContext(t, db) {
         ),
       );
       const sent = [];
+      await authorizeMockEmail(t, db, { enrollExisting: true, companyId });
       t.mock.method(globalThis, 'fetch', async (_url, options) => {
         sent.push(options.headers['Idempotency-Key']);
         return new Response('{}', { status: 202 });

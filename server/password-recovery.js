@@ -3,6 +3,12 @@ import bcrypt from 'bcryptjs';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { passwordSchema } from './profile.js';
+import {
+  emailConfigured,
+  emailDeliveryScope,
+  deliverTransactionalEmail,
+} from './transactional-email.js';
+import { emailTemplate } from './email-templates.js';
 
 const message =
   'Se existir uma conta com esse e-mail, você receberá um link para redefinir sua senha. Confira também a caixa de spam.';
@@ -13,7 +19,7 @@ const tokenFor = (secret, id) =>
 const fail = (status, text) => {
   throw Object.assign(new Error(text), { status });
 };
-const configured = () => Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+const configured = emailConfigured;
 const tokenSchema = z.string().regex(/^[a-f0-9]{64}$/, invalid);
 const miniContext = (id) => {
   const match = /^minisite:([A-Za-z0-9_-]+):(agendar|reservas):/.exec(id);
@@ -100,7 +106,7 @@ export function installPasswordRecovery(
         ? `minisite:${Buffer.from(clientCompanyId).toString('base64url')}:${destination}:${randomUUID()}`
         : `${scope === 'gradefy' ? 'gradefy-' : ''}${randomUUID()}`;
       await tx.run(
-        'INSERT INTO password_recovery (id,user_id,email,session_version,token_hash,event,created_at,expires_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO password_recovery (id,user_id,email,session_version,token_hash,event,created_at,expires_at,next_attempt_at,email_delivery_scope) VALUES (?,?,?,?,?,?,?,?,?,?)',
         [
           id,
           user.id,
@@ -111,6 +117,7 @@ export function installPasswordRecovery(
           now,
           new Date(Date.parse(now) + 30 * 60000).toISOString(),
           now,
+          emailDeliveryScope(),
         ],
       );
     });
@@ -163,7 +170,7 @@ export function installPasswordRecovery(
       );
       const now = new Date().toISOString();
       await tx.run(
-        'INSERT INTO password_recovery (id,user_id,email,session_version,event,created_at,expires_at,next_attempt_at) VALUES (?,?,?,?,?,?,?,?)',
+        'INSERT INTO password_recovery (id,user_id,email,session_version,event,created_at,expires_at,next_attempt_at,email_delivery_scope) VALUES (?,?,?,?,?,?,?,?,?)',
         [
           `${miniContext(row.id) ? row.id.split(':').slice(0, 3).join(':') + ':' : row.id.startsWith('gradefy-') ? 'gradefy-' : ''}${randomUUID()}`,
           user.id,
@@ -173,6 +180,7 @@ export function installPasswordRecovery(
           now,
           new Date(Date.now() + 86400000).toISOString(),
           now,
+          emailDeliveryScope(),
         ],
       );
     });
@@ -243,39 +251,67 @@ export function createPasswordEmailProcessor(db, secret) {
         // Fragment keeps the token out of HTTP access logs and referrer headers.
         url.hash = `token=${tokenFor(secret, job.id)}`;
         const reset = job.event === 'reset';
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          signal: AbortSignal.timeout(10000),
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json',
-            'Idempotency-Key': `password-${job.id}`,
+        const response = await deliverTransactionalEmail(
+          db,
+          {
+            companyId: mini?.companyId,
+            sourceId: job.id,
+            kind: 'password',
+            scope: job.email_delivery_scope,
           },
-          body: JSON.stringify({
+          {
             from: process.env.EMAIL_FROM,
             to: [job.email],
-            subject: reset ? `Redefina sua senha — ${brand}` : `Sua senha foi alterada — ${brand}`,
-            text: reset
-              ? `Recebemos uma solicitação para redefinir sua senha ${mini ? 'em ' + brand : gradefy ? 'no Gradefy' : 'na Igor Barber Club'}.\n\nAbra o link e escolha uma nova senha:\n${url.href}\n\nEste link é de uso único e expira em 30 minutos após a solicitação. Se você não pediu essa alteração, ignore este e-mail. Sua senha permanece a mesma.\n\n${brand}`
-              : `Sua senha ${mini ? 'em ' + brand : gradefy ? 'no Gradefy' : 'na Igor Barber Club'} foi redefinida com sucesso. As sessões anteriores foram encerradas.\n\nSe você não realizou esta alteração, solicite uma nova recuperação no site${gradefy || mini ? '' : ' e entre em contato com a barbearia'}.\n\n${brand}`,
-          }),
-        });
+            ...emailTemplate({
+              subject: reset
+                ? 'Redefina sua senha \u2014 Gradefy'
+                : 'Sua senha foi alterada \u2014 Gradefy',
+              title: reset ? 'Redefina sua senha' : 'Sua senha foi alterada',
+              greeting: 'Ol\u00e1!',
+              paragraphs: reset
+                ? [
+                    'Recebemos uma solicita\u00e7\u00e3o para redefinir sua senha em ' +
+                      brand +
+                      '.',
+                    'Este link \u00e9 de uso \u00fanico e expira em 30 minutos ap\u00f3s a solicita\u00e7\u00e3o.',
+                    'Se voc\u00ea n\u00e3o pediu essa altera\u00e7\u00e3o, ignore este e-mail. Sua senha permanece a mesma.',
+                  ]
+                : [
+                    'Sua senha em ' +
+                      brand +
+                      ' foi redefinida com sucesso. As sess\u00f5es anteriores foram encerradas.',
+                    'Se voc\u00ea n\u00e3o realizou esta altera\u00e7\u00e3o, solicite uma nova recupera\u00e7\u00e3o no site e contate o suporte.',
+                  ],
+              action: reset ? { label: 'Redefinir minha senha', url: url.href } : undefined,
+              footer: brand,
+            }),
+          },
+          'password-' + job.id,
+          10000,
+        );
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        await db.run("UPDATE password_recovery SET status='sent' WHERE id=? AND status='sending'", [
-          job.id,
-        ]);
-      } catch {
+        await db.run(
+          "UPDATE password_recovery SET status='sent' WHERE id=? AND status='sending' AND attempts=?",
+          [job.id, job.attempts + 1],
+        );
+      } catch (error) {
         // Never log provider bodies, tokens, URLs, passwords or recipient addresses.
         console.error('Falha no envio de recuperação de senha; consulte o Resend.');
         await db.run(
-          'UPDATE password_recovery SET status=?,next_attempt_at=? WHERE id=? AND status=?',
+          'UPDATE password_recovery SET status=?,next_attempt_at=? WHERE id=? AND status=? AND attempts=?',
           [
-            job.attempts >= 2 ? 'failed' : 'pending',
+            error.code === 'EMAIL_POLICY_BLOCKED' || job.attempts >= 2 ? 'failed' : 'pending',
             new Date(Date.now() + 60000 * 2 ** job.attempts).toISOString(),
             job.id,
             'sending',
+            job.attempts + 1,
           ],
         );
+        if (error.code !== 'EMAIL_POLICY_BLOCKED' && job.attempts < 2)
+          await db.run(
+            "UPDATE email_deliveries SET status='pending' WHERE source_id=? AND kind='password' AND status='failed'",
+            [job.id],
+          );
       }
     } catch {
       console.error('Falha no processamento da fila de recuperação de senha.');

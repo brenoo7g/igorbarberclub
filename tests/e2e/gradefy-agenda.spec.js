@@ -23,10 +23,11 @@ test('agenda real: day/week, filters, details, responsive presentation and compa
   await login(page);
   await page.getByLabel('Empresa', { exact: true }).selectOption(cid);
   await page
-    .getByRole('button', { name: 'Minha agenda Consultar seus horários', exact: true })
+    .locator('.gf-business-nav-desktop')
+    .getByRole('link', { name: 'Minha agenda' })
     .click();
   await expect(page).toHaveURL(calendar);
-  await expect(page.getByRole('heading', { name: 'Minha agenda', exact: true })).toBeVisible();
+  await expect(page.locator('.gf-agenda-navigation')).toBeVisible();
   await expect(page.locator('.gf-agenda-row')).toHaveCount(2);
   await expect(
     page.locator('.gf-agenda-row').filter({ hasText: 'Cliente Cancelado' }),
@@ -84,8 +85,10 @@ test('manual creation survives a lost response, then reschedule/cancel retain hi
   await login(page);
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
-    .getByRole('link', { name: 'Novo agendamento Registrar atendimento', exact: true })
+    .getByRole('navigation', { name: 'Áreas da empresa' })
+    .getByRole('link', { name: 'Minha agenda' })
     .click();
+  await page.getByRole('button', { name: 'Novo agendamento', exact: true }).first().click();
   await expect(dialog(page).getByRole('heading', { name: 'Novo agendamento' })).toBeVisible();
   const snapshot = await (await page.request.get('/api/admin/agenda', { headers })).json();
   const date = dayAfter(snapshot.today, 3),
@@ -177,13 +180,10 @@ test('completion updates dashboard without payments; session and load failures n
   await expect(dialog(page)).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('não foi registrado pagamento');
   await page.goto('/app/dashboard?empresa=' + cid);
-  await expect(
-    page
-      .locator('.gf-dashboard-metric')
-      .filter({ hasText: 'Atendimentos concluídos' })
-      .locator('strong'),
-  ).toHaveText('1');
-  await page.getByRole('link', { name: 'Corte Agenda Rafael Agenda', exact: true }).click();
+  const completed = await (await page.request.get('/api/dashboard', { headers })).json();
+  expect(completed.metrics.completedAppointments).toBe(1);
+  await expect(page.locator('.gf-desktop-metrics')).toContainText('R$ 0,00');
+  await page.locator('.gf-desktop-next .gf-desktop-appointment').click();
   await expect(dialog(page)).toContainText('Cliente Retorno');
   await page.getByRole('button', { name: 'Fechar', exact: true }).click();
   await page.route('**/api/admin/agenda?**', (route) => route.abort('failed'));

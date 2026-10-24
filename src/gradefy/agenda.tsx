@@ -10,6 +10,10 @@ import {
   RefreshCw,
   UserRound,
   CheckCheck,
+  UsersRound,
+  ArrowRight,
+  LockKeyhole,
+  Search,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { addDays, ApiError, errorMessage, money, newIdempotencyKey, statusLabels } from '../lib';
@@ -21,9 +25,15 @@ import type { AgendaCatalog, AgendaDetail, AgendaState } from './agenda-types';
 import { BusinessNav } from './business-nav';
 import { PaymentPanel } from './finance-payment';
 import { AgendaBlockPanel } from './agenda-blocks';
+import { AgendaTimeline } from './agenda-timeline';
 import './dashboard.css';
 import './agenda.css';
 import { agendaDateLabel, monday } from './agenda-display';
+import { ManagementTopbar, subscriptionLabel } from './management-topbar';
+import './management-desktop.css';
+import './agenda-desktop.css';
+import './agenda-timeline.css';
+import './agenda-refinement.css';
 export { agendaDateLabel } from './agenda-display';
 export default function Agenda() {
   return <ManagementAccess>{(props) => <AgendaContent {...props} />}</ManagementAccess>;
@@ -38,13 +48,32 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
   const [date, setDate] = useState(''),
     [view, setView] = useState<'day' | 'week'>('day'),
     [professional, setProfessional] = useState(query.get('professionalId') || ''),
+    [service, setService] = useState(''),
+    [search, setSearch] = useState(''),
     [status, setStatus] = useState(''),
     [page, setPage] = useState(1),
     [revision, setRevision] = useState(0);
   const [detailId, setDetailId] = useState(query.get('atendimento') || ''),
     [create, setCreate] = useState(query.get('novo') === '1'),
-    [reschedule, setReschedule] = useState<AgendaDetail | null>(null);
+    [reschedule, setReschedule] = useState<AgendaDetail | null>(null),
+    [blockOpen, setBlockOpen] = useState(false);
   const dashboard = '/app/dashboard?empresa=' + encodeURIComponent(companyId);
+  const localNow = data
+    ? new Intl.DateTimeFormat('en-GB', {
+        timeZone: data.company.timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(new Date(data.now))
+    : '';
+  const upcoming =
+    data?.items
+      .filter(
+        (item) =>
+          item.status === 'confirmed' &&
+          (item.date > data.today || (item.date === data.today && item.time >= localNow)),
+      )
+      .slice(0, 4) || [];
   useEffect(() => {
     const controller = new AbortController();
     setBusy(true);
@@ -52,6 +81,8 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
     const params = new URLSearchParams({ view, page: String(page) });
     if (date) params.set('from', date);
     if (professional) params.set('professionalId', professional);
+    if (service) params.set('serviceId', service);
+    if (search.trim()) params.set('q', search.trim());
     if (status) params.set('status', status);
     api<AgendaState>('/admin/agenda?' + params, {
       headers: { 'X-Gradefy-Company-Id': companyId },
@@ -74,7 +105,7 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [api, companyId, date, view, professional, status, page, revision]);
+  }, [api, companyId, date, view, professional, service, search, status, page, revision]);
   useEffect(() => {
     const refresh = () => setRevision((n) => n + 1),
       timer = setInterval(refresh, 60000);
@@ -101,9 +132,33 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
     setPage(1);
   }
   return (
-    <div className="gf-dashboard gf-agenda">
-      <BusinessNav companyId={companyId} />
+    <div className="gf-dashboard gf-agenda gf-premium-page">
+      <BusinessNav
+        companyId={companyId}
+        companyName={data?.company.name}
+        planName={
+          data?.entitlement.planCode === 'team'
+            ? 'Equipe'
+            : data?.entitlement.planCode === 'individual'
+              ? 'Individual'
+              : data?.entitlement.planCode
+        }
+        showPlanPromo={Boolean(data?.entitlement.planCode)}
+        subscriptionLabel={subscriptionLabel(data?.entitlement)}
+        sitePublished={data?.company.site_published === 1}
+      />
       <div className="gf-dashboard-main" aria-busy={busy}>
+        <ManagementTopbar
+          companyId={companyId}
+          companyName={data?.company.name || companies.find((c) => c.id === companyId)?.name}
+          description="Acompanhe seus atendimentos e organize o dia da sua equipe."
+          searchValue={search}
+          searchPlaceholder="Buscar nesta agenda..."
+          onSearch={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+        />
         <div className="gf-agenda-heading">
           <div>
             <div className="gf-kicker">SEU TEMPO BEM CUIDADO</div>
@@ -113,6 +168,15 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
           <Button disabled={busy || !data?.editable} onClick={() => setCreate(true)}>
             <Plus size={18} />
             Novo agendamento
+          </Button>
+        </div>
+        <div className="gf-agenda-mobile-block-action">
+          <Button
+            variant="secondary"
+            disabled={busy || !data?.editable}
+            onClick={() => setBlockOpen(true)}
+          >
+            <LockKeyhole size={17} /> Bloquear agenda
           </Button>
         </div>
         {companies.length > 1 && (
@@ -141,200 +205,380 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
                 A agenda está disponível para consulta. A assinatura atual não permite alterações.
               </Feedback>
             )}
-            <AgendaBlockPanel
-              companyId={companyId}
-              scope="management"
-              today={data.today}
-              editable={data.editable}
-              professionals={data.professionals}
-              onChanged={() => setRevision((n) => n + 1)}
-            />
-            <Card className="gf-agenda-toolbar">
-              <div className="gf-agenda-navigation">
-                <div className="gf-agenda-views" role="group" aria-label="Visualização da agenda">
-                  <button
-                    aria-pressed={view === 'day'}
+            <div className="gf-agenda-stage">
+              <Card className="gf-agenda-toolbar">
+                <div className="gf-agenda-navigation">
+                  <div className="gf-agenda-desktop-title">
+                    <h2>Minha agenda</h2>
+                    <Button disabled={busy || !data.editable} onClick={() => setCreate(true)}>
+                      <Plus size={16} /> Novo agendamento
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      aria-label="Bloquear agenda"
+                      title="Bloquear agenda"
+                      disabled={!data.editable}
+                      onClick={() => setBlockOpen(true)}
+                    >
+                      <LockKeyhole size={16} /> <span>Bloquear agenda</span>
+                    </Button>
+                  </div>
+                  <div className="gf-agenda-views" role="group" aria-label="Visualização da agenda">
+                    <button
+                      aria-pressed={view === 'day'}
+                      disabled={busy}
+                      onClick={() => {
+                        setView('day');
+                        setPage(1);
+                      }}
+                    >
+                      Dia
+                    </button>
+                    <button
+                      aria-pressed={view === 'week'}
+                      disabled={busy}
+                      onClick={() => {
+                        setView('week');
+                        changeDate(monday(date || data.today));
+                      }}
+                    >
+                      Semana
+                    </button>
+                  </div>
+                  <div className="gf-agenda-date-nav">
+                    <Button
+                      variant="secondary"
+                      aria-label="Período anterior"
+                      disabled={busy}
+                      onClick={() => changeDate(addDays(data.from, view === 'week' ? -7 : -1))}
+                    >
+                      <ChevronLeft size={18} />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => changeDate(view === 'week' ? monday(data.today) : data.today)}
+                    >
+                      Hoje
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      aria-label="Próximo período"
+                      disabled={busy}
+                      onClick={() => changeDate(addDays(data.from, view === 'week' ? 7 : 1))}
+                    >
+                      <ChevronRight size={18} />
+                    </Button>
+                  </div>
+                  <span className="gf-agenda-period-inline">
+                    {agendaDateLabel(data.from)}
+                    {view === 'week' ? ' a ' + agendaDateLabel(data.to) : ''}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    aria-label="Atualizar agenda"
                     disabled={busy}
-                    onClick={() => {
-                      setView('day');
+                    onClick={() => setRevision((n) => n + 1)}
+                  >
+                    <RefreshCw size={17} />
+                  </Button>
+                </div>
+                <div className="gf-agenda-filters">
+                  <div className="gf-field">
+                    <label htmlFor="agenda-date">Data da agenda</label>
+                    <input
+                      id="agenda-date"
+                      type="date"
+                      min="1900-01-01"
+                      max="2199-12-25"
+                      disabled={busy}
+                      value={date || data.from}
+                      onChange={(e) =>
+                        changeDate(
+                          view === 'week' && e.target.value
+                            ? monday(e.target.value)
+                            : e.target.value,
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="gf-field">
+                    <label htmlFor="agenda-pro">Profissional</label>
+                    <select
+                      id="agenda-pro"
+                      value={professional}
+                      disabled={busy}
+                      onChange={(e) => {
+                        setProfessional(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="">Todos os profissionais</option>
+                      {data.professionals.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                          {!p.active ? ' (inativo)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="gf-field">
+                    <label htmlFor="agenda-status">Status</label>
+                    <select
+                      id="agenda-status"
+                      disabled={busy}
+                      value={status}
+                      onChange={(e) => {
+                        setStatus(e.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="">Todos os status</option>
+                      {Object.entries(statusLabels).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="gf-field">
+                    <label htmlFor="agenda-service">Filtrar por serviço</label>
+                    <select
+                      id="agenda-service"
+                      disabled={busy}
+                      value={service}
+                      onChange={(event) => {
+                        setService(event.target.value);
+                        setPage(1);
+                      }}
+                    >
+                      <option value="">Todos os serviços</option>
+                      {(data.services || []).map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                          {item.active ? '' : ' (inativo)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Input
+                    label="Buscar agendamentos"
+                    placeholder="Buscar agendamentos..."
+                    value={search}
+                    icon={<Search size={17} />}
+                    maxLength={100}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
                       setPage(1);
                     }}
-                  >
-                    Dia
-                  </button>
-                  <button
-                    aria-pressed={view === 'week'}
-                    disabled={busy}
-                    onClick={() => {
-                      setView('week');
-                      changeDate(monday(date || data.today));
-                    }}
-                  >
-                    Semana
-                  </button>
-                </div>
-                <div className="gf-agenda-date-nav">
-                  <Button
-                    variant="secondary"
-                    aria-label="Período anterior"
-                    disabled={busy}
-                    onClick={() => changeDate(addDays(data.from, view === 'week' ? -7 : -1))}
-                  >
-                    <ChevronLeft size={18} />
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => changeDate(view === 'week' ? monday(data.today) : data.today)}
-                  >
-                    Hoje
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    aria-label="Próximo período"
-                    disabled={busy}
-                    onClick={() => changeDate(addDays(data.from, view === 'week' ? 7 : 1))}
-                  >
-                    <ChevronRight size={18} />
-                  </Button>
-                </div>
-                <Button
-                  variant="secondary"
-                  aria-label="Atualizar agenda"
-                  disabled={busy}
-                  onClick={() => setRevision((n) => n + 1)}
-                >
-                  <RefreshCw size={17} />
-                </Button>
-              </div>
-              <div className="gf-agenda-filters">
-                <div className="gf-field">
-                  <label htmlFor="agenda-date">Data da agenda</label>
-                  <input
-                    id="agenda-date"
-                    type="date"
-                    min="1900-01-01"
-                    max="2199-12-25"
-                    disabled={busy}
-                    value={date || data.from}
-                    onChange={(e) =>
-                      changeDate(
-                        view === 'week' && e.target.value ? monday(e.target.value) : e.target.value,
-                      )
-                    }
                   />
                 </div>
-                <div className="gf-field">
-                  <label htmlFor="agenda-pro">Profissional</label>
-                  <select
-                    id="agenda-pro"
-                    value={professional}
-                    disabled={busy}
-                    onChange={(e) => {
-                      setProfessional(e.target.value);
-                      setPage(1);
-                    }}
-                  >
-                    <option value="">Todos os profissionais</option>
-                    {data.professionals.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                        {!p.active ? ' (inativo)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="gf-field">
-                  <label htmlFor="agenda-status">Status</label>
-                  <select
-                    id="agenda-status"
-                    disabled={busy}
-                    value={status}
-                    onChange={(e) => {
-                      setStatus(e.target.value);
-                      setPage(1);
-                    }}
-                  >
-                    <option value="">Todos os status</option>
-                    {Object.entries(statusLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <p className="gf-agenda-range">
-                {agendaDateLabel(data.from)}
-                {view === 'week' ? ' a ' + agendaDateLabel(data.to) : ''} · {data.total}{' '}
-                {data.total === 1 ? 'atendimento' : 'atendimentos'} · {data.company.timezone}
-              </p>
-            </Card>
-            {!data.items.length ? (
-              <Card className="gf-dashboard-empty">
-                <CalendarDays size={30} />
-                <h2>Nenhum atendimento neste período</h2>
-                <p>
-                  Consulte outra data ou ajuste os filtros.
-                  {data.editable ? ' Você também pode registrar um novo atendimento.' : ''}
+                <p className="gf-agenda-range">
+                  {agendaDateLabel(data.from)}
+                  {view === 'week' ? ' a ' + agendaDateLabel(data.to) : ''} · {data.total}{' '}
+                  {data.total === 1 ? 'atendimento' : 'atendimentos'} · {data.company.timezone}
                 </p>
-                {data.editable && (
-                  <Button onClick={() => setCreate(true)}>
-                    <Plus size={17} />
-                    Novo agendamento
-                  </Button>
-                )}
+                <div className="gf-agenda-week-strip" aria-label="Navegar pelos dias da semana">
+                  {Array.from({ length: 7 }, (_, index) => addDays(monday(data.from), index)).map(
+                    (day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        disabled={busy}
+                        aria-current={day === data.from ? 'date' : undefined}
+                        onClick={() => {
+                          setView('day');
+                          changeDate(day);
+                        }}
+                      >
+                        <small>
+                          {new Intl.DateTimeFormat('pt-BR', {
+                            weekday: 'short',
+                            timeZone: 'UTC',
+                          }).format(new Date(day + 'T12:00Z'))}
+                        </small>
+                        <strong>{day.slice(-2)}</strong>
+                      </button>
+                    ),
+                  )}
+                </div>
               </Card>
-            ) : (
-              <div className="gf-agenda-days">
-                {Array.from({ length: view === 'week' ? 7 : 1 }, (_, i) =>
-                  addDays(data.from, i),
-                ).map((day) => {
-                  const items = data.items.filter((a) => a.date === day);
-                  if (!items.length) return null;
-                  return (
-                    <Card key={day} className="gf-agenda-day">
-                      <div className="gf-dashboard-section-heading">
-                        <h2>{agendaDateLabel(day)}</h2>
-                        <CalendarDays size={20} />
+              <div className="gf-agenda-workspace">
+                <div className="gf-agenda-primary">
+                  {!data.items.length && !(data.blocks || []).length ? (
+                    <Card className="gf-dashboard-empty">
+                      <CalendarDays size={30} />
+                      <h2>Nenhum atendimento neste período</h2>
+                      <p>
+                        Consulte outra data ou ajuste os filtros.
+                        {data.editable ? ' Você também pode registrar um novo atendimento.' : ''}
+                      </p>
+                      {data.editable && (
+                        <Button onClick={() => setCreate(true)}>
+                          <Plus size={17} />
+                          Novo agendamento
+                        </Button>
+                      )}
+                    </Card>
+                  ) : (
+                    <div className="gf-agenda-days">
+                      {Array.from({ length: view === 'week' ? 7 : 1 }, (_, i) =>
+                        addDays(data.from, i),
+                      ).map((day) => {
+                        const items = data.items.filter((a) => a.date === day);
+                        const blocks = (data.blocks || []).filter((block) => block.date === day);
+                        const breaks = (data.recurringBreaks || []).filter(
+                          (item) => item.date === day,
+                        );
+                        if (!items.length && !blocks.length && !breaks.length) return null;
+                        return (
+                          <Card key={day} className="gf-agenda-day">
+                            <div className="gf-dashboard-section-heading">
+                              <h2>{agendaDateLabel(day)}</h2>
+                              <CalendarDays size={20} />
+                            </div>
+                            <AgendaTimeline day={day} data={data} open={setDetailId} />
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <aside className="gf-agenda-side" aria-label="Resumo da agenda">
+                  <Card className="gf-agenda-summary">
+                    <h2>
+                      <CalendarDays size={20} /> Resumo do período
+                    </h2>
+                    <div className="gf-agenda-summary-grid">
+                      <div>
+                        <CalendarDays size={21} aria-hidden="true" />
+                        <span>Atendimentos</span>
+                        <strong>{data.total}</strong>
+                        <small>No período selecionado</small>
                       </div>
-                      <div className="gf-agenda-table-heading">
-                        <span>Horário</span>
-                        <span>Cliente e serviço</span>
-                        <span>Profissional</span>
-                        <span>Status</span>
+                      <div>
+                        <CheckCheck size={21} aria-hidden="true" />
+                        <span>Confirmados</span>
+                        <strong>{data.statusCounts?.confirmed || 0}</strong>
+                        <small>
+                          {data.total
+                            ? Math.round(((data.statusCounts?.confirmed || 0) / data.total) * 100) +
+                              '% do período'
+                            : 'Nenhum no período'}
+                        </small>
                       </div>
-                      {items.map((a) => (
-                        <button
-                          key={a.id}
-                          className="gf-agenda-row"
-                          aria-label={'Ver atendimento de ' + a.clientName + ' às ' + a.time}
-                          onClick={() => setDetailId(a.id)}
+                      <div>
+                        <CheckCheck size={21} aria-hidden="true" />
+                        <span>Concluídos</span>
+                        <strong>{data.statusCounts?.completed || 0}</strong>
+                        <small>
+                          {data.total
+                            ? Math.round(((data.statusCounts?.completed || 0) / data.total) * 100) +
+                              '% do período'
+                            : 'Nenhum no período'}
+                        </small>
+                      </div>
+                      <div>
+                        <LockKeyhole size={21} aria-hidden="true" />
+                        <span>Cancelados</span>
+                        <strong>{data.statusCounts?.cancelled || 0}</strong>
+                        <small>
+                          {data.total
+                            ? Math.round(((data.statusCounts?.cancelled || 0) / data.total) * 100) +
+                              '% do período'
+                            : 'Nenhum no período'}
+                        </small>
+                      </div>
+                    </div>
+                    <div className="gf-agenda-status-detail">
+                      <span>
+                        <i aria-hidden="true" />
+                        Não compareceu <strong>{data.statusCounts?.['no-show'] || 0}</strong>
+                      </span>
+                      <small>Contagens de todo o período filtrado, não apenas desta página.</small>
+                    </div>
+                  </Card>
+                  <Card className="gf-agenda-upcoming">
+                    <div className="gf-agenda-side-title">
+                      <h2>
+                        <Clock3 size={20} /> Próximos confirmados
+                      </h2>
+                    </div>
+                    <p className="gf-agenda-upcoming-scope">Nesta página do período selecionado.</p>
+                    {upcoming.map((item) => (
+                      <button key={item.id} type="button" onClick={() => setDetailId(item.id)}>
+                        <span className="gf-agenda-side-time">{item.time}</span>
+                        <span
+                          className="gf-agenda-upcoming-person"
+                          data-initials={item.clientName.slice(0, 1).toUpperCase()}
                         >
-                          <time dateTime={a.date + 'T' + a.time}>{a.time}</time>
-                          <span className="gf-agenda-client">
-                            <strong>{a.clientName}</strong>
-                            <span>{a.services.map((s) => s.name).join(' + ')}</span>
-                            <small>
-                              <Clock3 size={12} />
-                              {a.duration} min · {money(a.totalCents)}
-                            </small>
-                          </span>
-                          <span className="gf-agenda-professional">
-                            <UserRound size={13} />
-                            {a.professionalName}
-                          </span>
-                          <span className={'gf-appointment-status gf-status-' + a.status}>
-                            <i />
-                            {statusLabels[a.status]}
-                          </span>
+                          <strong>{item.clientName}</strong>
+                          <small>
+                            {item.services.map((service) => service.name).join(' + ')} ·{' '}
+                            {item.professionalName}
+                          </small>
+                        </span>
+                        <span className="gf-agenda-upcoming-status">Confirmado</span>
+                        <ArrowRight size={15} aria-hidden="true" />
+                      </button>
+                    ))}
+                    {!upcoming.length && (
+                      <div className="gf-agenda-upcoming-empty">
+                        <CalendarDays size={22} aria-hidden="true" />
+                        <p>Nenhuma reserva futura confirmada nesta página do período.</p>
+                        {data.from !== data.today && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setView('day');
+                              changeDate(data.today);
+                            }}
+                          >
+                            Ver agenda de hoje <ArrowRight size={15} aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </Card>
+                  <Card className="gf-agenda-team">
+                    <div className="gf-agenda-side-title">
+                      <h2>
+                        <UsersRound size={20} /> Equipe do período
+                      </h2>
+                      <Link to={'/app/profissionais?empresa=' + encodeURIComponent(companyId)}>
+                        Ver equipe <ArrowRight size={14} />
+                      </Link>
+                    </div>
+                    <p>
+                      {data.professionals.filter((item) => item.active).length}{' '}
+                      {data.professionals.filter((item) => item.active).length === 1
+                        ? 'profissional ativo cadastrado'
+                        : 'profissionais ativos cadastrados'}
+                      . Consulte a agenda individual para horários e bloqueios.
+                    </p>
+                    {data.professionals
+                      .filter((item) => item.active)
+                      .slice(0, 4)
+                      .map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setProfessional(item.id);
+                            setPage(1);
+                          }}
+                        >
+                          <span aria-hidden="true">{item.name.slice(0, 1).toUpperCase()}</span>
+                          <strong>{item.name}</strong>
+                          <small>
+                            Ver agenda <ArrowRight size={13} />
+                          </small>
                         </button>
                       ))}
-                    </Card>
-                  );
-                })}
+                  </Card>
+                </aside>
               </div>
-            )}
+            </div>
             {data.total > data.pageSize && (
               <nav className="gf-dashboard-pagination" aria-label="Páginas da agenda">
                 <Button
@@ -382,6 +626,24 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
           close={close}
           changed={changed}
         />
+      )}
+      {blockOpen && data && (
+        <div className="gf-agenda-modal gf-agenda-block-overlay">
+          <Modal
+            title="Bloquear agenda"
+            className="gf-agenda-block-dialog"
+            onClose={() => setBlockOpen(false)}
+          >
+            <AgendaBlockPanel
+              companyId={companyId}
+              scope="management"
+              today={data.today}
+              editable={data.editable}
+              professionals={data.professionals}
+              onChanged={() => setRevision((n) => n + 1)}
+            />
+          </Modal>
+        </div>
       )}
     </div>
   );

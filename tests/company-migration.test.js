@@ -33,6 +33,13 @@ async function snapshot(db, tables) {
   const result = {};
   for (const table of tables) {
     result[table] = plain(await db.all(`SELECT * FROM ${table}`));
+    if (table === 'password_recovery')
+      for (const row of result[table]) {
+        if ('email_delivery_scope' in row) {
+          assert.equal(row.email_delivery_scope, '');
+          delete row.email_delivery_scope;
+        }
+      }
     if (table === 'notifications') assertUnclaimedMigration(result[table]);
     if (legacyTables.includes(table))
       for (const row of result[table]) {
@@ -230,7 +237,7 @@ test('Gradefy migration: a failed DDL rolls back the entire migration and its jo
     fail = false;
     assert.deepEqual(
       await runMigrations(db),
-      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
     );
     assert.deepEqual(await runMigrations(db), []);
   } finally {

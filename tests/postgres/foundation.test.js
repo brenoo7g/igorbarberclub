@@ -18,6 +18,28 @@ import {
 import { assertFoundationIntegrity } from '../helpers/foundation-integrity.js';
 
 // This suite is intentionally NOT part of tests/*.test.js. Only run-local.mjs provisions it.
+test('Gradefy Resend PostgreSQL: additive delivery migration, safety, audit and verified webhooks', async (t) => {
+  const { db } = await makeCase(t, 'email_delivery');
+  const { assertEmailDelivery, assertEmailMigration } =
+    await import('../helpers/email-delivery.js');
+  await assertEmailMigration(t, db);
+  await db.run(
+    "INSERT INTO users(id,name,email,phone,password_hash,role,created_at) VALUES('email-owner','Owner ficticio','owner@example.test','21999999999','not-login','admin','2026')",
+  );
+  await db.run(
+    "INSERT INTO company_members(company_id,user_id,role,created_at) VALUES('igor-barber-club','email-owner','owner','2026')",
+  );
+  // Deterministic booking fixture: PostgreSQL runner intentionally disables demo seeding.
+  const { seedLegacyCompany } = await import('../../server/seed.js');
+  await seedLegacyCompany(db, 'igor-barber-club');
+  await db.run(
+    "INSERT INTO appointments(id,company_id,user_id,barber_id,date,start_minute,end_minute,total,status,created_at) VALUES('email-booking','igor-barber-club','email-owner','igor','2030-01-20',540,580,3000,'confirmed','2026')",
+  );
+  await db.run(
+    "INSERT INTO appointment_services(company_id,appointment_id,service_id,name,price,duration) VALUES('igor-barber-club','email-booking','corte','Corte ficticio',3000,40)",
+  );
+  await assertEmailDelivery(t, db);
+});
 const input = process.env.GRADEFY_PG_TEST_URL;
 const runId = process.env.GRADEFY_PG_TEST_RUN_ID;
 const token = process.env.GRADEFY_PG_TEST_TOKEN;
@@ -134,6 +156,13 @@ async function snapshot(raw, tables) {
         if (table === 'appointments' && 'cancellation_reason' in row) {
           assert.equal(row.cancellation_reason, '');
           delete row.cancellation_reason;
+        }
+      }
+    if (table === 'password_recovery')
+      for (const row of rows) {
+        if ('email_delivery_scope' in row) {
+          assert.equal(row.email_delivery_scope, '');
+          delete row.email_delivery_scope;
         }
       }
     if (table === 'notifications') assertUnclaimedMigration(rows);
@@ -310,6 +339,9 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
       'professional_personal_blocks',
       'agenda_block_operations',
       'agenda_block_cancellations',
+      'email_deliveries',
+      'email_delivery_attempts',
+      'email_webhook_events',
       'company_onboarding',
       'company_clients',
       'client_appointments',
@@ -345,6 +377,9 @@ test('01 PostgreSQL vazio: schema legado, migration 001 e catálogos completos',
           'professional_personal_blocks',
           'agenda_block_operations',
           'agenda_block_cancellations',
+          'email_deliveries',
+          'email_delivery_attempts',
+          'email_webhook_events',
           'company_onboarding',
           'company_clients',
           'client_appointments',
@@ -666,7 +701,7 @@ test('13 Upgrade PostgreSQL 001 para 002: preserva linhas, índice personalizado
   const after = await snapshot(raw, [...legacyTables, ...foundationTables]);
   assert.deepEqual(
     after.schema_migrations.map((row) => row.version),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
   );
   assert.deepEqual(after.schema_migrations[0], before.schema_migrations[0]);
   delete after.schema_migrations;

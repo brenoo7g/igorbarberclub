@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './email-fixtures.js';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
@@ -38,7 +39,7 @@ export async function assertBlockCancellationMigration(t, db) {
   assert.equal(await db.get('SELECT version FROM schema_migrations WHERE version=21'), undefined);
   await assert.rejects(db.all('SELECT * FROM agenda_block_operations'));
   await assert.rejects(db.all('SELECT cancellation_reason FROM appointments'));
-  assert.deepEqual(await runMigrations(db), [21]);
+  assert.deepEqual(await runMigrations(db), [21, 22]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(
     await db.all('SELECT * FROM schema_migrations WHERE version<21 ORDER BY version'),
@@ -591,6 +592,7 @@ export async function assertBlockCancellations(t, db, second = db) {
       process.env.RESEND_API_KEY = 'mock-only';
       process.env.EMAIL_FROM = 'Teste <test@example.test>';
       process.env.APP_URL = 'https://gradefy.example.test';
+      await authorizeMockEmail(ct, db, { enrollExisting: true });
       await worker();
       assert.ok(calls > 0);
       assert.equal(
@@ -619,7 +621,10 @@ export async function assertBlockCancellations(t, db, second = db) {
       assert.ok(job.submitted_at);
       assert.equal(job.provider_message_id, 'provider-' + job.id);
       const email = sent.get(job.id).payload;
-      assert.equal(email.subject, 'Seu agendamento foi cancelado — Equipe de Atendimento');
+      assert.equal(
+        email.subject,
+        'Aviso importante: seu agendamento foi cancelado — Equipe de Atendimento',
+      );
       assert.ok(email.text.includes('Cliente Cancelamento'));
       assert.ok(email.text.includes('Serviço Histórico'));
       assert.ok(email.text.includes('Maria Profissional'));

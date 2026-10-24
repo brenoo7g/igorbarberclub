@@ -118,7 +118,7 @@ test('pause is distinct from publishing; Barber Classic displays friendly messag
     await expect(guest.getByRole('heading', { name: 'Uma pausa na agenda online.' })).toBeVisible();
     expect((await guest.request.get('/api/public/' + cid + '/site')).status()).toBe(200);
     await page.goto('/app/agenda?empresa=' + cid);
-    await expect(page.getByRole('heading', { name: 'Minha agenda', exact: true })).toBeVisible();
+    await expect(page.locator('.gf-agenda-navigation')).toBeVisible();
   } finally {
     const current = await (await page.request.get('/api/admin/settings', { headers })).json();
     expect(

@@ -38,8 +38,8 @@ test('manual partial/full receipts, lost response replay, audit reversal and rea
   await login(page);
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
-    .locator('.gf-dashboard-quick')
-    .getByRole('link', { name: 'Financeiro Abrir gestão', exact: true })
+    .locator('.gf-business-nav-desktop')
+    .getByRole('link', { name: 'Pagamentos — Financeiro', exact: true })
     .click();
   await expect(page).toHaveURL('/app/financeiro?empresa=' + cid);
   await expect(metric(page, 'Pagamentos recebidos')).toHaveText('R$ 0,00');

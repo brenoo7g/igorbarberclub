@@ -49,7 +49,7 @@ export async function assertAgendaMigration(t, db) {
     await db.all('SELECT * FROM idempotency_keys ORDER BY company_id,operation,key_hash'),
     keysBefore,
   );
-  assert.deepEqual(await runMigrations(db), [12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+  assert.deepEqual(await runMigrations(db), [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
   assert.deepEqual(await runMigrations(db), []);
   assert.deepEqual(
     await db.all('SELECT id,date,status,total FROM appointments ORDER BY id'),
@@ -265,6 +265,17 @@ export async function assertAgenda(t, db, second = db) {
       );
       const listed = await req('?from=' + day);
       assert.equal(listed.data.items.length, 1);
+      assert.deepEqual(listed.data.statusCounts, { confirmed: 1 });
+      assert.deepEqual(listed.data.blocks, []);
+      assert.ok(listed.data.recurringBreaks.length >= 1);
+      assert.equal((await req('?from=' + day + '&serviceId=agenda-a-service')).data.total, 1);
+      assert.equal(
+        (await req('?from=' + day + '&q=' + encodeURIComponent(guest.name))).data.total,
+        1,
+      );
+      assert.equal((await req('?from=' + day + '&q=%25')).data.total, 0);
+      assert.equal((await req('?from=' + day + '&serviceId=agenda-b-service')).status, 404);
+      assert.equal((await req('?from=' + day, { cid: 'agenda-b' })).data.total, 0);
       assert.ok(!JSON.stringify(listed.data).includes(guest.email));
       assert.ok(!JSON.stringify(listed.data).includes(guest.phone));
     },

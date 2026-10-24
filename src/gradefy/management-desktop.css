@@ -1,0 +1,173 @@
+@media (min-width: 801px) {
+  .gf-premium-page :focus-visible {
+    outline: 2px solid #a68cff;
+    outline-offset: 2px;
+  }
+  .gf-premium-page .gf-dashboard-main {
+    position: relative;
+    padding: 20px clamp(22px, 2.2vw, 42px) 50px;
+    color: #f5f8ff;
+    background: radial-gradient(ellipse at 48% -20%, #19246a42, transparent 45%), #050d20;
+  }
+  .gf-management-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    padding: 0 0 16px;
+    border-bottom: 1px solid #1a2c54;
+  }
+  .gf-management-topbar h1 {
+    margin: 0 0 7px;
+    font: 700 clamp(24px, 2.1vw, 31px)/1.2 var(--gf-font-heading);
+    letter-spacing: -0.035em;
+  }
+  .gf-management-topbar p {
+    margin: 0;
+    color: #b2c2e6;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .gf-management-company-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 43px;
+    max-width: 32ch;
+    padding: 9px 15px;
+    border: 1px solid #2b4071;
+    border-radius: 12px;
+    background: linear-gradient(125deg, #17234a, #0c1b37);
+    color: #dce7ff;
+    font-size: 13px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .gf-management-company-chip svg {
+    color: #9d8bff;
+    flex-shrink: 0;
+  }
+  .gf-management-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .gf-premium-page .gf-management-topbar-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: min(285px, 22vw);
+    min-height: 43px;
+    padding: 0 14px;
+    border: 1px solid #284170;
+    border-radius: 12px;
+    background: #0c1e3f;
+    color: #aec2eb;
+  }
+  .gf-premium-page .gf-management-topbar-search:focus-within {
+    border-color: #9979fb;
+    box-shadow: 0 0 0 3px #6d54e333;
+  }
+  .gf-premium-page .gf-management-topbar-search svg {
+    flex: none;
+  }
+  .gf-premium-page .gf-management-topbar-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #f5f8ff;
+    font: 500 13px var(--gf-font-body);
+  }
+  .gf-premium-page .gf-management-topbar-search input::placeholder {
+    color: #a6b9de;
+  }
+  .gf-management-notifications {
+    display: grid;
+    place-items: center;
+    width: 43px;
+    height: 43px;
+    border: 1px solid #2b4071;
+    border-radius: 12px;
+    background: #101f43;
+    color: #bed0ff;
+  }
+  .gf-management-notifications:hover {
+    border-color: #7a5bf0;
+    color: white;
+  }
+  .gf-premium-page
+    .gf-dashboard-main:has(> .gf-field #dashboard-company)
+    .gf-management-topbar-actions {
+    margin-right: min(270px, 30vw);
+  }
+  .gf-premium-page
+    .gf-dashboard-main:has(> .gf-field #dashboard-company)
+    .gf-management-company-chip {
+    display: none;
+  }
+  .gf-premium-page .gf-dashboard-main > .gf-field:has(#dashboard-company) {
+    position: absolute;
+    z-index: 2;
+    top: 20px;
+    right: clamp(22px, 2.2vw, 42px);
+    width: min(250px, 28vw);
+    margin: 0;
+  }
+  .gf-premium-page .gf-dashboard-main > .gf-field:has(#dashboard-company) label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .gf-premium-page .gf-dashboard-main > .gf-field:has(#dashboard-company) select {
+    min-height: 44px;
+    border-color: #2b4071;
+    background: #101f43;
+    font-size: 13px;
+  }
+  .gf-premium-page .gf-agenda-heading {
+    margin: 29px 0 23px;
+    align-items: end;
+  }
+  .gf-premium-page .gf-agenda-heading .gf-kicker {
+    color: #a28cff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.17em;
+  }
+  .gf-premium-page .gf-agenda-heading h1 {
+    margin: 5px 0 6px;
+    font: 700 clamp(27px, 2.2vw, 34px)/1.22 var(--gf-font-heading);
+    letter-spacing: -0.035em;
+  }
+  .gf-premium-page .gf-agenda-heading p {
+    color: #b6c4e3;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .gf-premium-page .gf-agenda-heading > .gf-button {
+    min-height: 47px;
+    padding-inline: 22px;
+    border-color: #9164fa;
+    background: linear-gradient(100deg, #8738eb, #485ef0 62%, #16bff0);
+    box-shadow: 0 8px 25px #492fe450;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .gf-premium-page .gf-agenda-heading > .gf-button:disabled {
+    box-shadow: none;
+  }
+  .gf-premium-page .gf-dashboard-main > .gf-field,
+  .gf-premium-page .gf-dashboard-main > .gf-company-selector {
+    margin-bottom: 18px;
+  }
+}
+@media (max-width: 800px) {
+  .gf-management-topbar {
+    display: none;
+  }
+}

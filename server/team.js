@@ -4,7 +4,12 @@ import { z } from 'zod';
 import { availabilityStatus } from './professional-availability.js';
 import { currentTime, domainError } from './entitlements.js';
 import { lockResource } from './scheduling-locks.js';
-import { emailConfigured, sendTransactionalEmail } from './transactional-email.js';
+import {
+  emailConfigured,
+  emailDeliveryScope,
+  deliverTransactionalEmail,
+} from './transactional-email.js';
+import { emailTemplate } from './email-templates.js';
 import { invitationCode, invitationToken } from './invitation-code.js';
 import { setProfessionalLink } from './professional-links.js';
 import { agendaCompanyState } from './agenda.js';
@@ -253,7 +258,14 @@ async function acceptanceCandidate(tx, token, userId) {
 export function installTeamRoutes(
   app,
   db,
-  { authenticated, secret, email = { configured: emailConfigured, send: sendTransactionalEmail } },
+  {
+    authenticated,
+    secret,
+    email = {
+      configured: emailConfigured,
+      send: (payload, key, context) => deliverTransactionalEmail(db, context, payload, key),
+    },
+  },
 ) {
   const limiter = rateLimit({
     windowMs: 15 * 60000,
@@ -359,10 +371,37 @@ export function installTeamRoutes(
           {
             from: process.env.EMAIL_FROM,
             to: [result.invitation.email],
-            subject: `Convite para ${company.name} — Gradefy`,
-            text: `Você recebeu um convite para acessar ${company.name} no Gradefy como ${result.invitation.role === 'manager' ? 'gestor' : 'profissional'}.\n\nEntre ou cadastre-se com este e-mail e confirme o aceite:\n${result.link}\n\nOu escolha "Sou colaborador" no Gradefy e digite este código individual:\n${result.code}\n\nO convite vale por 7 dias. Se não esperava este convite, ignore esta mensagem.`,
+            ...emailTemplate({
+              subject: `Você recebeu um convite — ${company.name}`,
+              title: 'Você recebeu um convite',
+              greeting: 'Olá!',
+              paragraphs: [
+                `Você foi convidado para fazer parte de ${company.name}. Entre ou cadastre-se com o e-mail que recebeu este convite.`,
+                'Se não esperava este convite, ignore esta mensagem.',
+              ],
+              details: [
+                ['Estabelecimento', company.name],
+                ['Função', result.invitation.role === 'manager' ? 'Gestor' : 'Profissional'],
+                [
+                  'Validade',
+                  new Intl.DateTimeFormat('pt-BR', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                    timeZone: 'America/Sao_Paulo',
+                  }).format(new Date(result.invitation.expiresAt)),
+                ],
+                ['Código individual', result.code],
+              ],
+              action: { label: 'Aceitar convite', url: result.link },
+            }),
           },
           'team-' + result.invitation.id + '-' + digest(result.link),
+          {
+            companyId: cid,
+            sourceId: result.invitation.id,
+            kind: 'invitation',
+            scope: emailDeliveryScope(),
+          },
         );
         delivery = r.ok ? 'sent' : 'failed';
       } catch {

@@ -82,9 +82,14 @@ export async function assertOwnershipUpgrade(db) {
   assert.equal(metrics.visits, 2);
   assert.deepEqual(
     await runMigrations(db),
-    [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+    [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
   );
   const after = await ownershipSnapshot(db);
+  for (const row of after.password_recovery || [])
+    if (!('email_delivery_scope' in before.password_recovery.find((r) => r.id === row.id))) {
+      assert.equal(row.email_delivery_scope, '');
+      delete row.email_delivery_scope;
+    }
   expectBarberClassicMetadata(before);
   assert.deepEqual(after.schema_migrations.slice(0, 2), before.schema_migrations);
   delete after.schema_migrations;

@@ -25,8 +25,8 @@ test('owner manages real invitation cards, renewal, cancellation and responsive 
   await login(page);
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
-    .locator('.gf-dashboard-quick')
-    .getByRole('link', { name: 'Equipe e acessos Abrir gestão', exact: true })
+    .locator('.gf-business-nav-desktop')
+    .getByRole('link', { name: 'Equipe — Equipe e acessos', exact: true })
     .click();
   await expect(page).toHaveURL('/app/equipe?empresa=' + cid);
   await expect(page.getByRole('heading', { name: 'Equipe e permissões' })).toBeVisible();
@@ -112,9 +112,7 @@ test('invited registration preserves fragment, acceptance adds one membership an
     await expect(guest).toHaveURL('/app/convite');
     await guest.getByRole('link', { name: 'Acessar minha conta empresarial' }).click();
     await expect(guest).toHaveURL('/app/dashboard?empresa=' + cid);
-    await expect(
-      guest.getByRole('heading', { name: 'Seu negócio em números', exact: true }),
-    ).toBeVisible();
+    await expect(guest.locator('.gf-desktop-metrics')).toBeVisible();
     const companies = await (await guest.request.get('/api/companies')).json();
     expect(companies.map((c) => c.id)).toEqual([cid]);
     const me = await (await guest.request.get('/api/auth/me?scope=gradefy')).json();

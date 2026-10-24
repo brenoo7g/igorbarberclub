@@ -225,13 +225,15 @@ export function installAgendaBlocks(router, db, cid, { scope, authorize }) {
 
 export async function notificationState(db, cid, operationId, management = false) {
   const rows = await db.all(
-    `SELECT n.id,n.status,n.attempts,n.error,n.submitted_at,n.provider_message_id,a.id AS appointment_id,a.date,a.start_minute,a.cancellation_reason,COALESCE(a.guest_name,u.name,'Cliente') AS client_name,COALESCE(a.guest_email,u.email) AS email,COALESCE(a.guest_phone,u.phone) AS phone,(SELECT COALESCE(SUM(p.amount_cents),0) FROM financial_payments p WHERE p.company_id=a.company_id AND p.appointment_id=a.id AND NOT EXISTS(SELECT 1 FROM financial_payment_reversals r WHERE r.company_id=p.company_id AND r.payment_id=p.id)) AS paid_cents FROM agenda_block_cancellations c JOIN notifications n ON n.company_id=c.company_id AND n.id=c.notification_id JOIN appointments a ON a.company_id=c.company_id AND a.id=c.appointment_id LEFT JOIN users u ON u.id=a.user_id WHERE c.company_id=? AND c.operation_id=? ORDER BY a.date,a.start_minute,a.id`,
+    `SELECT n.id,COALESCE(d.status,n.status) AS status,n.attempts,n.error,n.submitted_at,n.provider_message_id,a.id AS appointment_id,a.date,a.start_minute,a.cancellation_reason,COALESCE(a.guest_name,u.name,'Cliente') AS client_name,COALESCE(a.guest_email,u.email) AS email,COALESCE(a.guest_phone,u.phone) AS phone,(SELECT COALESCE(SUM(p.amount_cents),0) FROM financial_payments p WHERE p.company_id=a.company_id AND p.appointment_id=a.id AND NOT EXISTS(SELECT 1 FROM financial_payment_reversals r WHERE r.company_id=p.company_id AND r.payment_id=p.id)) AS paid_cents FROM agenda_block_cancellations c JOIN notifications n ON n.company_id=c.company_id AND n.id=c.notification_id LEFT JOIN email_deliveries d ON d.company_id=n.company_id AND d.source_id=n.id AND d.kind='appointment' JOIN appointments a ON a.company_id=c.company_id AND a.id=c.appointment_id LEFT JOIN users u ON u.id=a.user_id WHERE c.company_id=? AND c.operation_id=? ORDER BY a.date,a.start_minute,a.id`,
     [cid, operationId],
   );
   const configured = emailConfigured();
-  const processed = rows.filter((r) => r.status === 'sent').length;
+  const processed = rows.filter((r) => ['sent', 'accepted', 'delivered'].includes(r.status)).length;
   const attention = rows.filter(
-    (r) => ['failed', 'review'].includes(r.status) || (!configured && r.status !== 'sent'),
+    (r) =>
+      ['failed', 'review', 'rejected', 'suppressed', 'complained', 'delayed'].includes(r.status) ||
+      (!configured && !['sent', 'accepted', 'delivered'].includes(r.status)),
   ).length;
   const pending = rows.length - processed - attention;
   return {

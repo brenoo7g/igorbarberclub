@@ -137,7 +137,7 @@ test('Gradefy uses existing admin login without changing Igor permissions or pub
 }) => {
   await login(page, 'admin@igorbarberclub.com.br', 'IgorDemo2026!');
   await expect(page).toHaveURL('/app/dashboard');
-  await expect(page.locator('.gf-dashboard-business')).toContainText('Igor Barber Club');
+  await expect(page.locator('.gf-desktop-company')).toContainText('Igor Barber Club');
   await expect(page.getByText('Sem assinatura vinculada', { exact: true })).toBeVisible();
   await page.goto('/admin');
   await expect(page.locator('.kpi-card')).toHaveCount(4);

@@ -34,11 +34,12 @@ test('business clients: manual registration, edit, actual agenda history and res
   await login(page);
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
-    .locator('.gf-dashboard-quick')
-    .getByRole('link', { name: 'Clientes Abrir gestão', exact: true })
+    .getByRole('navigation', { name: 'Áreas da empresa' })
+    .getByRole('link', { name: 'Clientes' })
     .click();
   await expect(page).toHaveURL('/app/clientes?empresa=' + cid);
-  await expect(card(page, 'Ana Martins')).toHaveCount(2); // Unrelated reservations are not merged by name/phone.
+  await expect(card(page, 'Ana Martins')).toHaveCount(1);
+  await expect(card(page, 'Bruna Martins')).toHaveCount(1);
   await responsive(page, 'clients');
   const imported = (await (await page.request.get('/api/admin/clients?q=Ana', { headers })).json())
     .items;
@@ -68,7 +69,10 @@ test('business clients: manual registration, edit, actual agenda history and res
   await expect(dialog(page)).toHaveCount(0);
   await page.getByLabel('Buscar por nome, telefone ou e-mail').fill('99777');
   await expect(card(page, 'Cliente Gestão Navegador')).toBeVisible();
-  await card(page, 'Cliente Gestão Navegador').getByRole('button').click();
+  await card(page, 'Cliente Gestão Navegador')
+    .getByRole('button', { name: 'Ações de Cliente Gestão Navegador' })
+    .click();
+  await page.getByRole('menuitem', { name: 'Ver detalhes e histórico' }).click();
   await expect(dialog(page)).toContainText('Contato autorizado apenas para atendimento.');
   await expect(dialog(page)).toContainText('Cadastrado em');
   await dialog(page).getByRole('button', { name: 'Editar cliente', exact: true }).click();

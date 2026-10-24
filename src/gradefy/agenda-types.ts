@@ -28,7 +28,7 @@ export type AgendaDetail = {
   timezone: string;
 };
 export type AgendaState = {
-  company: { id: string; name: string; timezone: string };
+  company: { id: string; name: string; timezone: string; site_published: number };
   today: string;
   now: string;
   from: string;
@@ -37,9 +37,27 @@ export type AgendaState = {
   page: number;
   pageSize: number;
   total: number;
+  statusCounts: Partial<Record<Appointment['status'], number>>;
+  blocks: {
+    id: string;
+    date: string;
+    startMinute: number;
+    endMinute: number;
+    reason: string;
+    professionalName: string;
+  }[];
+  recurringBreaks: {
+    date: string;
+    barberId: string;
+    startMinute: number;
+    endMinute: number;
+    professionalName: string;
+  }[];
   editable: boolean;
+  entitlement: { planCode: string | null; subscriptionStatus: string | null; valid: boolean };
   items: AgendaItem[];
   professionals: { id: string; name: string; active: number }[];
+  services: { id: string; name: string; active: number }[];
 };
 export type AgendaCatalog = {
   editable: boolean;

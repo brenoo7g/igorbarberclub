@@ -1,0 +1,6 @@
+GRADEfy - Comparacao visual do Dashboard
+
+Referencia: gradefy-dashboard-desktop-referencia.png
+Captura atual: gradefy-dashboard-desktop-atual.png
+
+Compare em viewport equivalente (1672 x 941 CSS px, zoom 100%), com fixture de apresentacao isolada e tambem dados reais. Nao usar dados de fixture em producao.

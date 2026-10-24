@@ -1,0 +1,10 @@
+REFERÊNCIAS VISUAIS OFICIAIS GRADEFY — FASE 7F.4C.2
+
+Copie a pasta docs/design-references/ deste ZIP para a raiz do repositório gradefyapp-recuperado.
+
+- desktop-agenda.png: referência visual APROVADA para Agenda desktop.
+- desktop-clientes.png: referência visual APROVADA para Clientes desktop.
+- desktop-dashboard-aprovado.png: referência de design system recente / identidade visual desktop.
+
+Todas as imagens são referências visuais, com dados ilustrativos. Nunca converter métricas, contatos, status, fotos, filtros ou campanhas conceituais em recursos ativos sem suporte real.
+Desenvolver SOMENTE desktop nesta fase, preservando o mobile atual.

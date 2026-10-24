@@ -1,3 +1,4 @@
+import { authorizeMockEmail } from './helpers/email-fixtures.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
@@ -17,6 +18,7 @@ async function fixture(t) {
   process.env.APP_URL = 'https://barber.example';
   const db = await createDatabase('', ':memory:');
   await seed(db);
+  await authorizeMockEmail(t, db);
   const app = createApp(db, { test: true, secret, serveStatic: false });
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');

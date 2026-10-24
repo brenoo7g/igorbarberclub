@@ -53,7 +53,9 @@ export async function agendaAccess(tx, cid, userId, write = false) {
 }
 // Business state only. Callers must first authorize the current company membership.
 export async function agendaCompanyState(tx, cid, write = false) {
-  const company = await tx.get('SELECT id,name,timezone FROM companies WHERE id=?', [cid]);
+  const company = await tx.get('SELECT id,name,timezone,site_published FROM companies WHERE id=?', [
+    cid,
+  ]);
   const onboarding = await tx.get('SELECT status FROM company_onboarding WHERE company_id=?', [
     cid,
   ]);
@@ -82,6 +84,8 @@ const listSchema = z
     from: agendaDate.optional(),
     view: z.enum(['day', 'week']).default('day'),
     professionalId: z.string().min(1).max(200).optional(),
+    serviceId: z.string().min(1).max(200).optional(),
+    q: z.string().trim().max(100).default(''),
     status: z.enum(['confirmed', 'completed', 'cancelled', 'no-show']).optional(),
     page: z.coerce.number().int().min(1).max(100000).default(1),
   })
@@ -121,15 +125,37 @@ export function installAgendaRoutes(
           ]))
         )
           domainError(404, 'PROFESSIONAL_NOT_FOUND', 'Profissional não encontrado.');
+        if (
+          options.serviceId &&
+          !(await tx.get('SELECT id FROM services WHERE company_id=? AND id=?', [
+            cid,
+            options.serviceId,
+          ]))
+        )
+          domainError(404, 'SERVICE_NOT_FOUND', 'Serviço não encontrado.');
+        const pattern =
+          '%' + options.q.toLowerCase().replace(/[!%_]/g, (character) => '!' + character) + '%';
         const where =
           'a.date>=? AND a.date<=?' +
           (options.professionalId ? ' AND a.barber_id=?' : '') +
-          (options.status ? ' AND a.status=?' : '');
+          (options.status ? ' AND a.status=?' : '') +
+          (options.serviceId
+            ? ' AND EXISTS(SELECT 1 FROM appointment_services aps WHERE aps.company_id=a.company_id AND aps.appointment_id=a.id AND aps.service_id=?)'
+            : '') +
+          (options.q
+            ? ` AND (
+            lower(COALESCE(a.guest_name,(SELECT u.name FROM users u WHERE u.id=a.user_id),'')) LIKE ? ESCAPE '!'
+            OR EXISTS(SELECT 1 FROM barbers p WHERE p.company_id=a.company_id AND p.id=a.barber_id AND lower(p.name) LIKE ? ESCAPE '!')
+            OR EXISTS(SELECT 1 FROM appointment_services aps WHERE aps.company_id=a.company_id AND aps.appointment_id=a.id AND lower(aps.name) LIKE ? ESCAPE '!')
+          )`
+            : '');
         const args = [
           from,
           to,
           ...(options.professionalId ? [options.professionalId] : []),
           ...(options.status ? [options.status] : []),
+          ...(options.serviceId ? [options.serviceId] : []),
+          ...(options.q ? [pattern, pattern, pattern] : []),
         ];
         const total = Number(
           (
@@ -139,6 +165,40 @@ export function installAgendaRoutes(
             )
           ).n,
         );
+        const statusCounts = await tx.all(
+          `SELECT a.status,COUNT(*) AS count FROM appointments a WHERE a.company_id=? AND (${where}) GROUP BY a.status`,
+          [cid, ...args],
+        );
+        const blocks = await tx.all(
+          `SELECT b.id,b.date,b.start_minute,b.end_minute,b.reason,b.barber_id,p.name AS professional_name
+           FROM blocks b JOIN barbers p ON p.company_id=b.company_id AND p.id=b.barber_id
+           WHERE b.company_id=? AND b.date>=? AND b.date<=?${options.professionalId ? ' AND b.barber_id=?' : ''}
+           ORDER BY b.date,b.start_minute,b.id LIMIT 100`,
+          [cid, from, to, ...(options.professionalId ? [options.professionalId] : [])],
+        );
+        const recurringRows = await tx.all(
+          `SELECT b.barber_id,b.weekday,b.start_time,b.end_time,p.name AS professional_name
+           FROM barber_working_breaks b
+           JOIN barber_working_hours h ON h.company_id=b.company_id AND h.barber_id=b.barber_id AND h.weekday=b.weekday AND h.active=1
+           JOIN barbers p ON p.company_id=b.company_id AND p.id=b.barber_id AND p.active=1
+           WHERE b.company_id=?${options.professionalId ? ' AND b.barber_id=?' : ''}
+           ORDER BY b.weekday,b.start_time,b.end_time,p.name`,
+          [cid, ...(options.professionalId ? [options.professionalId] : [])],
+        );
+        const recurringBreaks = [];
+        for (let offset = 0; offset <= (options.view === 'week' ? 6 : 0); offset++) {
+          const date = addDays(from, offset);
+          const weekday = new Date(date + 'T12:00Z').getUTCDay();
+          for (const row of recurringRows.filter((breakRow) => breakRow.weekday === weekday))
+            recurringBreaks.push({
+              date,
+              barberId: row.barber_id,
+              startMinute:
+                Number(row.start_time.slice(0, 2)) * 60 + Number(row.start_time.slice(3, 5)),
+              endMinute: Number(row.end_time.slice(0, 2)) * 60 + Number(row.end_time.slice(3, 5)),
+              professionalName: row.professional_name,
+            });
+        }
         const items = await appointmentList(cid, where, args, tx, {
           limit: 30,
           offset: (options.page - 1) * 30,
@@ -156,6 +216,18 @@ export function installAgendaRoutes(
           page: options.page,
           pageSize: 30,
           total,
+          statusCounts: Object.fromEntries(
+            statusCounts.map((row) => [row.status, Number(row.count)]),
+          ),
+          blocks: blocks.map((row) => ({
+            id: row.id,
+            date: row.date,
+            startMinute: row.start_minute,
+            endMinute: row.end_minute,
+            reason: row.reason,
+            professionalName: row.professional_name,
+          })),
+          recurringBreaks,
           items: items.map(
             ({
               id,
@@ -189,6 +261,10 @@ export function installAgendaRoutes(
           ),
           professionals: await tx.all(
             'SELECT id,name,active FROM barbers WHERE company_id=? ORDER BY active DESC,name,id LIMIT 200',
+            [cid],
+          ),
+          services: await tx.all(
+            'SELECT id,name,active FROM services WHERE company_id=? ORDER BY active DESC,name,id LIMIT 200',
             [cid],
           ),
         };
