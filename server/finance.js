@@ -209,6 +209,12 @@ export function installFinanceRoutes(router, db, cid) {
             `SELECT * FROM ${source} WHERE ${where} ORDER BY date DESC,occurred_at DESC,id DESC LIMIT 30 OFFSET ?`,
             [...args, (q.page - 1) * 30],
           );
+          const methodTotals = (
+            await tx.all(
+              `SELECT method,SUM(amount_cents) AS amount_cents FROM ${source} WHERE date>=? AND date<=? AND type IN ('payment','payment-reversal') GROUP BY method ORDER BY method`,
+              [cid, cid, cid, cid, from, to],
+            )
+          ).map((row) => ({ method: row.method, amountCents: metricInteger(row.amount_cents) }));
           return {
             company: access.company,
             editable: access.editable,
@@ -220,6 +226,7 @@ export function installFinanceRoutes(router, db, cid) {
             pageSize: 30,
             total,
             items,
+            methodTotals,
             metrics: {
               expectedCents: totals.expected,
               completedCents: totals.completed_value,

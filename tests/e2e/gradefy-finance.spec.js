@@ -15,6 +15,7 @@ async function login(page) {
   await expect(page).toHaveURL('/app/dashboard');
 }
 async function responsive(page, name, modal = false) {
+  const previous = page.viewportSize();
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -24,6 +25,7 @@ async function responsive(page, name, modal = false) {
       expect(await dialog(page).evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
     await page.screenshot({ path: `test-results/finance-${name}-${width}.png`, fullPage: true });
   }
+  if (previous) await page.setViewportSize(previous);
 }
 const metric = (page, label) =>
   page
@@ -39,9 +41,10 @@ test('manual partial/full receipts, lost response replay, audit reversal and rea
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
     .locator('.gf-business-nav-desktop')
-    .getByRole('link', { name: 'Pagamentos — Financeiro', exact: true })
+    .getByRole('link', { name: 'Pagamentos', exact: true })
     .click();
   await expect(page).toHaveURL('/app/financeiro?empresa=' + cid);
+  await page.setViewportSize({ width: 390, height: 900 });
   await expect(metric(page, 'Pagamentos recebidos')).toHaveText('R$ 0,00');
   await expect(
     page.getByRole('heading', { name: 'Nenhuma movimentação neste período' }),
@@ -119,6 +122,7 @@ test('pending expense, traced edit, manual payment and correction retain cash in
   page,
 }) => {
   await login(page);
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/app/financeiro?empresa=' + cid);
   await page.getByRole('button', { name: 'Nova despesa', exact: true }).click();
   await dialog(page).getByLabel('Descrição da despesa').fill('Materiais Financeiro E2E');
@@ -156,6 +160,7 @@ test('cancelled appointment keeps its payment; network recovery, company switch 
   page,
 }) => {
   await login(page);
+  await page.setViewportSize({ width: 390, height: 900 });
   const agenda = await (await page.request.get('/api/admin/agenda', { headers })).json(),
     date = new Date(Date.parse(agenda.today + 'T12:00Z') + 6 * 86400000).toISOString().slice(0, 10);
   const booked = await page.request.post('/api/admin/agenda', {

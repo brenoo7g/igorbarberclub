@@ -325,6 +325,9 @@ export async function assertFinance(t, db, second = db) {
       const detail = (await req(root + '/appointments/' + before.id)).data;
       assert.equal(detail.items.length, 2);
       assert.equal(detail.receivedCents, 4500);
+      assert.deepEqual((await req(root + period)).data.methodTotals, [
+        { method: 'pix', amountCents: 4500 },
+      ]);
       assert.equal(
         (
           await req(root + '/payments', {
@@ -429,6 +432,12 @@ export async function assertFinance(t, db, second = db) {
       assert.equal(pair[0].status, 201);
       assert.deepEqual(pair[0], pair[1]);
       assert.equal(pair[0].data.receivedCents, 2500);
+      assert.deepEqual((await req(root + period)).data.methodTotals, [
+        { method: 'pix', amountCents: 9500 },
+      ]);
+      assert.deepEqual((await req(root + period, { company: other })).data.methodTotals, [
+        { method: 'pix', amountCents: 1000 },
+      ]);
       assert.deepEqual(
         await db.get('SELECT * FROM financial_payments WHERE id=?', [first.data.id]),
         original,

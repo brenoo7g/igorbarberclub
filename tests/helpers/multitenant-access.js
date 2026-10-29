@@ -18,7 +18,7 @@ export async function assertMultitenantAccess(t, db) {
   const secret = 'multitenant-identity-test-secret-32-characters';
   const password = 'TestingAccess123!';
   await db.run(
-    "INSERT INTO subscriptions(id,company_id,plan_id,status,source,created_at,updated_at) VALUES('isolation-active-plan',?,'team','active','manual','2026','2026')",
+    "INSERT INTO subscriptions(id,company_id,plan_id,status,source,trial_started_at,trial_ends_at,created_at,updated_at) VALUES('isolation-active-plan',?,'team','active','manual','2024-12-25','2025-01-01','2024-12-25','2026')",
     [B],
   );
   const hash = await bcrypt.hash(password, 4);
@@ -105,6 +105,18 @@ export async function assertMultitenantAccess(t, db) {
         Object.keys(list[0]).sort(),
         ['id', 'name', 'slug', 'status', 'niche', 'template', 'role'].sort(),
       );
+      const navigation = (await request('/companies?view=management', { user: 'multi' })).body;
+      assert.deepEqual(navigation.map((company) => company.id).sort(), [A, B].sort());
+      const ownPlan = navigation.find((company) => company.id === B);
+      assert.equal(ownPlan.plan_name, 'Equipe');
+      assert.equal(ownPlan.subscription_status, 'active');
+      assert.equal(ownPlan.subscription_ends_at, null);
+      const professionalNavigation = (
+        await request('/companies?view=management', { user: 'professional' })
+      ).body;
+      assert.equal(professionalNavigation.length, 1);
+      assert.equal(professionalNavigation[0].plan_name, null);
+      assert.equal(professionalNavigation[0].subscription_status, null);
       const missing = await request('/admin/metrics', { user: 'multi' });
       assert.equal(missing.status, 409);
       assert.equal(missing.body.code, 'COMPANY_CONTEXT_REQUIRED');

@@ -187,6 +187,55 @@ export async function assertTeam(t, db, second = db) {
     };
   }
   const root = '/admin/team';
+  await t.test('weekly team view uses company-scoped professional hours and blocks', async () => {
+    const initial = await req(root + '/weekly');
+    assert.equal(initial.status, 200);
+    assert.equal(initial.data.people.length, 2);
+    assert.equal(initial.data.people[0].days.length, 7);
+    const date = initial.data.people[0].days[0].date;
+    await db.run(
+      "INSERT INTO barber_working_hours(company_id,barber_id,weekday,active,start_time,end_time,break_start,break_end) VALUES('team-a','no-login',1,1,'09:00','18:00','12:00','13:00')",
+    );
+    await db.run(
+      "INSERT INTO barber_settings(company_id,barber_id,agenda_mode,max_days_ahead,version) VALUES('team-a','no-login','manual',90,0)",
+    );
+    await db.run(
+      "INSERT INTO blocks(company_id,id,barber_id,date,start_minute,end_minute,reason) VALUES('team-a','team-weekly-block','no-login',?,840,900,'test')",
+      [date],
+    );
+    const week = await req(root + '/weekly?week=' + initial.data.from);
+    assert.equal(week.status, 200);
+    const day = week.data.people.find((person) => person.id === 'no-login').days[0];
+    assert.deepEqual(
+      { start: day.start, end: day.end, active: day.active },
+      { start: '09:00', end: '18:00', active: true },
+    );
+    assert.deepEqual(day.breaks, [{ start: '12:00', end: '13:00' }]);
+    assert.deepEqual(day.blocks, [{ startMinute: 840, endMinute: 900 }]);
+    assert.equal(day.released, false);
+    await db.run(
+      "INSERT INTO released_weeks(company_id,barber_id,week_start,start_date,end_date,created_at) VALUES('team-a','no-login',?,?,?,?)",
+      [initial.data.from, date, date, stamp],
+    );
+    assert.equal(
+      (await req(root + '/weekly')).data.people.find((person) => person.id === 'no-login').days[0]
+        .released,
+      true,
+    );
+    assert.equal(JSON.stringify(week.data).includes('reason'), false);
+    assert.equal((await req(root + '/weekly', { user: 'manager' })).status, 200);
+    assert.equal((await req(root + '/weekly', { user: 'outsider' })).status, 403);
+    assert.equal((await req(root + '/weekly', { user: null })).status, 401);
+    assert.equal(
+      (await req(root + '/weekly', { cid: 'team-b', user: 'manager' })).data.people.length,
+      0,
+    );
+    assert.equal((await req(root + '/weekly?week=bad-date')).status, 400);
+    assert.equal(
+      (await req(root + '/weekly?week=' + initial.data.people[0].days[1].date)).status,
+      400,
+    );
+  });
   const token = (result) =>
     new URLSearchParams(new URL(result.data.link).hash.slice(1)).get('token');
   const create = (email, options = {}) =>

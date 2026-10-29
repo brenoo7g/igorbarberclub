@@ -75,6 +75,7 @@ test('operational settings persist, follow company selection and work at 320/390
         fullPage: true,
       });
     }
+    await page.getByRole('button', { name: 'Editar horários de funcionamento' }).click();
     await page.getByLabel('Abertura — Segunda-feira', { exact: true }).fill('20:00');
     await page.getByLabel('Encerramento — Segunda-feira', { exact: true }).fill('19:00');
     await page.getByRole('button', { name: 'Salvar configurações', exact: true }).click();

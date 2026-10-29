@@ -16,6 +16,7 @@ const dialog = (page) => page.getByRole('dialog'),
 const tomorrow = (date) =>
   new Date(Date.parse(date + 'T12:00Z') + 5 * 86400000).toISOString().slice(0, 10);
 async function responsive(page, prefix, modal = false) {
+  const originalViewport = page.viewportSize();
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -25,6 +26,7 @@ async function responsive(page, prefix, modal = false) {
       expect(await dialog(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: `test-results/gradefy-${prefix}-${width}.png`, fullPage: true });
   }
+  if (originalViewport) await page.setViewportSize(originalViewport);
 }
 test('business clients: manual registration, edit, actual agenda history and responsive navigation', async ({
   page,
@@ -128,6 +130,7 @@ test('services and professionals use actual catalog, cent values, associations a
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await login(page);
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto('/app/servicos?empresa=' + cid);
   await expect(card(page, 'Corte clássico')).toContainText('R$ 45,00');
   await responsive(page, 'services');
@@ -170,10 +173,7 @@ test('services and professionals use actual catalog, cent values, associations a
   await card(page, 'Barba alinhada').getByRole('button', { name: 'Ativar', exact: true }).click();
   await dialog(page).getByRole('button', { name: 'Confirmar alteração' }).click();
   await expect(card(page, 'Barba alinhada')).toContainText('Ativo');
-  await page
-    .locator('.gf-dashboard-sidebar')
-    .getByRole('link', { name: 'Profissionais', exact: true })
-    .click();
+  await page.goto('/app/profissionais?empresa=' + cid);
   await expect(page.getByRole('heading', { name: 'Profissionais', exact: true })).toBeVisible();
   await expect(page.locator('.gf-business-plan')).toContainText('Equipe · R$ 32,99/mês');
   await responsive(page, 'professionals');
@@ -215,6 +215,7 @@ test('deactivation shows future reservations, links to filtered agenda and rejec
   page,
 }) => {
   await login(page);
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto('/app/profissionais?empresa=' + cid);
   await card(page, 'Rafael Silva').getByRole('button', { name: 'Desativar', exact: true }).click();
   await expect(dialog(page)).toContainText('reservas futuras ou em andamento serão mantidas');
@@ -262,6 +263,7 @@ test('Individual errors, public clients, unauthorized management and empty state
   page,
 }) => {
   await login(page);
+  await page.setViewportSize({ width: 768, height: 900 });
   const one = 'business-browser-one';
   await page.goto('/app/profissionais?empresa=' + one);
   await expect(page.locator('.gf-business-plan')).toContainText('1 profissional ativo de 1');

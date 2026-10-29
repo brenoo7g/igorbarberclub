@@ -1,0 +1,283 @@
+.gf-reports-desktop {
+  display: none;
+}
+@media (min-width: 801px) {
+  .gf-reports-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+  }
+  .gf-reports-toolbar .gf-agenda-heading {
+    flex: 1;
+    min-width: 0;
+    margin-bottom: 10px;
+  }
+  .gf-reports-toolbar > .gf-field {
+    flex: none;
+    width: min(240px, 24%);
+    margin: 0 0 10px;
+  }
+  .gf-reports-desktop {
+    display: block;
+  }
+  .gf-reports-desktop :focus-visible {
+    outline: 2px solid #a18cff;
+    outline-offset: 3px;
+  }
+  .gf-reports-desktop .gf-card {
+    min-width: 0;
+    margin: 0;
+    padding: 20px;
+    border: 1px solid #263b67;
+    border-radius: 18px;
+    background: linear-gradient(145deg, #101e3c, #0a1731 82%);
+    box-shadow:
+      inset 0 1px #ffffff0d,
+      0 16px 32px #02071b3a;
+  }
+  .gf-reports-desktop-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 15px;
+    margin: 18px 0;
+  }
+  .gf-reports-desktop .gf-reports-desktop-metric {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    min-height: 100px;
+    padding: 17px;
+  }
+  .gf-reports-desktop-metric > svg {
+    width: 46px;
+    height: 46px;
+    padding: 10px;
+    flex: none;
+    border-radius: 13px;
+    color: #d7bdff;
+    background: linear-gradient(135deg, #7942e970, #3f59eb35);
+  }
+  .gf-reports-desktop-metric.is-1 > svg {
+    color: #78deff;
+    background: linear-gradient(135deg, #078ad777, #2e56e338);
+  }
+  .gf-reports-desktop-metric.is-2 > svg {
+    color: #9aedcf;
+    background: linear-gradient(135deg, #078a9e66, #3569da38);
+  }
+  .gf-reports-desktop-metric.is-3 > svg {
+    color: #f4c887;
+    background: linear-gradient(135deg, #b77b3f66, #734cd038);
+  }
+  .gf-reports-desktop-metric div {
+    display: grid;
+    min-width: 0;
+    gap: 6px;
+  }
+  .gf-reports-desktop-metric span {
+    color: #c2d1ed;
+    font-size: 13px;
+  }
+  .gf-reports-desktop-metric strong {
+    color: #fff;
+    font: 700 clamp(19px, 1.6vw, 29px)/1.15 var(--gf-font-heading);
+    white-space: nowrap;
+  }
+  .gf-reports-desktop-charts {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(255px, 0.88fr);
+    gap: 15px;
+    align-items: start;
+  }
+  .gf-reports-desktop-charts:has(> :nth-child(2):last-child) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gf-reports-desktop-charts > :only-child {
+    grid-column: 1 / -1;
+  }
+  .gf-reports-desktop h2 {
+    margin: 0;
+    color: #f8fbff;
+    font: 700 18px/1.3 var(--gf-font-heading);
+  }
+  .gf-reports-desktop .gf-report-chart {
+    min-height: 310px;
+  }
+  .gf-reports-desktop .gf-report-chart.is-empty {
+    min-height: 0;
+  }
+  .gf-reports-desktop .gf-report-chart svg {
+    min-height: 0;
+    margin: 8px 0;
+  }
+  .gf-reports-desktop .gf-report-chart svg text {
+    font-size: 11px;
+  }
+  .gf-reports-desktop .gf-report-chart > p {
+    color: #aebfdf;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .gf-reports-desktop .gf-report-text-toggle {
+    min-height: 33px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .gf-reports-desktop .gf-report-bars li {
+    margin: 12px 0;
+  }
+  .gf-reports-desktop .gf-report-bars li > div {
+    background: #273b62;
+  }
+  .gf-reports-desktop .gf-report-bars i {
+    background: linear-gradient(90deg, #8c54f3, #3978f7);
+  }
+  .gf-reports-desktop-secondary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+  }
+  .gf-reports-desktop-secondary > .gf-card {
+    min-height: 185px;
+  }
+  .gf-reports-desktop-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .gf-reports-desktop-heading svg {
+    color: #a991fb;
+  }
+  .gf-reports-desktop-secondary p {
+    color: #adc0df;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .gf-reports-desktop-status {
+    display: grid;
+    gap: 10px;
+  }
+  .gf-reports-desktop-status span {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #dbe5f8;
+    font-size: 12px;
+  }
+  .gf-reports-desktop-status i {
+    display: block;
+    height: 7px;
+    margin-top: 5px;
+    border-radius: 10px;
+    background: #27395e;
+    overflow: hidden;
+  }
+  .gf-reports-desktop-status b {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #8f55f6, #29bce9);
+  }
+  .gf-reports-desktop-note {
+    background: linear-gradient(145deg, #211753, #10264c) !important;
+  }
+  .gf-reports-desktop-note a {
+    color: #bca9ff;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .gf-reports .gf-finance-metrics,
+  .gf-reports .gf-report-counts,
+  .gf-reports .gf-report-charts {
+    display: none;
+  }
+  .gf-reports .gf-report-tabs {
+    margin: 10px 0;
+  }
+  .gf-reports .gf-report-tabs button {
+    min-height: 37px;
+    padding: 7px 12px;
+    border-color: #354b79;
+    background: #101f3f;
+    font-size: 12px;
+  }
+  .gf-reports .gf-report-tabs button[aria-current='page'] {
+    background: linear-gradient(110deg, #6541d7, #3465e4);
+    border-color: #8971fa;
+  }
+  .gf-reports .gf-report-filters {
+    margin-bottom: 12px;
+    padding: 11px 16px;
+    border-color: #293e69;
+    background: #0e1c39;
+  }
+  .gf-reports .gf-report-filters > .gf-field {
+    flex: 0 1 260px;
+  }
+  .gf-reports .gf-report-filters > .gf-button {
+    flex: none;
+    width: auto;
+    min-width: 42px;
+  }
+  .gf-reports .gf-report-period {
+    color: #b8c9e7;
+  }
+  .gf-reports .gf-report-ranks .gf-card {
+    border-color: #263b67;
+    background: linear-gradient(145deg, #101e3c, #0a1731);
+  }
+}
+@media (min-width: 801px) and (max-width: 1450px) {
+  .gf-reports-desktop-charts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gf-reports-desktop-charts > .gf-report-chart:last-child:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1451px) {
+  .gf-reports-desktop.area-appointments .gf-report-chart svg,
+  .gf-reports-desktop.area-professionals .gf-report-chart svg {
+    height: 220px;
+  }
+  .gf-reports-desktop.area-finance {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(290px, 0.75fr);
+    gap: 15px;
+  }
+  .gf-reports-desktop.area-finance > .gf-reports-desktop-metrics {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+  .gf-reports-desktop.area-finance > .gf-reports-desktop-charts {
+    grid-column: 1;
+    grid-template-columns: 1fr;
+  }
+  .gf-reports-desktop.area-finance .gf-report-chart {
+    min-height: 0;
+  }
+  .gf-reports-desktop.area-finance > .gf-reports-desktop-secondary {
+    grid-column: 2;
+    grid-template-columns: 1fr;
+    margin-top: 0;
+    align-self: start;
+  }
+}
+@media (min-width: 801px) and (max-width: 1050px) {
+  .gf-reports-toolbar {
+    flex-wrap: wrap;
+  }
+  .gf-reports-toolbar > .gf-field {
+    width: 240px;
+  }
+  .gf-reports-desktop-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gf-reports-desktop-charts,
+  .gf-reports-desktop-secondary {
+    grid-template-columns: 1fr;
+  }
+}

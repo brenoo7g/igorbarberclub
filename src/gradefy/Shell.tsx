@@ -40,6 +40,7 @@ export default function GradefyShell() {
     '/app/relatorios',
     '/app/equipe',
     '/app/configuracoes',
+    '/app/meu-site',
     '/app/minha-agenda',
     '/app/minha-agenda/configurar',
   ].includes(useLocation().pathname);

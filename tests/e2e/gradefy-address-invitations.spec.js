@@ -133,6 +133,7 @@ async function owner(page) {
   await page.getByLabel('Senha', { exact: true }).fill('ClienteDemo2026!');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page).toHaveURL('/app/dashboard');
+  await page.setViewportSize({ width: 768, height: 900 });
   await page.goto('/app/equipe?empresa=' + cid);
   await expect(page.getByRole('heading', { name: 'Equipe e permissões' })).toBeVisible();
 }

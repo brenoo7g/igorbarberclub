@@ -1024,10 +1024,10 @@
 
 @media (min-width: 1200px) {
   .gf-enterprise-layout .gf-dashboard {
-    grid-template-columns: 244px minmax(0, 1fr);
+    grid-template-columns: var(--gf-business-sidebar-width) minmax(0, 1fr);
   }
   .gf-enterprise-layout:has(.gf-business-nav-desktop) .gf-footer {
-    margin-left: 244px;
+    margin-left: var(--gf-business-sidebar-width);
   }
 }
 

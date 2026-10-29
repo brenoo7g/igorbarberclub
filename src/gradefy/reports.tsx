@@ -9,6 +9,7 @@ import { ManagementAccess, CompanySelector } from './management';
 import type { ManagementProps } from './management';
 import { financialDate, FinancialPagination, paymentMethods } from './finance-shared';
 import { ReportChart, ServiceChart } from './reports-charts';
+import { ReportsDesktop } from './reports-desktop';
 import type { ReportArea, ReportState } from './reports-types';
 import './dashboard.css';
 import './agenda.css';
@@ -64,7 +65,8 @@ function ReportContent({ companyId, companies, choose }: ManagementProps) {
   const params = new URLSearchParams(query);
   params.delete('empresa');
   const signature = params.toString();
-  const data = requestSignature === signature ? snapshot : null;
+  const data =
+    requestSignature === signature && snapshot?.company.id === companyId ? snapshot : null;
   const busy = loading || requestSignature !== signature;
   useEffect(() => {
     const c = new AbortController();
@@ -182,18 +184,20 @@ function ReportContent({ companyId, companies, choose }: ManagementProps) {
     <div className="gf-dashboard gf-business gf-reports">
       <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
-        <div className="gf-agenda-heading">
-          <div>
-            <div className="gf-kicker">DADOS PARA SEU NEGÓCIO</div>
-            <h1>Relatórios</h1>
-            <p>{data?.company.name || 'Desempenho empresarial'}</p>
+        <div className="gf-reports-toolbar">
+          <div className="gf-agenda-heading">
+            <div>
+              <div className="gf-kicker">DADOS PARA SEU NEGÓCIO</div>
+              <h1>Relatórios</h1>
+              <p>{data?.company.name || 'Desempenho empresarial'}</p>
+            </div>
+            <Button disabled={!data || busy} busy={exportBusy} onClick={() => void download()}>
+              <Download size={17} />
+              Exportar CSV
+            </Button>
           </div>
-          <Button disabled={!data || busy} busy={exportBusy} onClick={() => void download()}>
-            <Download size={17} />
-            Exportar CSV
-          </Button>
+          <CompanySelector companies={companies} value={companyId} choose={choose} />
         </div>
-        <CompanySelector companies={companies} value={companyId} choose={choose} />
         <nav className="gf-report-tabs" aria-label="Áreas dos relatórios">
           {Object.entries(areas).map(([key, label]) => (
             <button
@@ -379,6 +383,7 @@ function ReportContent({ companyId, companies, choose }: ManagementProps) {
               {areas[area]} · {financialDate(data.from)} a {financialDate(data.to)} ·{' '}
               {data.company.timezone}
             </p>
+            <ReportsDesktop data={data} area={area} companyId={companyId} />
             {!data.editable && (
               <p className="gf-notice">
                 Sua assinatura permite consultar e exportar o histórico, sem registrar alterações.

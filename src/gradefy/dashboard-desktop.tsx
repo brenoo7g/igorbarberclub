@@ -180,14 +180,7 @@ export function DesktopDashboard({ companyId, companies, choose }: ManagementPro
     <div
       className={`gf-dashboard gf-desktop-dashboard${data && filteredAgenda.length < 3 ? ' gf-desktop-sparse' : ''}`}
     >
-      <BusinessNav
-        companyId={companyId}
-        companyName={company}
-        planName={plan?.planName}
-        showPlanPromo
-        subscriptionLabel={subscription}
-        sitePublished={data?.site.published}
-      />
+      <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy || switchingCompany}>
         <header className="gf-desktop-topbar">
           <div>

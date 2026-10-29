@@ -1,13 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowUp, ArrowDown, ImagePlus, Save, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context';
 import { ApiError, errorMessage } from '../lib';
-import { useCompanies } from './company-access';
+import { BusinessCompanyContext, useCompanies } from './company-access';
+import type { Company } from './company-access';
+import { BusinessNav } from './business-nav';
 import { Button, ButtonLink, Card, Feedback, Input, Loading } from './components';
 import MiniSiteEditor from './minisite-editor';
 import type { WorkingDay } from '../types';
+import './dashboard.css';
+import './business-design.css';
+import './site-editor-nav.css';
+
+function SiteEditorFrame({ company, children }: { company?: Company; children: ReactNode }) {
+  if (!company) return <>{children}</>;
+  return (
+    <BusinessCompanyContext.Provider value={company}>
+      <div className="gf-site-business-frame">
+        <BusinessNav companyId={company.id} />
+        <div className="gf-site-frame-main">{children}</div>
+      </div>
+    </BusinessCompanyContext.Provider>
+  );
+}
 
 export interface Settings {
   version: number;
@@ -212,463 +229,468 @@ export default function SiteEditor({ onboarding = false }: { onboarding?: boolea
   if (companyId && data && data.company.id !== companyId) return <Loading />;
   if (data?.company.template === 'gradefy-minisite' && form)
     return (
-      <MiniSiteEditor
-        key={companyId}
-        {...{
-          data,
-          form,
-          busy,
-          error,
-          message,
-          fieldErrors,
-          onboarding,
-          allowed: allowed || [],
-          companyId,
-        }}
-        onCompany={(id) => setQuery({ empresa: id })}
-        change={change}
-        save={save}
-        mutate={mutate}
-        upload={upload}
-        move={move}
-        reload={() => setRevision((r) => r + 1)}
-      />
+      <SiteEditorFrame company={onboarding ? undefined : allowed.find((c) => c.id === companyId)}>
+        <MiniSiteEditor
+          key={companyId}
+          {...{
+            data,
+            form,
+            busy,
+            error,
+            message,
+            fieldErrors,
+            onboarding,
+            allowed: allowed || [],
+            companyId,
+          }}
+          onCompany={(id) => setQuery({ empresa: id })}
+          change={change}
+          save={save}
+          mutate={mutate}
+          upload={upload}
+          move={move}
+          reload={() => setRevision((r) => r + 1)}
+        />
+      </SiteEditorFrame>
     );
   return (
-    <div className="gf-plans-page gf-site-editor">
-      <Link className="gf-back" to="/app/conta">
-        <ArrowLeft size={16} />
-        Voltar para minha conta
-      </Link>
-      <div className="gf-plans-heading">
-        <div className="gf-kicker">SEU NEGÓCIO, SUA IDENTIDADE</div>
-        <h1>Meu Site</h1>
-        <p>Personalize o site com as informações da sua empresa.</p>
-      </div>
-      {allowed.length > 1 && (
-        <div className="gf-field">
-          <label htmlFor="editor-company">Empresa</label>
-          <select
-            id="editor-company"
-            value={companyId}
-            disabled={busy}
-            onChange={(e) => setQuery({ empresa: e.target.value })}
-          >
-            <option value="">Escolha sua empresa</option>
-            {allowed.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+    <SiteEditorFrame company={onboarding ? undefined : allowed.find((c) => c.id === companyId)}>
+      <div className="gf-plans-page gf-site-editor">
+        <Link className="gf-back" to="/app/conta">
+          <ArrowLeft size={16} />
+          Voltar para minha conta
+        </Link>
+        <div className="gf-plans-heading">
+          <div className="gf-kicker">SEU NEGÓCIO, SUA IDENTIDADE</div>
+          <h1>Meu Site</h1>
+          <p>Personalize o site com as informações da sua empresa.</p>
         </div>
-      )}
-      <Feedback>{error}</Feedback>
-      <Feedback success>{message}</Feedback>
-      {error && (
-        <Button variant="secondary" disabled={busy} onClick={() => setRevision((r) => r + 1)}>
-          Recarregar dados
-        </Button>
-      )}
-      {!companyId ? (
-        <Card>
-          <p>Selecione uma empresa para continuar.</p>
-        </Card>
-      ) : !data || !form ? (
-        !error && <Loading />
-      ) : (
-        <>
-          <div className="gf-site-status">
-            <ShieldCheck size={19} />
-            {data.company.sitePublished
-              ? 'Salvar atualiza o site já publicado.'
-              : 'Seu site ainda não foi publicado. Salvar não publica o site.'}
+        {allowed.length > 1 && (
+          <div className="gf-field">
+            <label htmlFor="editor-company">Empresa</label>
+            <select
+              id="editor-company"
+              value={companyId}
+              disabled={busy}
+              onChange={(e) => setQuery({ empresa: e.target.value })}
+            >
+              <option value="">Escolha sua empresa</option>
+              {allowed.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
           </div>
+        )}
+        <Feedback>{error}</Feedback>
+        <Feedback success>{message}</Feedback>
+        {error && (
+          <Button variant="secondary" disabled={busy} onClick={() => setRevision((r) => r + 1)}>
+            Recarregar dados
+          </Button>
+        )}
+        {!companyId ? (
           <Card>
-            <h2>{data.company.sitePublished ? 'Seu site está no ar!' : 'Prévia e publicação'}</h2>
-            <p>
+            <p>Selecione uma empresa para continuar.</p>
+          </Card>
+        ) : !data || !form ? (
+          !error && <Loading />
+        ) : (
+          <>
+            <div className="gf-site-status">
+              <ShieldCheck size={19} />
               {data.company.sitePublished
-                ? 'Status: publicado. Alterações salvas atualizam o site público.'
-                : 'Status: não publicado. Visualize os dados salvos antes de publicar.'}
-            </p>
-            <div className="gf-site-actions">
-              <Link
-                className="gf-button gf-secondary"
-                to={`/preview/site/${encodeURIComponent(companyId)}`}
-              >
-                Visualizar meu site
-              </Link>
-              {data.company.sitePublished ? (
-                <>
-                  <a
-                    className="gf-button gf-primary"
-                    href={`/${encodeURIComponent(data.company.slug)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Abrir meu site
-                  </a>
-                  <Button
-                    disabled={busy}
-                    variant="secondary"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(
-                          `${window.location.origin}/${data.company.slug}`,
-                        );
-                        setMessage('Link copiado.');
-                      } catch {
-                        setError('Não foi possível copiar. Selecione o endereço abaixo.');
-                      }
-                    }}
-                  >
-                    Copiar link
-                  </Button>
-                  <Button
-                    disabled={busy}
-                    variant="secondary"
-                    onClick={async () => {
-                      try {
-                        const url = `${window.location.origin}/${data.company.slug}`;
-                        if (navigator.share)
-                          await navigator.share({ title: data.company.name, url });
-                        else {
-                          await navigator.clipboard.writeText(url);
-                          setMessage('Link copiado para compartilhar.');
-                        }
-                      } catch (e) {
-                        if (!(e instanceof Error && e.name === 'AbortError'))
-                          setError('Não foi possível compartilhar. Copie o endereço do site.');
-                      }
-                    }}
-                  >
-                    Compartilhar
-                  </Button>
-                  <Button
-                    disabled={busy}
-                    variant="secondary"
-                    onClick={() => setConfirmUnpublish(true)}
-                  >
-                    Retirar site do ar
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  disabled={busy}
-                  busy={busy}
-                  onClick={() =>
-                    mutate('/publish', {
-                      method: 'POST',
-                      body: JSON.stringify({ version: data.settings.version }),
-                    })
-                  }
-                >
-                  Publicar meu site
-                </Button>
-              )}
+                ? 'Salvar atualiza o site já publicado.'
+                : 'Seu site ainda não foi publicado. Salvar não publica o site.'}
             </div>
-            {data.company.sitePublished && (
-              <p className="gf-public-address">
-                {window.location.origin}/{data.company.slug}
+            <Card>
+              <h2>{data.company.sitePublished ? 'Seu site está no ar!' : 'Prévia e publicação'}</h2>
+              <p>
+                {data.company.sitePublished
+                  ? 'Status: publicado. Alterações salvas atualizam o site público.'
+                  : 'Status: não publicado. Visualize os dados salvos antes de publicar.'}
               </p>
-            )}
-            {confirmUnpublish && (
-              <div className="gf-feedback" role="group" aria-label="Confirmação de despublicação">
-                <p>
-                  Retirar o site do ar? Novos agendamentos ficarão indisponíveis. Fotos, serviços e
-                  reservas anteriores serão preservados.
-                </p>
-                <div className="gf-site-actions">
+              <div className="gf-site-actions">
+                <Link
+                  className="gf-button gf-secondary"
+                  to={`/preview/site/${encodeURIComponent(companyId)}`}
+                >
+                  Visualizar meu site
+                </Link>
+                {data.company.sitePublished ? (
+                  <>
+                    <a
+                      className="gf-button gf-primary"
+                      href={`/${encodeURIComponent(data.company.slug)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Abrir meu site
+                    </a>
+                    <Button
+                      disabled={busy}
+                      variant="secondary"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(
+                            `${window.location.origin}/${data.company.slug}`,
+                          );
+                          setMessage('Link copiado.');
+                        } catch {
+                          setError('Não foi possível copiar. Selecione o endereço abaixo.');
+                        }
+                      }}
+                    >
+                      Copiar link
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      variant="secondary"
+                      onClick={async () => {
+                        try {
+                          const url = `${window.location.origin}/${data.company.slug}`;
+                          if (navigator.share)
+                            await navigator.share({ title: data.company.name, url });
+                          else {
+                            await navigator.clipboard.writeText(url);
+                            setMessage('Link copiado para compartilhar.');
+                          }
+                        } catch (e) {
+                          if (!(e instanceof Error && e.name === 'AbortError'))
+                            setError('Não foi possível compartilhar. Copie o endereço do site.');
+                        }
+                      }}
+                    >
+                      Compartilhar
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      variant="secondary"
+                      onClick={() => setConfirmUnpublish(true)}
+                    >
+                      Retirar site do ar
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     disabled={busy}
+                    busy={busy}
                     onClick={() =>
-                      mutate('/unpublish', {
+                      mutate('/publish', {
                         method: 'POST',
                         body: JSON.stringify({ version: data.settings.version }),
                       })
                     }
                   >
-                    Confirmar retirada
+                    Publicar meu site
                   </Button>
-                  <Button
-                    disabled={busy}
-                    variant="secondary"
-                    onClick={() => setConfirmUnpublish(false)}
-                  >
-                    Manter publicado
-                  </Button>
-                </div>
+                )}
               </div>
-            )}
-          </Card>
-          <form onSubmit={save}>
-            <fieldset disabled={busy} className="gf-site-fieldset">
-              <legend className="gf-visually-hidden">Personalização do site</legend>
-              <Card>
-                <h2>Identidade</h2>
-                <div className="gf-business-fields">
-                  {labels.slice(0, 2).map(({ key, label, max }) => (
-                    <Input
-                      key={key}
-                      label={label}
-                      value={form[key] ?? ''}
-                      maxLength={max}
-                      required={key === 'name'}
-                      minLength={key === 'name' ? 2 : undefined}
-                      error={fieldErrors[key]}
-                      onChange={(e) => change(key, e.target.value)}
-                    />
-                  ))}
-                  <div className="gf-field gf-business-wide">
-                    <label htmlFor="site-description">Descrição</label>
-                    <textarea
-                      id="site-description"
-                      value={form.description}
-                      maxLength={1000}
-                      onChange={(e) => change('description', e.target.value)}
-                    />
+              {data.company.sitePublished && (
+                <p className="gf-public-address">
+                  {window.location.origin}/{data.company.slug}
+                </p>
+              )}
+              {confirmUnpublish && (
+                <div className="gf-feedback" role="group" aria-label="Confirmação de despublicação">
+                  <p>
+                    Retirar o site do ar? Novos agendamentos ficarão indisponíveis. Fotos, serviços
+                    e reservas anteriores serão preservados.
+                  </p>
+                  <div className="gf-site-actions">
+                    <Button
+                      disabled={busy}
+                      onClick={() =>
+                        mutate('/unpublish', {
+                          method: 'POST',
+                          body: JSON.stringify({ version: data.settings.version }),
+                        })
+                      }
+                    >
+                      Confirmar retirada
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      variant="secondary"
+                      onClick={() => setConfirmUnpublish(false)}
+                    >
+                      Manter publicado
+                    </Button>
                   </div>
                 </div>
-              </Card>
-              <Card>
-                <h2>Aparência</h2>
-                <div className="gf-field-pair">
-                  <Input
-                    label="Cor principal"
-                    type="color"
-                    value={
-                      form.primary_color ||
-                      (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF')
-                    }
-                    onChange={(e) => change('primary_color', e.target.value)}
-                    error={fieldErrors.primary_color}
-                  />
-                  <Input
-                    label="Cor secundária"
-                    type="color"
-                    value={
-                      form.secondary_color ||
-                      (data.company.template === 'gradefy-minisite' ? '#00D4FF' : '#EF3340')
-                    }
-                    onChange={(e) => change('secondary_color', e.target.value)}
-                    error={fieldErrors.secondary_color}
-                  />
-                </div>
-                <div
-                  className="gf-color-sample"
-                  style={{
-                    borderColor:
-                      form.primary_color ||
-                      (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF'),
-                  }}
-                >
-                  <span
-                    style={{
-                      background:
+              )}
+            </Card>
+            <form onSubmit={save}>
+              <fieldset disabled={busy} className="gf-site-fieldset">
+                <legend className="gf-visually-hidden">Personalização do site</legend>
+                <Card>
+                  <h2>Identidade</h2>
+                  <div className="gf-business-fields">
+                    {labels.slice(0, 2).map(({ key, label, max }) => (
+                      <Input
+                        key={key}
+                        label={label}
+                        value={form[key] ?? ''}
+                        maxLength={max}
+                        required={key === 'name'}
+                        minLength={key === 'name' ? 2 : undefined}
+                        error={fieldErrors[key]}
+                        onChange={(e) => change(key, e.target.value)}
+                      />
+                    ))}
+                    <div className="gf-field gf-business-wide">
+                      <label htmlFor="site-description">Descrição</label>
+                      <textarea
+                        id="site-description"
+                        value={form.description}
+                        maxLength={1000}
+                        onChange={(e) => change('description', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </Card>
+                <Card>
+                  <h2>Aparência</h2>
+                  <div className="gf-field-pair">
+                    <Input
+                      label="Cor principal"
+                      type="color"
+                      value={
+                        form.primary_color ||
+                        (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF')
+                      }
+                      onChange={(e) => change('primary_color', e.target.value)}
+                      error={fieldErrors.primary_color}
+                    />
+                    <Input
+                      label="Cor secundária"
+                      type="color"
+                      value={
                         form.secondary_color ||
-                        (data.company.template === 'gradefy-minisite' ? '#00D4FF' : '#EF3340'),
-                    }}
-                  />
-                  <strong>{form.name}</strong>
-                  <p>Amostra das cores do seu site</p>
-                  <span
-                    className="gf-sample-cta"
+                        (data.company.template === 'gradefy-minisite' ? '#00D4FF' : '#EF3340')
+                      }
+                      onChange={(e) => change('secondary_color', e.target.value)}
+                      error={fieldErrors.secondary_color}
+                    />
+                  </div>
+                  <div
+                    className="gf-color-sample"
                     style={{
-                      background:
+                      borderColor:
                         form.primary_color ||
                         (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF'),
                     }}
                   >
-                    Agendar horário
-                  </span>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => setForm({ ...form, primary_color: null, secondary_color: null })}
-                >
-                  Restaurar cores do template
-                </Button>
-              </Card>
-              <Card>
-                <h2>Contato e localização</h2>
-                <div className="gf-business-fields">
-                  {labels.slice(2).map(({ key, label, max }) => (
-                    <Input
-                      key={key}
-                      label={label}
-                      value={form[key] ?? ''}
-                      maxLength={max}
-                      error={fieldErrors[key]}
-                      onChange={(e) =>
-                        change(
-                          key,
-                          key === 'region' ? e.target.value.toUpperCase() : e.target.value,
-                        )
-                      }
+                    <span
+                      style={{
+                        background:
+                          form.secondary_color ||
+                          (data.company.template === 'gradefy-minisite' ? '#00D4FF' : '#EF3340'),
+                      }}
                     />
-                  ))}
-                </div>
-              </Card>
-              <Card>
-                <h2>Seções opcionais</h2>
-                <div className="gf-site-section-options">
-                  {(
-                    [
-                      { key: 'about', label: 'Mostrar seção sobre a empresa' },
-                      { key: 'gallery', label: 'Mostrar galeria de trabalhos' },
-                    ] as const
-                  )
-                    .filter(
-                      ({ key }) => data.company.template !== 'gradefy-minisite' || key !== 'about',
-                    )
-                    .map(({ key, label }) => (
-                      <label key={key} className="gf-check">
-                        <input
-                          type="checkbox"
-                          checked={form.sections[key]}
-                          onChange={(e) =>
-                            change('sections', { ...form.sections, [key]: e.target.checked })
-                          }
-                        />
-                        {label}
-                      </label>
-                    ))}
-                </div>
-                <p>
-                  {data.company.template === 'gradefy-minisite'
-                    ? 'O Mini Site exibe sua identidade, ações rápidas, até cinco fotos e horários. Os serviços ficam no catálogo acessível pelo card Ver serviços.'
-                    : 'Os textos e o layout do Barber Classic são preservados.'}
-                </p>
-              </Card>
-            </fieldset>
-            <Button type="submit" busy={busy}>
-              <Save size={17} />
-              Salvar alterações
-            </Button>
-          </form>
-          <Card className="gf-site-media">
-            <h2>Logo e imagem principal</h2>
-            <p>As imagens são salvas ao enviar. JPG, PNG ou WebP de até 3 MB.</p>
-            {!data.storage.configured && (
-              <Feedback>
-                O armazenamento de imagens ainda não foi configurado. Textos, cores e seções podem
-                ser salvos normalmente.
-              </Feedback>
-            )}
-            <div className="gf-site-image-grid">
-              {(['logo', 'banner'] as const).map((purpose) => (
-                <div key={purpose}>
-                  <h3>{purpose === 'logo' ? 'Logo' : 'Banner principal'}</h3>
-                  {data.images[purpose] ? (
-                    <img
-                      src={data.images[purpose]!}
-                      alt={purpose === 'logo' ? 'Logo da empresa' : 'Banner da empresa'}
-                    />
-                  ) : (
-                    <div className="gf-image-empty">
-                      <ImagePlus size={28} />
-                      Nenhuma imagem
-                    </div>
-                  )}
-                  <Input
-                    label={purpose === 'logo' ? 'Enviar logo' : 'Enviar banner'}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    disabled={busy || !data.storage.configured}
-                    onChange={(e) => {
-                      upload(purpose, e.target.files?.[0]);
-                      e.target.value = '';
-                    }}
-                  />
-                  {data.images[purpose] && (
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        mutate(`/images/${purpose}`, {
-                          method: 'DELETE',
-                          body: JSON.stringify({ version: data.settings.version }),
-                        })
-                      }
+                    <strong>{form.name}</strong>
+                    <p>Amostra das cores do seu site</p>
+                    <span
+                      className="gf-sample-cta"
+                      style={{
+                        background:
+                          form.primary_color ||
+                          (data.company.template === 'gradefy-minisite' ? '#6C5CE7' : '#335CFF'),
+                      }}
                     >
-                      Remover {purpose === 'logo' ? 'logo' : 'banner'}
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-          <Card className="gf-site-media">
-            <h2>{data.company.template === 'gradefy-minisite' ? 'Portfólio' : 'Galeria'}</h2>
-            <p>
-              {data.gallery.length}/{data.galleryLimit} fotos. Reordene com as setas.
-            </p>
-            <Input
-              label="Adicionar fotografia"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              disabled={
-                busy || !data.storage.configured || data.gallery.length >= data.galleryLimit
-              }
-              onChange={(e) => {
-                upload('gallery', e.target.files?.[0]);
-                e.target.value = '';
-              }}
-            />
-            {!data.gallery.length && <p>Nenhuma fotografia cadastrada.</p>}
-            <div className="gf-editor-gallery">
-              {data.gallery.map((g, i) => (
-                <div key={g.id}>
-                  <img src={g.image} alt={g.title} />
-                  <div>
-                    <Button
-                      variant="secondary"
-                      disabled={busy || i === 0}
-                      aria-label={`Mover foto ${i + 1} para cima`}
-                      onClick={() => move(i, -1)}
-                    >
-                      <ArrowUp size={16} />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={busy || i === data.gallery.length - 1}
-                      aria-label={`Mover foto ${i + 1} para baixo`}
-                      onClick={() => move(i, 1)}
-                    >
-                      <ArrowDown size={16} />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      aria-label={`Excluir foto ${i + 1}`}
-                      onClick={() =>
-                        mutate(`/gallery/${encodeURIComponent(g.id)}`, {
-                          method: 'DELETE',
-                          body: JSON.stringify({ version: data.settings.version }),
-                        })
-                      }
-                    >
-                      Excluir
-                    </Button>
+                      Agendar horário
+                    </span>
                   </div>
-                </div>
-              ))}
-            </div>
-            {data.storage.cleanupPending > 0 && (
-              <p>A remoção foi registrada. A limpeza do armazenamento será tentada novamente.</p>
-            )}
-          </Card>
-          <Card>
-            <h2>Dados de atendimento</h2>
-            <p>
-              {data.operations.services} serviços ativos · {data.operations.professionals}{' '}
-              profissionais ativos
-            </p>
-            <p>Os atendimentos usam os cadastros existentes. Não são duplicados no editor.</p>
-          </Card>
-        </>
-      )}
-    </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setForm({ ...form, primary_color: null, secondary_color: null })}
+                  >
+                    Restaurar cores do template
+                  </Button>
+                </Card>
+                <Card>
+                  <h2>Contato e localização</h2>
+                  <div className="gf-business-fields">
+                    {labels.slice(2).map(({ key, label, max }) => (
+                      <Input
+                        key={key}
+                        label={label}
+                        value={form[key] ?? ''}
+                        maxLength={max}
+                        error={fieldErrors[key]}
+                        onChange={(e) =>
+                          change(
+                            key,
+                            key === 'region' ? e.target.value.toUpperCase() : e.target.value,
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
+                </Card>
+                <Card>
+                  <h2>Seções opcionais</h2>
+                  <div className="gf-site-section-options">
+                    {(
+                      [
+                        { key: 'about', label: 'Mostrar seção sobre a empresa' },
+                        { key: 'gallery', label: 'Mostrar galeria de trabalhos' },
+                      ] as const
+                    )
+                      .filter(
+                        ({ key }) =>
+                          data.company.template !== 'gradefy-minisite' || key !== 'about',
+                      )
+                      .map(({ key, label }) => (
+                        <label key={key} className="gf-check">
+                          <input
+                            type="checkbox"
+                            checked={form.sections[key]}
+                            onChange={(e) =>
+                              change('sections', { ...form.sections, [key]: e.target.checked })
+                            }
+                          />
+                          {label}
+                        </label>
+                      ))}
+                  </div>
+                  <p>
+                    {data.company.template === 'gradefy-minisite'
+                      ? 'O Mini Site exibe sua identidade, ações rápidas, até cinco fotos e horários. Os serviços ficam no catálogo acessível pelo card Ver serviços.'
+                      : 'Os textos e o layout do Barber Classic são preservados.'}
+                  </p>
+                </Card>
+              </fieldset>
+              <Button type="submit" busy={busy}>
+                <Save size={17} />
+                Salvar alterações
+              </Button>
+            </form>
+            <Card className="gf-site-media">
+              <h2>Logo e imagem principal</h2>
+              <p>As imagens são salvas ao enviar. JPG, PNG ou WebP de até 3 MB.</p>
+              {!data.storage.configured && (
+                <Feedback>
+                  O armazenamento de imagens ainda não foi configurado. Textos, cores e seções podem
+                  ser salvos normalmente.
+                </Feedback>
+              )}
+              <div className="gf-site-image-grid">
+                {(['logo', 'banner'] as const).map((purpose) => (
+                  <div key={purpose}>
+                    <h3>{purpose === 'logo' ? 'Logo' : 'Banner principal'}</h3>
+                    {data.images[purpose] ? (
+                      <img
+                        src={data.images[purpose]!}
+                        alt={purpose === 'logo' ? 'Logo da empresa' : 'Banner da empresa'}
+                      />
+                    ) : (
+                      <div className="gf-image-empty">
+                        <ImagePlus size={28} />
+                        Nenhuma imagem
+                      </div>
+                    )}
+                    <Input
+                      label={purpose === 'logo' ? 'Enviar logo' : 'Enviar banner'}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      disabled={busy || !data.storage.configured}
+                      onChange={(e) => {
+                        upload(purpose, e.target.files?.[0]);
+                        e.target.value = '';
+                      }}
+                    />
+                    {data.images[purpose] && (
+                      <Button
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() =>
+                          mutate(`/images/${purpose}`, {
+                            method: 'DELETE',
+                            body: JSON.stringify({ version: data.settings.version }),
+                          })
+                        }
+                      >
+                        Remover {purpose === 'logo' ? 'logo' : 'banner'}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+            <Card className="gf-site-media">
+              <h2>{data.company.template === 'gradefy-minisite' ? 'Portfólio' : 'Galeria'}</h2>
+              <p>
+                {data.gallery.length}/{data.galleryLimit} fotos. Reordene com as setas.
+              </p>
+              <Input
+                label="Adicionar fotografia"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={
+                  busy || !data.storage.configured || data.gallery.length >= data.galleryLimit
+                }
+                onChange={(e) => {
+                  upload('gallery', e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+              {!data.gallery.length && <p>Nenhuma fotografia cadastrada.</p>}
+              <div className="gf-editor-gallery">
+                {data.gallery.map((g, i) => (
+                  <div key={g.id}>
+                    <img src={g.image} alt={g.title} />
+                    <div>
+                      <Button
+                        variant="secondary"
+                        disabled={busy || i === 0}
+                        aria-label={`Mover foto ${i + 1} para cima`}
+                        onClick={() => move(i, -1)}
+                      >
+                        <ArrowUp size={16} />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={busy || i === data.gallery.length - 1}
+                        aria-label={`Mover foto ${i + 1} para baixo`}
+                        onClick={() => move(i, 1)}
+                      >
+                        <ArrowDown size={16} />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={busy}
+                        aria-label={`Excluir foto ${i + 1}`}
+                        onClick={() =>
+                          mutate(`/gallery/${encodeURIComponent(g.id)}`, {
+                            method: 'DELETE',
+                            body: JSON.stringify({ version: data.settings.version }),
+                          })
+                        }
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {data.storage.cleanupPending > 0 && (
+                <p>A remoção foi registrada. A limpeza do armazenamento será tentada novamente.</p>
+              )}
+            </Card>
+            <Card>
+              <h2>Dados de atendimento</h2>
+              <p>
+                {data.operations.services} serviços ativos · {data.operations.professionals}{' '}
+                profissionais ativos
+              </p>
+              <p>Os atendimentos usam os cadastros existentes. Não são duplicados no editor.</p>
+            </Card>
+          </>
+        )}
+      </div>
+    </SiteEditorFrame>
   );
 }

@@ -9,6 +9,7 @@ import { ManagementAccess, CompanySelector } from './management';
 import type { ManagementProps } from './management';
 import { BusinessNav } from './business-nav';
 import { PaymentPanel } from './finance-payment';
+import { FinanceDesktop } from './finance-desktop';
 import {
   expenseCategories,
   paymentMethods,
@@ -39,7 +40,7 @@ export default function Finance() {
 function FinanceContent({ companyId, companies, choose }: ManagementProps) {
   const { api } = useApp(),
     [query, setQuery] = useSearchParams(),
-    [data, setData] = useState<FinanceState | null>(null),
+    [snapshot, setData] = useState<FinanceState | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(true),
     [revision, setRevision] = useState(0),
@@ -52,9 +53,11 @@ function FinanceContent({ companyId, companies, choose }: ManagementProps) {
     [newExpense, setNewExpense] = useState(false),
     [notice, setNotice] = useState('');
   const appointmentId = query.get('atendimento');
+  const data = snapshot?.company.id === companyId ? snapshot : null;
   useEffect(() => {
     const c = new AbortController();
     setBusy(true);
+    setData(null);
     setError('');
     if ((from && !to) || (!from && to)) {
       setBusy(false);
@@ -121,27 +124,29 @@ function FinanceContent({ companyId, companies, choose }: ManagementProps) {
     <div className="gf-dashboard gf-business gf-finance">
       <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
-        <header className="gf-agenda-heading">
-          <div>
-            <div className="gf-kicker">CLAREZA PARA SEU NEGÓCIO</div>
-            <h1>Financeiro</h1>
-            <p>{data?.company.name || 'Movimentações da empresa'}</p>
-          </div>
-          <div className="gf-agenda-actions">
-            <Button disabled={!data?.editable || busy} onClick={() => setNewPayment(true)}>
-              <Plus size={18} />
-              Novo recebimento
-            </Button>
-            <Button
-              disabled={!data?.editable || busy}
-              variant="secondary"
-              onClick={() => setNewExpense(true)}
-            >
-              Nova despesa
-            </Button>
-          </div>
-        </header>
-        <CompanySelector companies={companies} value={companyId} choose={choose} />
+        <div className="gf-finance-toolbar">
+          <header className="gf-agenda-heading">
+            <div>
+              <div className="gf-kicker">CLAREZA PARA SEU NEGÓCIO</div>
+              <h1>Pagamentos</h1>
+              <p>Financeiro · {data?.company.name || 'Movimentações da empresa'}</p>
+            </div>
+            <div className="gf-agenda-actions">
+              <Button disabled={!data?.editable || busy} onClick={() => setNewPayment(true)}>
+                <Plus size={18} />
+                Novo recebimento
+              </Button>
+              <Button
+                disabled={!data?.editable || busy}
+                variant="secondary"
+                onClick={() => setNewExpense(true)}
+              >
+                Nova despesa
+              </Button>
+            </div>
+          </header>
+          <CompanySelector companies={companies} value={companyId} choose={choose} />
+        </div>
         <Feedback>{error}</Feedback>
         <Feedback success>{notice}</Feedback>
         <Card className="gf-finance-filters">
@@ -198,85 +203,95 @@ function FinanceContent({ companyId, companies, choose }: ManagementProps) {
                 A assinatura permite consulta, mas não novos lançamentos ou correções.
               </Feedback>
             )}
-            <div className="gf-finance-metrics">
-              {metrics.map(([label, value, help]) => (
-                <Card key={label}>
-                  <Wallet size={19} />
-                  <h2>{label}</h2>
-                  <strong>{money(value)}</strong>
-                  <p>{help}</p>
-                </Card>
-              ))}
-            </div>
-            <p className="gf-hint">
-              Período: {financialDate(data.from)} a {financialDate(data.to)} ·{' '}
-              {data.company.timezone}. Recebimentos e despesas seguem suas datas financeiras;
-              reversões são registradas no dia da correção. Todos os registros são manuais.
-            </p>
-            <h2 className="gf-business-section-title">Histórico de movimentações</h2>
-            {!data.items.length ? (
-              <Card>
-                <h3>Nenhuma movimentação neste período</h3>
-                <p>
-                  Registre um recebimento ou uma despesa para começar. Atendimentos concluídos não
-                  geram pagamentos automaticamente.
-                </p>
-              </Card>
-            ) : (
-              <div className="gf-finance-entries">
-                {data.items.map((entry) => (
-                  <Card key={entry.type + entry.id} className="gf-finance-entry">
-                    <div className="gf-finance-entry-heading">
-                      {entry.type.startsWith('payment') ? (
-                        <ArrowDownLeft size={19} />
-                      ) : (
-                        <ArrowUpRight size={19} />
-                      )}
-                      <div>
-                        <small>
-                          {labels[entry.type]} · {financialDate(entry.date)}
-                        </small>
-                        <h3>{entry.description}</h3>
-                      </div>
-                      <strong>{money(entry.amount_cents)}</strong>
-                    </div>
-                    <p>
-                      {labels[entry.status]}
-                      {entry.method ? ' · ' + paymentMethods[entry.method] : ''}
-                      {entry.category ? ' · ' + expenseCategories[entry.category] : ''}
-                    </p>
-                    {entry.type === 'payment' && entry.appointment_id && (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          setQuery({ empresa: companyId, atendimento: entry.appointment_id! })
-                        }
-                      >
-                        Consultar recebimento
-                      </Button>
-                    )}
-                    {entry.type === 'expense' && (
-                      <Button variant="secondary" onClick={() => setExpenseId(entry.id)}>
-                        Ver despesa e histórico
-                      </Button>
-                    )}
-                    {entry.appointment_id && (
-                      <Link
-                        to={
-                          '/app/agenda?empresa=' +
-                          encodeURIComponent(companyId) +
-                          '&atendimento=' +
-                          encodeURIComponent(entry.appointment_id)
-                        }
-                      >
-                        Abrir atendimento
-                      </Link>
-                    )}
+            <FinanceDesktop
+              companyId={companyId}
+              data={data}
+              page={page}
+              onPage={setPage}
+              onPayment={(id) => setQuery({ empresa: companyId, atendimento: id })}
+              onExpense={setExpenseId}
+            />
+            <div className="gf-finance-legacy">
+              <div className="gf-finance-metrics">
+                {metrics.map(([label, value, help]) => (
+                  <Card key={label}>
+                    <Wallet size={19} />
+                    <h2>{label}</h2>
+                    <strong>{money(value)}</strong>
+                    <p>{help}</p>
                   </Card>
                 ))}
               </div>
-            )}
-            <FinancialPagination page={page} total={data.total} onPage={setPage} />
+              <p className="gf-hint">
+                Período: {financialDate(data.from)} a {financialDate(data.to)} ·{' '}
+                {data.company.timezone}. Recebimentos e despesas seguem suas datas financeiras;
+                reversões são registradas no dia da correção. Todos os registros são manuais.
+              </p>
+              <h2 className="gf-business-section-title">Histórico de movimentações</h2>
+              {!data.items.length ? (
+                <Card>
+                  <h3>Nenhuma movimentação neste período</h3>
+                  <p>
+                    Registre um recebimento ou uma despesa para começar. Atendimentos concluídos não
+                    geram pagamentos automaticamente.
+                  </p>
+                </Card>
+              ) : (
+                <div className="gf-finance-entries">
+                  {data.items.map((entry) => (
+                    <Card key={entry.type + entry.id} className="gf-finance-entry">
+                      <div className="gf-finance-entry-heading">
+                        {entry.type.startsWith('payment') ? (
+                          <ArrowDownLeft size={19} />
+                        ) : (
+                          <ArrowUpRight size={19} />
+                        )}
+                        <div>
+                          <small>
+                            {labels[entry.type]} · {financialDate(entry.date)}
+                          </small>
+                          <h3>{entry.description}</h3>
+                        </div>
+                        <strong>{money(entry.amount_cents)}</strong>
+                      </div>
+                      <p>
+                        {labels[entry.status]}
+                        {entry.method ? ' · ' + paymentMethods[entry.method] : ''}
+                        {entry.category ? ' · ' + expenseCategories[entry.category] : ''}
+                      </p>
+                      {entry.type === 'payment' && entry.appointment_id && (
+                        <Button
+                          variant="secondary"
+                          onClick={() =>
+                            setQuery({ empresa: companyId, atendimento: entry.appointment_id! })
+                          }
+                        >
+                          Consultar recebimento
+                        </Button>
+                      )}
+                      {entry.type === 'expense' && (
+                        <Button variant="secondary" onClick={() => setExpenseId(entry.id)}>
+                          Ver despesa e histórico
+                        </Button>
+                      )}
+                      {entry.appointment_id && (
+                        <Link
+                          to={
+                            '/app/agenda?empresa=' +
+                            encodeURIComponent(companyId) +
+                            '&atendimento=' +
+                            encodeURIComponent(entry.appointment_id)
+                          }
+                        >
+                          Abrir atendimento
+                        </Link>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )}
+              <FinancialPagination page={page} total={data.total} onPage={setPage} />
+            </div>
           </>
         ) : (
           <Button onClick={() => setRevision((v) => v + 1)}>Tentar novamente</Button>

@@ -116,7 +116,7 @@ test('Gradefy protects the account route and handles an expired session without 
   await expect(
     page.getByRole('heading', { name: 'Seu próximo passo: seu negócio.' }),
   ).toBeVisible();
-  await page.route('**/api/companies', (route) =>
+  await page.route('**/api/companies*', (route) =>
     route.fulfill({ status: 401, json: { error: 'Entre novamente.' } }),
   );
   await page.route('**/api/auth/me?scope=gradefy', (route) =>

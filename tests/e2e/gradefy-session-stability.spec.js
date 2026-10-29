@@ -15,7 +15,7 @@ test('an isolated company 401 validates the canonical session without logging th
   page,
 }) => {
   await login(page);
-  await page.route('**/api/companies', (route) =>
+  await page.route('**/api/companies*', (route) =>
     route.fulfill({ status: 401, json: { error: 'Falha isolada de autorização.' } }),
   );
   await page
@@ -24,7 +24,7 @@ test('an isolated company 401 validates the canonical session without logging th
     .click();
   await expect(page.getByRole('alert')).toContainText('Falha isolada de autorização.');
   await expect(page).toHaveURL('/app/clientes?empresa=' + cid);
-  await page.unroute('**/api/companies');
+  await page.unroute('**/api/companies*');
   await page.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Clientes', exact: true })).toBeVisible();
 });

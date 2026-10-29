@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context';
-import { useCompanies } from './company-access';
+import { BusinessCompanyContext, useCompanies } from './company-access';
 import type { Company } from './company-access';
 import { Button, ButtonLink, Card, Feedback, Loading } from './components';
 export type ManagementProps = {
@@ -100,9 +100,11 @@ export function ManagementAccess({
   if (company.role !== 'professional' && area === 'professional')
     return <Navigate to={'/app/dashboard?empresa=' + encodeURIComponent(selected)} replace />;
   return (
-    <div key={selected}>
-      {children({ companyId: selected, companies: allowed, choose, refreshAccess: retry })}
-    </div>
+    <BusinessCompanyContext.Provider value={company}>
+      <div key={selected}>
+        {children({ companyId: selected, companies: allowed, choose, refreshAccess: retry })}
+      </div>
+    </BusinessCompanyContext.Provider>
   );
 }
 export function CompanySelector({

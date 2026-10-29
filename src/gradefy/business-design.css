@@ -9,6 +9,7 @@
   --gf-enterprise-cyan: #00c9f4;
   --gf-enterprise-radius: 16px;
   --gf-enterprise-shadow: 0 15px 38px #000a1d50;
+  --gf-business-sidebar-width: 244px;
   background: var(--gf-enterprise-bg);
 }
 
@@ -18,18 +19,18 @@
   }
   .gf-enterprise-layout .gf-dashboard {
     max-width: none;
-    grid-template-columns: 234px minmax(0, 1fr);
+    grid-template-columns: var(--gf-business-sidebar-width) minmax(0, 1fr);
     min-height: 100svh;
   }
   .gf-enterprise-layout:has(.gf-business-nav-desktop) .gf-footer {
-    margin-left: 234px;
+    margin-left: var(--gf-business-sidebar-width);
     background: var(--gf-enterprise-bg);
   }
   .gf-enterprise-layout .gf-business-nav-desktop {
     position: sticky;
     top: 0;
     height: 100svh;
-    min-height: 620px;
+    min-height: 0;
     overflow-y: auto;
     padding: 23px 14px 20px;
     gap: 35px;
@@ -54,7 +55,7 @@
   .gf-enterprise-layout .gf-business-nav-desktop nav a {
     min-height: 49px;
     color: #b8c8ed;
-    font-size: 13px;
+    font-size: 14px;
     border-radius: 12px;
     padding: 10px 16px;
   }
@@ -114,12 +115,12 @@
     white-space: nowrap;
   }
   .gf-sidebar-company strong {
-    font-size: 12px;
+    font-size: 13px;
     color: white;
   }
   .gf-sidebar-company small {
     margin-top: 3px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--gf-enterprise-muted);
   }
   .gf-enterprise-layout .gf-dashboard-main {
@@ -128,11 +129,14 @@
 }
 
 @media (min-width: 801px) and (max-width: 1199px) {
+  .gf-enterprise-layout {
+    --gf-business-sidebar-width: 202px;
+  }
   .gf-enterprise-layout .gf-dashboard {
-    grid-template-columns: 202px minmax(0, 1fr);
+    grid-template-columns: var(--gf-business-sidebar-width) minmax(0, 1fr);
   }
   .gf-enterprise-layout:has(.gf-business-nav-desktop) .gf-footer {
-    margin-left: 202px;
+    margin-left: var(--gf-business-sidebar-width);
   }
   .gf-enterprise-layout .gf-business-nav-desktop {
     padding-inline: 9px;
@@ -174,6 +178,23 @@
     cursor: pointer;
     padding: 9px 15px;
     list-style: none;
+    border: 1px solid transparent;
+    border-radius: 10px;
+  }
+  .gf-sidebar-more.has-active > summary {
+    color: #eee9ff;
+    background: #34237473;
+    border-color: #795ce47a;
+  }
+  .gf-sidebar-more summary:hover,
+  .gf-sidebar-more summary:focus-visible {
+    color: white;
+    background: #1c2d5a;
+  }
+  .gf-sidebar-more summary:focus-visible,
+  .gf-business-nav-desktop a:focus-visible {
+    outline: 2px solid #00c9f4;
+    outline-offset: 2px;
   }
   .gf-sidebar-more summary::-webkit-details-marker {
     display: none;
@@ -207,7 +228,7 @@
   .gf-sidebar-promo small {
     display: block;
     color: #c4d1f6;
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.35;
     margin: 7px 0;
   }
@@ -230,7 +251,7 @@
   .gf-business-nav-desktop .gf-sidebar-account {
     min-height: 32px;
     margin-bottom: 9px;
-    font-size: 11px;
+    font-size: 13px;
   }
 }
 

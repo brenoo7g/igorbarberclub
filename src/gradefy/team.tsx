@@ -23,9 +23,13 @@ import { DetailTile, JourneyFrame, StatusBadge } from './journey';
 import { CompanySelector, ManagementAccess } from './management';
 import type { ManagementProps } from './management';
 import { BusinessNav } from './business-nav';
+import { ManagementTopbar } from './management-topbar';
+import { TeamOverview } from './team-overview';
+import type { Professional, Service } from './business-types';
 import './dashboard.css';
 import './agenda.css';
 import './team.css';
+import './management-desktop.css';
 
 type Role = 'owner' | 'manager' | 'professional';
 type Invitation = {
@@ -33,8 +37,10 @@ type Invitation = {
   email: string;
   role: Role;
   status: string;
+  createdAt?: string;
   expiresAt: string;
   delivery: string;
+  professional?: { mode: 'new' | 'existing'; professionalId?: string | null };
 };
 type Member = {
   id: string;
@@ -80,6 +86,10 @@ export default function Team() {
 function TeamContent({ companyId, companies, choose }: ManagementProps) {
   const { api } = useApp();
   const [data, setData] = useState<TeamState | null>(null),
+    [roster, setRoster] = useState<Professional[]>([]),
+    [services, setServices] = useState<Service[]>([]),
+    [rosterCompanyId, setRosterCompanyId] = useState(''),
+    [rosterError, setRosterError] = useState(''),
     [busy, setBusy] = useState(true),
     [revision, setRevision] = useState(0),
     [error, setError] = useState(''),
@@ -124,6 +134,27 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);
+      });
+    return () => controller.abort();
+  }, [api, companyId, revision]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const options = { headers: { 'X-Gradefy-Company-Id': companyId }, signal: controller.signal };
+    setRosterCompanyId('');
+    setRosterError('');
+    void Promise.all([
+      api<Professional[]>('/admin/professionals', options),
+      api<Service[]>('/admin/services', options),
+    ])
+      .then(([people, catalog]) => {
+        if (!controller.signal.aborted) {
+          setRoster(people);
+          setServices(catalog);
+          setRosterCompanyId(companyId);
+        }
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) setRosterError(errorMessage(cause));
       });
     return () => controller.abort();
   }, [api, companyId, revision]);
@@ -198,14 +229,23 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
       );
   }
   return (
-    <div className="gf-dashboard gf-business gf-team">
+    <div className="gf-dashboard gf-business gf-team gf-premium-page">
       <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
+        <ManagementTopbar
+          companyId={companyId}
+          companyName={data?.company.id === companyId ? data.company.name : undefined}
+          description="Profissionais, escala semanal e acessos do estabelecimento."
+        />
         <header className="gf-agenda-heading">
           <div>
             <div className="gf-kicker">ACESSOS DO SEU NEGÓCIO</div>
             <h1>Equipe e permissões</h1>
-            <p>{data?.company.name || 'Gestão dos acessos empresariais'}</p>
+            <p>
+              {data?.company.id === companyId
+                ? data.company.name
+                : 'Gestão dos acessos empresariais'}
+            </p>
           </div>
           <Button
             variant="secondary"
@@ -221,209 +261,298 @@ function TeamContent({ companyId, companies, choose }: ManagementProps) {
         <Feedback success>{notice}</Feedback>
         {busy ? (
           <Loading label="Carregando equipe…" />
-        ) : data ? (
+        ) : data?.company.id === companyId ? (
           <>
-            <Card className="gf-team-intro">
-              <ShieldCheck size={25} />
-              <div>
-                <h2>Acesso ao painel e atendimento são diferentes</h2>
-                <p>
-                  Gestores recebem acesso à gestão. No convite de profissional, escolha criar um
-                  cadastro no aceite ou vincular um cadastro existente.
-                </p>
-                <Link to={'/app/profissionais?empresa=' + encodeURIComponent(companyId)}>
-                  Gerenciar profissionais de atendimento
-                </Link>
+            <Feedback>{rosterError}</Feedback>
+            {!rosterError && rosterCompanyId === companyId && (
+              <TeamOverview
+                companyId={companyId}
+                professionals={roster}
+                services={services}
+                editable
+                members={data.members}
+                invitations={data.invitations}
+              />
+            )}
+            <div className="gf-team-access-anchor" id="team-access" />
+            <div className="gf-team-access">
+              <header className="gf-team-access-heading">
+                <div>
+                  <span className="gf-kicker">PESSOAS E PERMISSÕES</span>
+                  <h2>Acessos da empresa</h2>
+                  <p>Gerencie quem pode entrar no painel e acompanhar a operação.</p>
+                </div>
+                <Button onClick={() => invitationForm.current?.querySelector('input')?.focus()}>
+                  <MailPlus size={18} /> Convidar pessoa
+                </Button>
+              </header>
+              <div className="gf-team-access-metrics" aria-label="Resumo dos acessos">
+                <div>
+                  <UserRound size={19} aria-hidden="true" />
+                  <span>Ativos</span>
+                  <strong>
+                    {data.members.filter((member) => member.status === 'active').length}
+                  </strong>
+                </div>
+                <div>
+                  <Mail size={19} aria-hidden="true" />
+                  <span>Convites pendentes</span>
+                  <strong>
+                    {
+                      data.invitations.filter((invitation) => invitation.status === 'pending')
+                        .length
+                    }
+                  </strong>
+                </div>
+                <div>
+                  <Clock3 size={19} aria-hidden="true" />
+                  <span>Expirados</span>
+                  <strong>
+                    {
+                      data.invitations.filter((invitation) => invitation.status === 'expired')
+                        .length
+                    }
+                  </strong>
+                </div>
               </div>
-            </Card>
-            <Card>
-              <h2>Convidar pessoa</h2>
-              <p>
-                Gestores acessam a operação, o financeiro e os relatórios. O papel Profissional
-                mantém o vínculo empresarial, sem acesso à gestão. Somente proprietários gerenciam
-                acessos.
-              </p>
-              <form className="gf-team-form" onSubmit={submit} ref={invitationForm}>
-                <Input
-                  label="E-mail do convidado"
-                  type="email"
-                  required
-                  maxLength={200}
-                  value={email}
-                  disabled={mutating}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoCapitalize="none"
-                />
-                <label className="gf-field">
-                  Papel do convidado
-                  <select
-                    value={role}
+              <Card className="gf-team-intro gf-team-access-note">
+                <ShieldCheck size={25} />
+                <div>
+                  <h2>Acesso ao painel e atendimento são diferentes</h2>
+                  <p>
+                    Gestores recebem acesso à gestão. No convite de profissional, escolha criar um
+                    cadastro no aceite ou vincular um cadastro existente.
+                  </p>
+                  <Link to={'/app/profissionais?empresa=' + encodeURIComponent(companyId)}>
+                    Gerenciar profissionais de atendimento
+                  </Link>
+                </div>
+              </Card>
+              <Card className="gf-team-invite-card">
+                <h2>Convidar pessoa</h2>
+                <p>
+                  Gestores acessam a operação, o financeiro e os relatórios. O papel Profissional
+                  mantém o vínculo empresarial, sem acesso à gestão. Somente proprietários gerenciam
+                  acessos.
+                </p>
+                <form className="gf-team-form" onSubmit={submit} ref={invitationForm}>
+                  <Input
+                    label="E-mail do convidado"
+                    type="email"
+                    required
+                    maxLength={200}
+                    value={email}
                     disabled={mutating}
-                    onChange={(e) => setRole(e.target.value as Role)}
-                  >
-                    <option value="manager">Gestor</option>
-                    <option value="professional">Profissional</option>
-                  </select>
-                </label>
-                {role === 'professional' && (
-                  <>
-                    <label className="gf-field">
-                      Cadastro na agenda
-                      <select
-                        value={professionalMode}
-                        disabled={mutating}
-                        onChange={(e) => setProfessionalMode(e.target.value)}
-                      >
-                        <option value="new">Criar novo profissional no aceite</option>
-                        <option value="existing">Vincular profissional existente</option>
-                      </select>
-                    </label>
-                    {professionalMode === 'existing' && (
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoCapitalize="none"
+                  />
+                  <label className="gf-field">
+                    Papel do convidado
+                    <select
+                      value={role}
+                      disabled={mutating}
+                      onChange={(e) => setRole(e.target.value as Role)}
+                    >
+                      <option value="manager">Gestor</option>
+                      <option value="professional">Profissional</option>
+                    </select>
+                  </label>
+                  {role === 'professional' && (
+                    <>
                       <label className="gf-field">
-                        Profissional do convite
+                        Cadastro na agenda
                         <select
-                          value={invitedProfessional}
-                          required
+                          value={professionalMode}
                           disabled={mutating}
-                          onChange={(e) => setInvitedProfessional(e.target.value)}
+                          onChange={(e) => setProfessionalMode(e.target.value)}
                         >
-                          <option value="">Selecione o cadastro</option>
-                          {data.professionals
-                            .filter(
-                              (p) =>
-                                !p.user_id ||
-                                data.members.some(
-                                  (m) =>
-                                    m.id === p.user_id && m.email === email.trim().toLowerCase(),
-                                ),
-                            )
-                            .map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                                {p.active ? '' : ' (inativo)'}
-                              </option>
-                            ))}
+                          <option value="new">Criar novo profissional no aceite</option>
+                          <option value="existing">Vincular profissional existente</option>
                         </select>
                       </label>
-                    )}
-                    <p className="gf-hint">
-                      O cadastro novo fica inativo, sem serviços e com a agenda fechada. Configure e
-                      ative em Profissionais; os limites do plano continuam valendo.
-                    </p>
-                  </>
-                )}
-                <Button type="submit" busy={mutating}>
-                  <MailPlus size={18} /> Criar convite
-                </Button>
-              </form>
-            </Card>
-            <section aria-label="Membros da empresa">
-              <h2>Pessoas com acesso</h2>
-              <div className="gf-business-grid">
-                {data.members.map((m) => (
-                  <Card className="gf-business-record" key={m.id}>
-                    <div>
-                      <h3>{m.name}</h3>
-                      <p>{m.email}</p>
-                    </div>
-                    <div className="gf-team-tags">
-                      <span>{roles[m.role]}</span>
-                      <span>{statuses[m.status]}</span>
-                    </div>
-                    {m.professional_name && <p>Profissional associado: {m.professional_name}</p>}
-                    {m.role === 'professional' && !m.professional_name && (
-                      <p>Vínculo profissional pendente.</p>
-                    )}
-                    {((m.role === 'professional' && m.status === 'active') ||
-                      m.professional_id) && (
-                      <Button
-                        variant="secondary"
-                        disabled={mutating || !data.linksEditable}
-                        onClick={() => {
-                          setLinkTarget(
-                            m.status === 'active' && m.role === 'professional'
-                              ? m.professional_id || ''
-                              : '',
-                          );
-                          setAction({ kind: 'professional', member: m });
-                        }}
-                      >
-                        {m.status !== 'active' || m.role !== 'professional'
-                          ? 'Remover vínculo profissional'
-                          : m.professional_name
-                            ? 'Alterar vínculo profissional'
-                            : 'Associar profissional'}
-                      </Button>
-                    )}
-                    {m.role === 'owner' ? (
-                      <p>O acesso do proprietário está protegido.</p>
-                    ) : m.status === 'active' ? (
-                      <div className="gf-business-actions">
+                      {professionalMode === 'existing' && (
+                        <label className="gf-field">
+                          Profissional do convite
+                          <select
+                            value={invitedProfessional}
+                            required
+                            disabled={mutating}
+                            onChange={(e) => setInvitedProfessional(e.target.value)}
+                          >
+                            <option value="">Selecione o cadastro</option>
+                            {data.professionals
+                              .filter(
+                                (p) =>
+                                  !p.user_id ||
+                                  data.members.some(
+                                    (m) =>
+                                      m.id === p.user_id && m.email === email.trim().toLowerCase(),
+                                  ),
+                              )
+                              .map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                  {p.active ? '' : ' (inativo)'}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                      )}
+                      <p className="gf-hint">
+                        O cadastro novo fica inativo, sem serviços e com a agenda fechada. Configure
+                        e ative em Profissionais; os limites do plano continuam valendo.
+                      </p>
+                    </>
+                  )}
+                  <Button type="submit" busy={mutating}>
+                    <MailPlus size={18} /> Criar convite
+                  </Button>
+                </form>
+              </Card>
+              <section className="gf-team-access-section" aria-label="Membros da empresa">
+                <h2>Pessoas com acesso</h2>
+                <div className="gf-business-grid gf-team-access-list">
+                  {data.members.map((m) => (
+                    <Card className="gf-business-record gf-team-access-row" key={m.id}>
+                      <span className="gf-team-access-avatar" aria-hidden="true">
+                        {m.name.trim().slice(0, 1).toUpperCase()}
+                      </span>
+                      <div className="gf-team-access-identity">
+                        <h3>{m.name}</h3>
+                        <p>{m.email}</p>
+                      </div>
+                      <div className="gf-team-tags">
+                        <span className={'gf-team-role gf-team-role-' + m.role}>
+                          {roles[m.role]}
+                        </span>
+                        <span className={'gf-team-status gf-team-status-' + m.status}>
+                          {statuses[m.status] || m.status}
+                        </span>
+                      </div>
+                      {m.professional_name && (
+                        <p className="gf-team-access-link">
+                          Profissional associado: {m.professional_name}
+                        </p>
+                      )}
+                      {m.role === 'professional' && !m.professional_name && (
+                        <p className="gf-team-access-link">Vínculo profissional pendente.</p>
+                      )}
+                      {((m.role === 'professional' && m.status === 'active') ||
+                        m.professional_id) && (
                         <Button
                           variant="secondary"
-                          disabled={mutating}
+                          disabled={mutating || !data.linksEditable}
                           onClick={() => {
-                            setRole(m.role);
-                            setAction({ kind: 'role', member: m });
+                            setLinkTarget(
+                              m.status === 'active' && m.role === 'professional'
+                                ? m.professional_id || ''
+                                : '',
+                            );
+                            setAction({ kind: 'professional', member: m });
                           }}
                         >
-                          Alterar papel
+                          {m.status !== 'active' || m.role !== 'professional'
+                            ? 'Remover vínculo profissional'
+                            : m.professional_name
+                              ? 'Alterar vínculo profissional'
+                              : 'Associar profissional'}
                         </Button>
-                        <Button
-                          variant="secondary"
-                          disabled={mutating}
-                          onClick={() => setAction({ kind: 'revoke', member: m })}
-                        >
-                          Revogar acesso
-                        </Button>
-                      </div>
-                    ) : (
-                      <p>Para conceder acesso novamente, crie um novo convite.</p>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            </section>
-            <section aria-label="Convites da empresa">
-              <h2>Convites</h2>
-              {!data.invitations.length ? (
-                <Card>
-                  <p>Nenhum convite criado. Convide quem vai ajudar a administrar seu negócio.</p>
-                </Card>
-              ) : (
-                <div className="gf-business-grid">
-                  {data.invitations.map((i) => (
-                    <Card className="gf-business-record" key={i.id}>
-                      <h3>{i.email}</h3>
-                      <div className="gf-team-tags">
-                        <span>{roles[i.role]}</span>
-                        <span>{statuses[i.status]}</span>
-                      </div>
-                      <p>Validade: {date(i.expiresAt)}</p>
-                      {i.status === 'pending' && <p>{deliveryText(i.delivery)}</p>}
-                      {['pending', 'expired'].includes(i.status) && (
+                      )}
+                      {m.role === 'owner' ? (
+                        <p>O acesso do proprietário está protegido.</p>
+                      ) : m.status === 'active' ? (
                         <div className="gf-business-actions">
                           <Button
                             variant="secondary"
                             disabled={mutating}
-                            onClick={() => setAction({ kind: 'renew', invitation: i })}
+                            onClick={() => {
+                              setRole(m.role);
+                              setAction({ kind: 'role', member: m });
+                            }}
                           >
-                            Renovar e reenviar
+                            Alterar papel
                           </Button>
                           <Button
                             variant="secondary"
                             disabled={mutating}
-                            onClick={() => setAction({ kind: 'cancel', invitation: i })}
+                            onClick={() => setAction({ kind: 'revoke', member: m })}
                           >
-                            Cancelar convite
+                            Revogar acesso
                           </Button>
                         </div>
+                      ) : (
+                        <p>Para conceder acesso novamente, crie um novo convite.</p>
                       )}
                     </Card>
                   ))}
                 </div>
-              )}
-            </section>
+              </section>
+              <section className="gf-team-access-section" aria-label="Convites da empresa">
+                <h2>Convites</h2>
+                {!data.invitations.length ? (
+                  <Card>
+                    <p>Nenhum convite criado. Convide quem vai ajudar a administrar seu negócio.</p>
+                  </Card>
+                ) : (
+                  <div className="gf-business-grid gf-team-access-list">
+                    {data.invitations.map((i) => (
+                      <Card
+                        className="gf-business-record gf-team-access-row gf-team-invitation-row"
+                        key={i.id}
+                      >
+                        <span className="gf-team-access-avatar" aria-hidden="true">
+                          <Mail size={18} />
+                        </span>
+                        <div className="gf-team-access-identity">
+                          <h3>{i.email}</h3>
+                          <p>
+                            {i.createdAt && <>Criado em {date(i.createdAt)} · </>}
+                            Validade: {date(i.expiresAt)}
+                          </p>
+                          {i.professional?.mode === 'new' && <p>Cadastro profissional no aceite</p>}
+                          {i.professional?.mode === 'existing' && (
+                            <p>
+                              Vínculo no aceite:{' '}
+                              {data.professionals.find(
+                                (professional) =>
+                                  professional.id === i.professional?.professionalId,
+                              )?.name || 'profissional selecionado'}
+                            </p>
+                          )}
+                        </div>
+                        <div className="gf-team-tags">
+                          <span className={'gf-team-role gf-team-role-' + i.role}>
+                            {roles[i.role]}
+                          </span>
+                          <span className={'gf-team-status gf-team-status-' + i.status}>
+                            {statuses[i.status] || i.status}
+                          </span>
+                        </div>
+                        {i.status === 'pending' && <p>{deliveryText(i.delivery)}</p>}
+                        {['pending', 'expired'].includes(i.status) && (
+                          <div className="gf-business-actions">
+                            <Button
+                              variant="secondary"
+                              disabled={mutating}
+                              onClick={() => setAction({ kind: 'renew', invitation: i })}
+                            >
+                              Renovar e reenviar
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              disabled={mutating}
+                              onClick={() => setAction({ kind: 'cancel', invitation: i })}
+                            >
+                              Cancelar convite
+                            </Button>
+                          </div>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
           </>
         ) : (
           <Card>

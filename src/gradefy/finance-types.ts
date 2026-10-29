@@ -59,6 +59,7 @@ export type FinanceState = {
   page: number;
   total: number;
   items: FinancialEntry[];
+  methodTotals: { method: string; amountCents: number }[];
   metrics: {
     expectedCents: number;
     completedCents: number;

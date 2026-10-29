@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   CalendarDays,
   LayoutDashboard,
@@ -17,6 +17,7 @@ import {
 import './business-management.css';
 import './business-design.css';
 import { GradefyLogo } from './components';
+import { BusinessCompanyContext } from './company-access';
 export const businessLinks = [
   { path: '/app/dashboard', label: 'Visão geral', short: 'Início', icon: LayoutDashboard },
   { path: '/app/agenda', label: 'Minha agenda', short: 'Agenda', icon: CalendarDays },
@@ -32,21 +33,14 @@ export const businessLinks = [
 export function BusinessNav({
   companyId,
   mobile = false,
-  companyName,
-  planName,
-  showPlanPromo = false,
-  subscriptionLabel,
-  sitePublished,
 }: {
   companyId: string;
   mobile?: boolean;
-  companyName?: string;
-  planName?: string | null;
-  showPlanPromo?: boolean;
-  subscriptionLabel?: string;
-  sitePublished?: boolean;
 }) {
   const { pathname } = useLocation();
+  const selectedCompany = useContext(BusinessCompanyContext);
+  const company = selectedCompany?.id === companyId ? selectedCompany : null;
+  const [moreOpen, setMoreOpen] = useState(false);
   const mobileNav = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!mobile) return;
@@ -60,36 +54,63 @@ export function BusinessNav({
     window.addEventListener('resize', align);
     return () => window.removeEventListener('resize', align);
   }, [mobile, pathname]);
-  const desktopNames: Record<string, string> = {
-    '/app/dashboard': 'Dashboard',
-    '/app/agenda': 'Agenda',
-    '/app/equipe': 'Equipe',
-    '/app/financeiro': 'Pagamentos',
-  };
-  const links = businessLinks.map((l) => (
+  const mobileLinks = businessLinks.map((l) => (
     <Link
       key={l.path}
       to={l.path + '?empresa=' + encodeURIComponent(companyId)}
       aria-current={pathname === l.path ? 'page' : undefined}
       className={pathname === l.path ? 'gf-nav-active' : ''}
-      aria-label={
-        mobile || !showPlanPromo || !desktopNames[l.path]
-          ? l.label
-          : `${desktopNames[l.path]} — ${l.label}`
-      }
+      aria-label={l.label}
     >
       <l.icon size={mobile ? 20 : 19} />
-      {mobile ? l.short : showPlanPromo ? desktopNames[l.path] || l.label : l.label}
+      {l.short}
     </Link>
   ));
-  const desktopOrder = showPlanPromo ? [0, 1, 2, 7, 3, 5, 6, 9] : [0, 1, 2, 7, 3, 5, 6, 9, 4, 8];
+  const desktopItems = [
+    [businessLinks[0], 'Dashboard'],
+    [businessLinks[1], 'Agenda'],
+    [businessLinks[2], 'Clientes'],
+    [businessLinks[7], 'Equipe'],
+    [businessLinks[3], 'Serviços'],
+    [businessLinks[5], 'Pagamentos'],
+    [businessLinks[6], 'Relatórios'],
+    [businessLinks[9], 'Configurações'],
+  ] as const;
+  const extraItems = [businessLinks[4], businessLinks[8]];
+  const extraActive = extraItems.some((item) => item.path === pathname);
+  const desktopLink = (item: (typeof businessLinks)[number], label = item.label) => (
+    <Link
+      key={item.path}
+      to={item.path + '?empresa=' + encodeURIComponent(companyId)}
+      aria-current={pathname === item.path ? 'page' : undefined}
+      className={pathname === item.path ? 'gf-nav-active' : ''}
+    >
+      <item.icon size={19} aria-hidden="true" />
+      {label}
+    </Link>
+  );
+  const subscriptionExpired =
+    company?.subscription_ends_at && Date.parse(company.subscription_ends_at) <= Date.now();
+  const subscription = subscriptionExpired
+    ? company?.subscription_status === 'trialing'
+      ? 'Teste grátis encerrado'
+      : 'Assinatura encerrada'
+    : company?.subscription_status === 'trialing'
+      ? 'Teste grátis em andamento'
+      : company?.subscription_status === 'active'
+        ? 'Assinatura ativa'
+        : company?.subscription_status === 'pending'
+          ? 'Assinatura pendente'
+          : company?.subscription_status
+            ? 'Sem assinatura vigente'
+            : 'Sem assinatura';
   return mobile ? (
     <nav
       ref={mobileNav}
       className="gf-dashboard-mobile-nav gf-business-mobile"
       aria-label="Navegação móvel"
     >
-      {links}
+      {mobileLinks}
     </nav>
   ) : (
     <aside
@@ -98,40 +119,43 @@ export function BusinessNav({
     >
       <GradefyLogo />
       <nav aria-label="Áreas da empresa">
-        {desktopOrder.map((index) => links[index])}
-        {showPlanPromo && (
-          <details className="gf-sidebar-more">
-            <summary>
-              Mais áreas <ChevronRight size={15} />
-            </summary>
-            {links[4]}
-            {links[8]}
-          </details>
-        )}
+        {desktopItems.map(([item, label]) => desktopLink(item, label))}
+        <details
+          className={'gf-sidebar-more' + (extraActive ? ' has-active' : '')}
+          open={extraActive || moreOpen}
+          onToggle={(event) => setMoreOpen(event.currentTarget.open)}
+        >
+          <summary>
+            Mais áreas <ChevronRight size={15} aria-hidden="true" />
+          </summary>
+          {extraItems.map((item) => desktopLink(item))}
+        </details>
       </nav>
       <div className="gf-sidebar-bottom">
-        {showPlanPromo && (
-          <div className="gf-sidebar-promo gf-desktop-plan">
-            <Crown size={24} aria-hidden="true" />
-            <strong>Seu negócio em outro nível</strong>
-            <p>
-              {planName ? `Plano ${planName}` : 'Sem plano selecionado'} · {subscriptionLabel}
-            </p>
-            <small>Mini Site: {sitePublished ? 'publicado' : 'não publicado'}</small>
-            <Link to="/app/onboarding/plan">
-              Conhecer planos <ChevronRight size={17} />
-            </Link>
-          </div>
-        )}
+        <div className="gf-sidebar-promo gf-desktop-plan">
+          <Crown size={24} aria-hidden="true" />
+          <strong>Seu negócio em outro nível</strong>
+          <p>
+            {company
+              ? company.plan_name
+                ? `Plano ${company.plan_name}`
+                : 'Plano não definido'
+              : 'Carregando empresa…'}
+          </p>
+          {company && <small>{subscription}</small>}
+          {company?.site_published !== undefined && (
+            <small>Mini Site: {company.site_published === 1 ? 'publicado' : 'não publicado'}</small>
+          )}
+        </div>
         <Link to="/app/conta" className="gf-sidebar-account">
           <UserRound size={19} /> Minha conta
         </Link>
-        {companyName && (
+        {company && (
           <div className="gf-sidebar-company">
-            <span aria-hidden="true">{companyName.slice(0, 1).toUpperCase()}</span>
+            <span aria-hidden="true">{company.name.slice(0, 1).toUpperCase()}</span>
             <div>
-              <strong>{companyName}</strong>
-              {planName && <small>Plano {planName}</small>}
+              <strong title={company.name}>{company.name}</strong>
+              {company.plan_name && <small>Plano {company.plan_name}</small>}
             </div>
           </div>
         )}

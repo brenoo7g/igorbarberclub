@@ -26,10 +26,15 @@ test('owner manages real invitation cards, renewal, cancellation and responsive 
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
     .locator('.gf-business-nav-desktop')
-    .getByRole('link', { name: 'Equipe — Equipe e acessos', exact: true })
+    .getByRole('link', { name: 'Equipe', exact: true })
     .click();
   await expect(page).toHaveURL('/app/equipe?empresa=' + cid);
-  await expect(page.getByRole('heading', { name: 'Equipe e permissões' })).toBeVisible();
+  await expect(
+    page
+      .locator('.gf-team-desktop')
+      .getByRole('heading', { name: /Profissionais/ })
+      .first(),
+  ).toBeVisible();
   await expect(page.getByRole('region', { name: 'Membros da empresa' })).toContainText(
     'Proprietário',
   );

@@ -98,7 +98,7 @@ test('owner account and recoverable errors preserve session; empty account has a
   await page.goto('/app/conta');
   await expect(page.getByRole('heading', { name: 'Seu acesso está ativo' })).toBeVisible();
   await capture(page, 'account');
-  await page.route('**/api/companies', (route) =>
+  await page.route('**/api/companies*', (route) =>
     route.fulfill({
       status: 503,
       json: { error: 'Não foi possível carregar os estabelecimentos.' },
@@ -108,7 +108,7 @@ test('owner account and recoverable errors preserve session; empty account has a
   await expect(page.getByRole('alert')).toContainText('Não foi possível');
   await expect(page).toHaveURL('/app/conta');
   expect((await page.request.get('/api/auth/me?scope=gradefy')).status()).toBe(200);
-  await page.unroute('**/api/companies');
+  await page.unroute('**/api/companies*');
   await page.getByRole('button', { name: 'Tentar novamente' }).click();
   await expect(page.getByRole('region', { name: 'Acesso a Clube Horizonte' })).toBeVisible();
   await page.getByRole('button', { name: 'Sair da conta' }).click();

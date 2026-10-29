@@ -1,4 +1,5 @@
 import { installServiceRoutes } from './services.js';
+import { installTeamOverview } from './team-overview.js';
 import { emailConfigured } from './transactional-email.js';
 import { installEmailWebhooks } from './email-webhooks.js';
 import { installEmailCenter } from './email-center.js';
@@ -275,7 +276,9 @@ export function createApp(
     email: invitationEmail,
   });
   app.get('/api/companies', authenticated, async (req, res) =>
-    res.json(await listUserCompanies(db, req.user.id)),
+    res.json(
+      await listUserCompanies(db, req.user.id, { navigation: req.query.view === 'management' }),
+    ),
   );
   app.get('/api/plans', authenticated, async (_req, res) => res.json(await getPlanCatalog(db)));
   installOnboardingCatalog(app, db, authenticated);
@@ -1028,6 +1031,7 @@ export function createApp(
     const authorizeManagement = (tx, req, write) => agendaAccess(tx, companyId, req.user.id, write);
     installOperationalSettings(app, db, companyId);
     installProfessionalRoutes(app, db, companyId, { authorize: authorizeManagement });
+    installTeamOverview(app, db, companyId, authorizeManagement);
     app.get('/admin/appointments', async (req, res) => {
       const from = dateSchema.parse(req.query.from || dateInBrazil()),
         to = dateSchema.parse(req.query.to || from);

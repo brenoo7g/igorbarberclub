@@ -24,7 +24,7 @@ test('agenda real: day/week, filters, details, responsive presentation and compa
   await page.getByLabel('Empresa', { exact: true }).selectOption(cid);
   await page
     .locator('.gf-business-nav-desktop')
-    .getByRole('link', { name: 'Minha agenda' })
+    .getByRole('link', { name: 'Agenda', exact: true })
     .click();
   await expect(page).toHaveURL(calendar);
   await expect(page.locator('.gf-agenda-navigation')).toBeVisible();
@@ -86,7 +86,7 @@ test('manual creation survives a lost response, then reschedule/cancel retain hi
   await page.goto('/app/dashboard?empresa=' + cid);
   await page
     .getByRole('navigation', { name: 'Áreas da empresa' })
-    .getByRole('link', { name: 'Minha agenda' })
+    .getByRole('link', { name: 'Agenda', exact: true })
     .click();
   await page.getByRole('button', { name: 'Novo agendamento', exact: true }).first().click();
   await expect(dialog(page).getByRole('heading', { name: 'Novo agendamento' })).toBeVisible();

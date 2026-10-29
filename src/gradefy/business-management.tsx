@@ -35,8 +35,10 @@ import type {
 import './dashboard.css';
 import './agenda.css';
 import './business-management.css';
-import { ManagementTopbar, subscriptionLabel } from './management-topbar';
+import { ManagementTopbar } from './management-topbar';
 import { ClientActions } from './client-actions';
+import { TeamOverview } from './team-overview';
+import { ServicesDesktop } from './services-desktop';
 import './management-desktop.css';
 import './clients-desktop.css';
 import './clients-refinement.css';
@@ -131,7 +133,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
         if (!c.signal.aborted) setBusy(false);
       });
     return () => c.abort();
-  }, [api, companyId, kind, page, q, revision]);
+  }, [api, companyId, kind, page, kind === 'clients' ? q : '', revision]);
   function close() {
     setForm(null);
     setDetail('');
@@ -195,38 +197,47 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
     <div
       className={
         'gf-dashboard gf-business' +
-        (kind === 'clients' ? ' gf-premium-page gf-business-clients' : '')
+        (kind === 'clients'
+          ? ' gf-premium-page gf-business-clients'
+          : ' gf-premium-page gf-business-' + kind)
       }
     >
-      <BusinessNav
-        companyId={companyId}
-        companyName={access?.company.name}
-        planName={access?.plan?.name}
-        showPlanPromo={kind === 'clients' && Boolean(access?.plan)}
-        subscriptionLabel={subscriptionLabel(access?.entitlement)}
-        sitePublished={access?.company.site_published === 1}
-      />
+      <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
-        {kind === 'clients' && (
-          <ManagementTopbar
-            companyId={companyId}
-            companyName={access?.company.name || companies.find((c) => c.id === companyId)?.name}
-            description="Acompanhe o relacionamento com os clientes do seu estabelecimento."
-            searchValue={q}
-            searchPlaceholder="Buscar clientes..."
-            onSearch={(value) => {
-              setQ(value);
-              setPage(1);
-            }}
-          />
-        )}
+        <ManagementTopbar
+          companyId={companyId}
+          companyName={
+            (access?.company.id === companyId ? access.company.name : undefined) ||
+            companies.find((c) => c.id === companyId)?.name
+          }
+          description={
+            kind === 'clients'
+              ? 'Acompanhe o relacionamento com os clientes do seu estabelecimento.'
+              : kind === 'services'
+                ? 'Organize seu catálogo e acompanhe os serviços realizados.'
+                : 'Profissionais, escala semanal e serviços vinculados.'
+          }
+          searchValue={q}
+          searchPlaceholder={kind === 'clients' ? 'Buscar clientes...' : 'Buscar serviços...'}
+          onSearch={
+            kind === 'professionals'
+              ? undefined
+              : (value) => {
+                  setQ(value);
+                  setPage(1);
+                }
+          }
+        />
         <div
           className={'gf-agenda-heading' + (kind === 'clients' ? ' gf-clients-mobile-heading' : '')}
         >
           <div>
             <div className="gf-kicker">SEU NEGÓCIO BEM CUIDADO</div>
             <h1>{names[kind]}</h1>
-            <p>{access?.company.name || companies.find((c) => c.id === companyId)?.name}</p>
+            <p>
+              {(access?.company.id === companyId ? access.company.name : undefined) ||
+                companies.find((c) => c.id === companyId)?.name}
+            </p>
           </div>
           <Button disabled={!access?.editable || busy} onClick={() => setForm({})}>
             <Plus size={18} />
@@ -238,7 +249,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
         )}
         <Feedback>{error}</Feedback>
         <Feedback success>{notice}</Feedback>
-        {!access ? (
+        {!access || access.company.id !== companyId ? (
           busy ? (
             <Loading label="Carregando dados…" />
           ) : (
@@ -300,6 +311,31 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
                   <strong>{clients.stats?.completedVisits ?? '—'}</strong>
                 </Card>
               </div>
+            )}
+            {!busy && kind === 'professionals' && (
+              <TeamOverview
+                companyId={companyId}
+                professionals={professionals}
+                services={services}
+                editable={access.editable}
+                onCreate={() => setForm({})}
+                onEdit={(person) => setForm({ professional: person })}
+                onSchedule={setSchedule}
+                onStatus={setConfirm}
+              />
+            )}
+            {!busy && kind === 'services' && (
+              <ServicesDesktop
+                companyId={companyId}
+                services={services}
+                professionals={professionals}
+                editable={access.editable}
+                search={q}
+                onSearch={setQ}
+                onCreate={() => setForm({})}
+                onEdit={(service) => setForm({ service })}
+                onStatus={setConfirm}
+              />
             )}
             <div className={kind === 'clients' ? 'gf-client-workspace' : undefined}>
               <div className={kind === 'clients' ? 'gf-client-main-panel' : undefined}>

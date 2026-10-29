@@ -29,7 +29,7 @@ import { AgendaTimeline } from './agenda-timeline';
 import './dashboard.css';
 import './agenda.css';
 import { agendaDateLabel, monday } from './agenda-display';
-import { ManagementTopbar, subscriptionLabel } from './management-topbar';
+import { ManagementTopbar } from './management-topbar';
 import './management-desktop.css';
 import './agenda-desktop.css';
 import './agenda-timeline.css';
@@ -133,20 +133,7 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
   }
   return (
     <div className="gf-dashboard gf-agenda gf-premium-page">
-      <BusinessNav
-        companyId={companyId}
-        companyName={data?.company.name}
-        planName={
-          data?.entitlement.planCode === 'team'
-            ? 'Equipe'
-            : data?.entitlement.planCode === 'individual'
-              ? 'Individual'
-              : data?.entitlement.planCode
-        }
-        showPlanPromo={Boolean(data?.entitlement.planCode)}
-        subscriptionLabel={subscriptionLabel(data?.entitlement)}
-        sitePublished={data?.company.site_published === 1}
-      />
+      <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
         <ManagementTopbar
           companyId={companyId}

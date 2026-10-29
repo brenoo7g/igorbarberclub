@@ -18,6 +18,7 @@ const metric = (page, label) =>
 const brMoney = (n) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n / 100);
 async function responsive(page, name) {
+  const previous = page.viewportSize();
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -25,6 +26,7 @@ async function responsive(page, name) {
     );
     await page.screenshot({ path: `test-results/reports-${name}-${width}.png`, fullPage: true });
   }
+  if (previous) await page.setViewportSize(previous);
 }
 test('real reports share financial totals, accessible charts, server periods and responsive navigation', async ({
   page,
@@ -38,6 +40,7 @@ test('real reports share financial totals, accessible charts, server periods and
     .getByRole('link', { name: 'Relatórios', exact: true })
     .click();
   await expect(page).toHaveURL('/app/relatorios?empresa=' + cid);
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.getByLabel('Período', { exact: true }).selectOption('last30');
   const actual = await (
     await page.request.get('/api/admin/reports?period=last30', { headers })
@@ -85,6 +88,7 @@ test('combined backend filters and CSV match complete period; reload preserves c
   page,
 }) => {
   await login(page);
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/app/relatorios?empresa=' + cid + '&area=appointments&period=last30');
   await expect(page.getByRole('heading', { name: 'Atendimentos no período' })).toBeVisible();
   await page.getByLabel('Profissional', { exact: true }).selectOption(cid + '-pro');
@@ -131,6 +135,7 @@ test('empty reports, forbidden filters, failed network/export, company isolation
   page,
 }) => {
   await login(page);
+  await page.setViewportSize({ width: 390, height: 900 });
   await page.goto(
     '/app/relatorios?empresa=' + cid + '&area=services&period=custom&from=2000-01-01&to=2000-01-01',
   );

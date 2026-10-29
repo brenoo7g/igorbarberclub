@@ -6,9 +6,31 @@ const fail = (status, code, message) => {
 };
 const managementRoles = new Set(['owner', 'manager']);
 
-export async function listUserCompanies(db, userId) {
+export async function listUserCompanies(db, userId, { navigation = false } = {}) {
+  if (!navigation)
+    return db.all(
+      "SELECT c.id,c.name,c.slug,c.status,c.niche_id AS niche,c.template_id AS template,m.role FROM companies c JOIN company_members m ON m.company_id=c.id WHERE m.user_id=? AND m.status='active' AND c.status='active' ORDER BY c.name,c.id",
+      [userId],
+    );
   return db.all(
-    "SELECT c.id,c.name,c.slug,c.status,c.niche_id AS niche,c.template_id AS template,m.role FROM companies c JOIN company_members m ON m.company_id=c.id WHERE m.user_id=? AND m.status='active' AND c.status='active' ORDER BY c.name,c.id",
+    `SELECT c.id,c.name,c.slug,c.status,c.niche_id AS niche,c.template_id AS template,
+      CASE WHEN m.role IN ('owner','manager') THEN c.site_published END AS site_published,m.role,
+      CASE WHEN m.role IN ('owner','manager') THEN COALESCE(
+        (SELECT p.name FROM subscriptions s JOIN plans p ON p.id=s.plan_id
+         WHERE s.company_id=c.id
+         ORDER BY CASE WHEN s.status IN ('pending','active','trialing') THEN 0 ELSE 1 END,
+           s.created_at DESC,s.id DESC LIMIT 1),
+        (SELECT p.name FROM company_onboarding o JOIN plans p ON p.id=o.plan_id
+         WHERE o.company_id=c.id)
+      ) END AS plan_name,
+      CASE WHEN m.role IN ('owner','manager') THEN (SELECT s.status FROM subscriptions s WHERE s.company_id=c.id
+       ORDER BY CASE WHEN s.status IN ('pending','active','trialing') THEN 0 ELSE 1 END,
+         s.created_at DESC,s.id DESC LIMIT 1) END AS subscription_status,
+      CASE WHEN m.role IN ('owner','manager') THEN (SELECT CASE WHEN s.status='trialing' THEN s.trial_ends_at ELSE s.ends_at END FROM subscriptions s WHERE s.company_id=c.id
+       ORDER BY CASE WHEN s.status IN ('pending','active','trialing') THEN 0 ELSE 1 END,
+         s.created_at DESC,s.id DESC LIMIT 1) END AS subscription_ends_at
+     FROM companies c JOIN company_members m ON m.company_id=c.id
+     WHERE m.user_id=? AND m.status='active' AND c.status='active' ORDER BY c.name,c.id`,
     [userId],
   );
 }

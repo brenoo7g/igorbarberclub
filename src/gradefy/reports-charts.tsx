@@ -9,11 +9,13 @@ export function ReportChart({
   rows,
   series,
   monetary = false,
+  compact = false,
 }: {
   title: string;
   rows: ChartRow[];
   series: ChartSeries[];
   monetary?: boolean;
+  compact?: boolean;
 }) {
   const id = useId(),
     [show, setShow] = useState(false);
@@ -22,11 +24,14 @@ export function ReportChart({
     hi = Math.max(1, ...values),
     lo = Math.min(0, ...values),
     span = hi - lo;
-  const x = (i: number) => 64 + (rows.length > 1 ? i / (rows.length - 1) : 0.5) * 560,
-    y = (v: number) => 24 + ((hi - v) / span) * 170;
+  const right = compact ? 874 : 624;
+  const plotHeight = compact ? 125 : 170;
+  const height = compact ? 190 : 235;
+  const x = (i: number) => 64 + (rows.length > 1 ? i / (rows.length - 1) : 0.5) * (right - 64),
+    y = (v: number) => 24 + ((hi - v) / span) * plotHeight;
   const hasData = values.some((v) => v !== 0);
   return (
-    <Card className="gf-report-chart">
+    <Card className={'gf-report-chart' + (hasData ? '' : ' is-empty')}>
       <h2 id={id}>{title}</h2>
       <div className="gf-report-legend">
         {series.map((s, i) => (
@@ -37,15 +42,22 @@ export function ReportChart({
         ))}
       </div>
       {hasData ? (
-        <svg viewBox="0 0 650 235" role="img" aria-labelledby={id}>
+        <svg viewBox={`0 0 ${compact ? 900 : 650} ${height}`} role="img" aria-labelledby={id}>
           <title>{title}</title>
           <desc>Valores por dia. Use “Ver dados” para consultar os números e as datas.</desc>
+          <defs>
+            <linearGradient id={id + '-area'} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={series[0]?.color || '#8e5cf6'} stopOpacity="0.23" />
+              <stop offset="100%" stopColor={series[0]?.color || '#8e5cf6'} stopOpacity="0" />
+            </linearGradient>
+          </defs>
           {[hi, (hi + lo) / 2, lo].map((v, i) => (
             <g key={i}>
-              <line x1="64" x2="624" y1={y(v)} y2={y(v)} stroke="#303c56" />
+              <line x1="64" x2={right} y1={y(v)} y2={y(v)} stroke="#303c56" />
               <text x="59" y={y(v) + 4} textAnchor="end">
                 {monetary
-                  ? new Intl.NumberFormat('pt-BR', {
+                  ? 'R$ ' +
+                    new Intl.NumberFormat('pt-BR', {
                       notation: 'compact',
                       maximumFractionDigits: 1,
                     }).format(v / 100)
@@ -53,12 +65,18 @@ export function ReportChart({
               </text>
             </g>
           ))}
-          <text x="64" y="222">
+          <text x="64" y={height - 13}>
             {rows[0]?.date.slice(5).split('-').reverse().join('/')}
           </text>
-          <text x="624" y="222" textAnchor="end">
+          <text x={right} y={height - 13} textAnchor="end">
             {rows.at(-1)?.date.slice(5).split('-').reverse().join('/')}
           </text>
+          {rows.length > 1 && series.length > 0 && (
+            <polygon
+              points={`64,${y(0)} ${rows.map((r, i) => `${x(i)},${y(Number(r[series[0].key]))}`).join(' ')} ${right},${y(0)}`}
+              fill={`url(#${id}-area)`}
+            />
+          )}
           {series.map((s, j) => (
             <g key={s.key}>
               <polyline

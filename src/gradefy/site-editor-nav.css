@@ -1,0 +1,27 @@
+@media (min-width: 801px) {
+  .gf-site-business-frame {
+    display: grid;
+    grid-template-columns: var(--gf-business-sidebar-width) minmax(0, 1fr);
+    min-height: 100svh;
+  }
+  .gf-site-frame-main {
+    min-width: 0;
+    padding: 24px 34px;
+  }
+  .gf-site-frame-main > .gf-plans-page {
+    max-width: 100%;
+  }
+}
+@media (min-width: 801px) and (max-width: 1199px) {
+  .gf-site-business-frame {
+    grid-template-columns: var(--gf-business-sidebar-width) minmax(0, 1fr);
+  }
+  .gf-site-frame-main {
+    padding-inline: 20px;
+  }
+}
+@media (max-width: 800px) {
+  .gf-site-business-frame > .gf-business-nav-desktop {
+    display: none;
+  }
+}

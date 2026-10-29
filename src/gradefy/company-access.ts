@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { useApp } from '../context';
 import { errorMessage } from '../lib';
 import type { PendingBusiness } from './business-types';
-export type Company = { id: string; name: string; role: string };
+export type Company = {
+  id: string;
+  name: string;
+  role: string;
+  plan_name?: string | null;
+  subscription_status?: string | null;
+  subscription_ends_at?: string | null;
+  site_published?: number;
+};
+export const BusinessCompanyContext = createContext<Company | null>(null);
 // Read-only membership lookup shared by the account and onboarding gates.
 export function useCompanies() {
   const { user, api } = useApp();
@@ -17,7 +26,7 @@ export function useCompanies() {
     setCompanies(null);
     setError('');
     Promise.all([
-      api<Company[]>('/companies'),
+      api<Company[]>('/companies?view=management'),
       api<{ company: PendingBusiness | null }>('/onboarding/business'),
     ])
       .then(([value, pending]) => {
