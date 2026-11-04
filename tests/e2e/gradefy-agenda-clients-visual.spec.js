@@ -80,9 +80,28 @@ test('Agenda desktop renders authorized real summaries, dates and an empty perio
   await expect(page.locator('.gf-agenda-row')).toHaveCount(api.items.length);
   await captureResponsive(page, 'agenda');
   await captureMobile(page, 'agenda');
-  const emptyDate = new Date(Date.parse(api.today + 'T12:00:00Z') + 120 * 86400000)
+  const firstFutureDay = Date.parse(api.today + 'T12:00:00Z') + 120 * 86400000;
+  const daysUntilSunday = (7 - new Date(firstFutureDay).getUTCDay()) % 7;
+  const emptyDate = new Date(firstFutureDay + daysUntilSunday * 86400000)
     .toISOString()
     .slice(0, 10);
+  await page.route('**/api/admin/agenda?**', async (route) => {
+    const response = await route.fetch();
+    const snapshot = await response.json();
+    if (snapshot.from !== emptyDate) return route.fulfill({ response });
+    await route.fulfill({
+      response,
+      json: {
+        ...snapshot,
+        items: [],
+        blocks: [],
+        recurringBreaks: [],
+        total: 0,
+        statusCounts: { confirmed: 0, completed: 0, cancelled: 0, 'no-show': 0 },
+      },
+    });
+  });
+  await page.getByRole('button', { name: /^Filtros/ }).click();
   await page.getByLabel('Data da agenda').fill(emptyDate);
   await expect(
     page.getByRole('heading', { name: 'Nenhum atendimento neste período' }),

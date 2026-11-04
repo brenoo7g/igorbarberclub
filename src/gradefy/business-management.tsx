@@ -37,11 +37,13 @@ import './agenda.css';
 import './business-management.css';
 import { ManagementTopbar } from './management-topbar';
 import { ClientActions } from './client-actions';
+import { MobileBusinessHeader } from './mobile-business-header';
 import { TeamOverview } from './team-overview';
 import { ServicesDesktop } from './services-desktop';
 import './management-desktop.css';
 import './clients-desktop.css';
 import './clients-refinement.css';
+import './clients-mobile.css';
 function displayPhone(value: string) {
   const digits = value.replace(/\D/g, '');
   if (digits.length === 11)
@@ -204,6 +206,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
     >
       <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
+        {kind === 'clients' && <MobileBusinessHeader companyId={companyId} />}
         <ManagementTopbar
           companyId={companyId}
           companyName={
@@ -343,7 +346,7 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
                   <div className="gf-client-panel-heading">
                     <div>
                       <h2>Clientes</h2>
-                      <p>Gerencie os cadastros de {access.company.name}.</p>
+                      <p>Gerencie seus clientes.</p>
                     </div>
                     <Button disabled={!access.editable || busy} onClick={() => setForm({})}>
                       <Plus size={17} />
@@ -459,21 +462,58 @@ function ResourcePage({ companyId, companies, choose, kind }: ManagementProps & 
                     </div>
                     <div className="gf-business-grid">
                       {clients?.items.map((c) => (
-                        <Card key={c.id} className="gf-business-record">
-                          <div className="gf-business-record-heading">
-                            <UserRound />
-                            <h2>{c.name}</h2>
+                        <Card key={c.id} className="gf-business-record gf-client-mobile-card">
+                          <div className="gf-client-mobile-identity">
+                            <span className="gf-client-mobile-avatar" aria-hidden="true">
+                              {c.name.trim().slice(0, 1).toLocaleUpperCase('pt-BR')}
+                            </span>
+                            <div>
+                              <h2>{c.name}</h2>
+                              <a href={'tel:' + c.phone}>{displayPhone(c.phone)}</a>
+                            </div>
                           </div>
-                          <p>{c.phone}</p>
-                          {c.email && <p>{c.email}</p>}
-                          <Button variant="secondary" onClick={() => setDetail(c.id)}>
-                            Ver cliente e histórico
-                          </Button>
+                          {c.email && (
+                            <a className="gf-client-mobile-email" href={'mailto:' + c.email}>
+                              {c.email}
+                            </a>
+                          )}
+                          <div className="gf-client-mobile-foot">
+                            <small>
+                              {c.created_at
+                                ? `Cliente desde ${c.created_at.slice(0, 7).split('-').reverse().join('/')}`
+                                : 'Cadastro sem data'}
+                            </small>
+                            <Button variant="secondary" onClick={() => showClient(c.id)}>
+                              Ver histórico <ArrowRight size={16} />
+                            </Button>
+                          </div>
                         </Card>
                       ))}
                     </div>
-                    {!clients?.items.length && <Empty icon={<Icon />} />}
+                    {!clients?.items.length &&
+                      (q ? (
+                        <Card className="gf-client-mobile-empty">
+                          <Search size={24} />
+                          <h2>Nenhum cliente encontrado</h2>
+                          <p>Tente outro nome, telefone ou e-mail.</p>
+                        </Card>
+                      ) : (
+                        <Empty icon={<Icon />} />
+                      ))}
                     <Pagination page={page} total={clients?.total || 0} onPage={setPage} />
+                    <div className="gf-client-mobile-actions">
+                      <h2>Ações rápidas</h2>
+                      <Button
+                        variant="secondary"
+                        disabled={!access.editable}
+                        onClick={() => setForm({})}
+                      >
+                        <UserPlus size={18} /> Cadastrar cliente
+                      </Button>
+                      <Link to={'/app/agenda?empresa=' + encodeURIComponent(companyId) + '&novo=1'}>
+                        <CalendarDays size={18} /> Novo agendamento <ArrowRight size={16} />
+                      </Link>
+                    </div>
                   </>
                 ) : (
                   <>

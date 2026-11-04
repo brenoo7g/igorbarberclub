@@ -23,9 +23,7 @@ async function prepare(page) {
     .click();
   await page.getByRole('button', { name: 'Continuar', exact: true }).click();
   await expect(page).toHaveURL('/app/onboarding/setup');
-  await expect(
-    page.getByRole('heading', { name: 'Agora vamos configurar seu negócio.' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Configure seu estabelecimento' })).toBeVisible();
 }
 async function fill(page, slug) {
   await page.getByLabel('Nome do estabelecimento', { exact: true }).fill('Meu Espaço');
@@ -50,7 +48,7 @@ test('initial business form, responsive creation, owner-only durable resume with
   await expect(page.getByRole('radio', { name: 'Plano Individual', exact: true })).toBeChecked();
   await page.goto('/app/onboarding/setup');
   await expect(page.locator('.gf-business-choices')).toContainText(
-    'Individual · Barbearia · Gradefy Mini Site',
+    'IndividualBarbeariaGradefy Mini Site',
   );
   await fill(page, `meu-espaco-${Date.now()}`);
   for (const width of [320, 390, 768, 1440]) {

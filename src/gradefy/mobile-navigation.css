@@ -1,0 +1,88 @@
+.gf-mobile-navigation {
+  display: none;
+}
+.gf-account-other-areas {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .gf-account-other-areas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 22px;
+  }
+  .gf-account-other-areas strong {
+    grid-column: 1 / -1;
+    color: #eef3ff;
+    font-size: 15px;
+  }
+  .gf-account-other-areas a {
+    min-height: 44px;
+    padding: 11px;
+    border: 1px solid #36518a;
+    border-radius: 11px;
+    color: #c3d6ff;
+    background: #10234c;
+    font-size: 12px;
+    text-align: center;
+  }
+  .gf-app:has(.gf-mobile-navigation) #gradefy-main {
+    padding-bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+  .gf-app:has(.gf-mobile-navigation) .gf-footer {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+  .gf-app .gf-mobile-navigation {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 35;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 2px;
+    min-height: calc(70px + env(safe-area-inset-bottom));
+    padding: 7px max(7px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+      max(7px, env(safe-area-inset-left));
+    border-top: 1px solid #274477;
+    border-radius: 20px 20px 0 0;
+    background: linear-gradient(180deg, #0b1a38f7, #061126fb);
+    box-shadow:
+      0 -10px 32px #000b23a8,
+      inset 0 1px #6780c323;
+    backdrop-filter: blur(16px);
+  }
+  .gf-app .gf-mobile-navigation a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 54px;
+    padding: 5px 1px;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    color: #aebfea;
+    font: 500 clamp(10px, 2.6vw, 12px)/1.2 var(--gf-font-body);
+    text-align: center;
+    text-decoration: none;
+  }
+  .gf-app .gf-mobile-navigation a svg {
+    flex: none;
+  }
+  .gf-app .gf-mobile-navigation a[aria-current='page'] {
+    border-color: #7655fa;
+    color: #fff;
+    background: linear-gradient(145deg, #2259d7, #5520ce 80%);
+    box-shadow:
+      0 4px 17px #4d37d761,
+      inset 0 1px #ffffff3a;
+  }
+  .gf-app .gf-mobile-navigation a:focus-visible {
+    outline: 2px solid #49d7ff;
+    outline-offset: 2px;
+  }
+  .gf-app:has(input:focus, textarea:focus, select:focus) .gf-mobile-navigation {
+    display: none;
+  }
+}

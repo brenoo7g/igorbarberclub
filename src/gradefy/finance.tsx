@@ -9,7 +9,8 @@ import { ManagementAccess, CompanySelector } from './management';
 import type { ManagementProps } from './management';
 import { BusinessNav } from './business-nav';
 import { PaymentPanel } from './finance-payment';
-import { FinanceDesktop } from './finance-desktop';
+import { FinanceDesktop, financeMovement } from './finance-desktop';
+import { MobileBusinessHeader } from './mobile-business-header';
 import {
   expenseCategories,
   paymentMethods,
@@ -23,6 +24,7 @@ import type { FinanceState, ExpenseDetail, ExpenseRecord } from './finance-types
 import './dashboard.css';
 import './agenda.css';
 import './finance.css';
+import './finance-mobile.css';
 const labels: Record<string, string> = {
   payment: 'Recebimento manual',
   'payment-reversal': 'Estorno de recebimento',
@@ -93,37 +95,21 @@ function FinanceContent({ companyId, companies, choose }: ManagementProps) {
   }
   const metrics = data
     ? ([
-        [
-          'Valor previsto',
-          data.metrics.expectedCents,
-          'Reservas confirmadas e concluídas pela data do atendimento.',
-        ],
-        [
-          'Serviços concluídos',
-          data.metrics.completedCents,
-          'Valor histórico dos atendimentos concluídos. Não comprova recebimento.',
-        ],
-        [
-          'Pagamentos recebidos',
-          data.metrics.receivedCents,
-          'Recebimentos manuais menos reversões registradas no período.',
-        ],
-        [
-          'Despesas pagas',
-          data.metrics.paidExpensesCents,
-          'Despesas efetivamente pagas menos correções registradas no período.',
-        ],
+        ['Pagamentos recebidos', data.metrics.receivedCents, 'Recebimentos manuais líquidos.'],
+        ['Despesas pagas', data.metrics.paidExpensesCents, 'Despesas pagas líquidas.'],
         [
           'Saldo operacional registrado',
           data.metrics.balanceCents,
-          'Recebimentos menos despesas pagas. Não representa lucro líquido.',
+          'Entradas menos saídas; não é lucro.',
         ],
+        ['Valor previsto', data.metrics.expectedCents, 'Reservas confirmadas e concluídas.'],
       ] as const)
     : [];
   return (
     <div className="gf-dashboard gf-business gf-finance">
       <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
+        <MobileBusinessHeader companyId={companyId} />
         <div className="gf-finance-toolbar">
           <header className="gf-agenda-heading">
             <div>
@@ -211,6 +197,14 @@ function FinanceContent({ companyId, companies, choose }: ManagementProps) {
               onPayment={(id) => setQuery({ empresa: companyId, atendimento: id })}
               onExpense={setExpenseId}
             />
+            <Card className="gf-finance-mobile-historical">
+              <Wallet size={21} aria-hidden="true" />
+              <div>
+                <span>Serviços concluídos</span>
+                <strong>{money(data.metrics.completedCents)}</strong>
+                <small>Valor histórico; não comprova recebimento.</small>
+              </div>
+            </Card>
             <div className="gf-finance-legacy">
               <div className="gf-finance-metrics">
                 {metrics.map(([label, value, help]) => (
@@ -252,7 +246,11 @@ function FinanceContent({ companyId, companies, choose }: ManagementProps) {
                           </small>
                           <h3>{entry.description}</h3>
                         </div>
-                        <strong>{money(entry.amount_cents)}</strong>
+                        <strong
+                          className={'gf-finance-entry-amount is-' + financeMovement(entry).kind}
+                        >
+                          {financeMovement(entry).text}
+                        </strong>
                       </div>
                       <p>
                         {labels[entry.status]}

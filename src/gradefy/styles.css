@@ -12,6 +12,7 @@
 }
 body.gf-body {
   background: #090d18;
+  min-width: 0;
 }
 .gf-app {
   font-family: var(--gf-font-body), sans-serif;

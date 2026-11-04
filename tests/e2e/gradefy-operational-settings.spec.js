@@ -17,7 +17,7 @@ test('operational settings persist, follow company selection and work at 320/390
 }) => {
   await login(page);
   await page.goto('/app/configuracoes?empresa=' + cid);
-  await expect(page.getByRole('heading', { name: 'Configurações operacionais' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Configurações', exact: true })).toBeVisible();
   await expect(page.getByLabel('Fuso horário', { exact: true })).toBeDisabled();
   const original = await (await page.request.get('/api/admin/settings', { headers })).json();
   try {
@@ -40,10 +40,15 @@ test('operational settings persist, follow company selection and work at 320/390
         true,
       );
       if (width < 900) {
-        const nav = page.getByRole('navigation', { name: 'Navegação móvel', exact: true });
-        await expect(
-          nav.getByRole('link', { name: 'Configurações', exact: true }),
-        ).toBeInViewport();
+        const nav = page.getByRole('navigation', { name: 'Navegação principal', exact: true });
+        await expect(nav.locator('a')).toHaveText([
+          'Dashboard',
+          'Agenda',
+          'Clientes',
+          'Pagamentos',
+          'Perfil',
+        ]);
+        await expect(nav.getByRole('link', { name: 'Perfil', exact: true })).toBeInViewport();
         expect(
           await nav.evaluate(
             (element) =>
@@ -80,7 +85,7 @@ test('operational settings persist, follow company selection and work at 320/390
     await page.getByLabel('Encerramento — Segunda-feira', { exact: true }).fill('19:00');
     await page.getByRole('button', { name: 'Salvar configurações', exact: true }).click();
     await expect(page.getByRole('alert').first()).toContainText('fim do expediente');
-    await page.getByRole('button', { name: 'Recarregar configurações', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar dados', exact: true }).click();
     await expect(page.getByLabel('Usar somente os expedientes dos profissionais')).toBeChecked();
     const current = await (await page.request.get('/api/admin/settings', { headers })).json();
     await page.request.put('/api/admin/settings', {

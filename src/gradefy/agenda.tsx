@@ -14,6 +14,7 @@ import {
   ArrowRight,
   LockKeyhole,
   Search,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { addDays, ApiError, errorMessage, money, newIdempotencyKey, statusLabels } from '../lib';
@@ -34,6 +35,8 @@ import './management-desktop.css';
 import './agenda-desktop.css';
 import './agenda-timeline.css';
 import './agenda-refinement.css';
+import { MobileBusinessHeader } from './mobile-business-header';
+import './agenda-mobile.css';
 export { agendaDateLabel } from './agenda-display';
 export default function Agenda() {
   return <ManagementAccess>{(props) => <AgendaContent {...props} />}</ManagementAccess>;
@@ -56,7 +59,11 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
   const [detailId, setDetailId] = useState(query.get('atendimento') || ''),
     [create, setCreate] = useState(query.get('novo') === '1'),
     [reschedule, setReschedule] = useState<AgendaDetail | null>(null),
-    [blockOpen, setBlockOpen] = useState(false);
+    [blockOpen, setBlockOpen] = useState(false),
+    [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilterCount = [professional, service, status, search.trim(), date].filter(
+    Boolean,
+  ).length;
   const dashboard = '/app/dashboard?empresa=' + encodeURIComponent(companyId);
   const localNow = data
     ? new Intl.DateTimeFormat('en-GB', {
@@ -135,6 +142,7 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
     <div className="gf-dashboard gf-agenda gf-premium-page">
       <BusinessNav companyId={companyId} />
       <div className="gf-dashboard-main" aria-busy={busy}>
+        <MobileBusinessHeader companyId={companyId} />
         <ManagementTopbar
           companyId={companyId}
           companyName={data?.company.name || companies.find((c) => c.id === companyId)?.name}
@@ -149,13 +157,18 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
         <div className="gf-agenda-heading">
           <div>
             <div className="gf-kicker">SEU TEMPO BEM CUIDADO</div>
-            <h1>Minha agenda</h1>
-            <p>{data?.company.name || companies.find((c) => c.id === companyId)?.name}</p>
+            <h1>Agenda</h1>
+            <p>Seus agendamentos, em um só lugar.</p>
           </div>
           <Button disabled={busy || !data?.editable} onClick={() => setCreate(true)}>
             <Plus size={18} />
             Novo agendamento
           </Button>
+          <small className="gf-agenda-mobile-company">
+            {companies.length > 1
+              ? 'Seus agendamentos, em um só lugar.'
+              : `${data?.company.name || companies.find((c) => c.id === companyId)?.name} · seus agendamentos`}
+          </small>
         </div>
         <div className="gf-agenda-mobile-block-action">
           <Button
@@ -188,9 +201,11 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
         ) : (
           <>
             {!data.editable && (
-              <Feedback>
-                A agenda está disponível para consulta. A assinatura atual não permite alterações.
-              </Feedback>
+              <div className="gf-agenda-readonly">
+                <Feedback>
+                  A agenda está disponível para consulta. A assinatura atual não permite alterações.
+                </Feedback>
+              </div>
             )}
             <div className="gf-agenda-stage">
               <Card className="gf-agenda-toolbar">
@@ -270,7 +285,33 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
                     <RefreshCw size={17} />
                   </Button>
                 </div>
-                <div className="gf-agenda-filters">
+                <div className="gf-agenda-mobile-search-row">
+                  <Input
+                    label="Buscar cliente ou serviço"
+                    placeholder="Buscar cliente ou serviço..."
+                    value={search}
+                    icon={<Search size={17} />}
+                    maxLength={100}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setPage(1);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="gf-agenda-filter-toggle"
+                    aria-expanded={filtersOpen}
+                    aria-controls="agenda-mobile-filters"
+                    onClick={() => setFiltersOpen((value) => !value)}
+                  >
+                    <SlidersHorizontal size={19} aria-hidden="true" />
+                    Filtros{activeFilterCount > 0 ? <span>{activeFilterCount}</span> : null}
+                  </button>
+                </div>
+                <div
+                  id="agenda-mobile-filters"
+                  className={'gf-agenda-filters' + (filtersOpen ? ' is-open' : '')}
+                >
                   <div className="gf-field">
                     <label htmlFor="agenda-date">Data da agenda</label>
                     <input
@@ -359,6 +400,21 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
                       setPage(1);
                     }}
                   />
+                  <button
+                    type="button"
+                    className="gf-agenda-clear-filters"
+                    disabled={!activeFilterCount}
+                    onClick={() => {
+                      setProfessional('');
+                      setService('');
+                      setStatus('');
+                      setSearch('');
+                      setDate('');
+                      setPage(1);
+                    }}
+                  >
+                    Limpar filtros
+                  </button>
                 </div>
                 <p className="gf-agenda-range">
                   {agendaDateLabel(data.from)}
@@ -392,12 +448,14 @@ function AgendaContent({ companyId, companies, choose }: ManagementProps) {
               </Card>
               <div className="gf-agenda-workspace">
                 <div className="gf-agenda-primary">
-                  {!data.items.length && !(data.blocks || []).length ? (
+                  {!data.items.length &&
+                  !(data.blocks || []).length &&
+                  !(data.recurringBreaks || []).length ? (
                     <Card className="gf-dashboard-empty">
                       <CalendarDays size={30} />
                       <h2>Nenhum atendimento neste período</h2>
                       <p>
-                        Consulte outra data ou ajuste os filtros.
+                        Nenhum atendimento encontrado.
                         {data.editable ? ' Você também pode registrar um novo atendimento.' : ''}
                       </p>
                       {data.editable && (

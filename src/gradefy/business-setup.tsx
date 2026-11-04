@@ -10,6 +10,7 @@ import { readPendingSelection } from './pending-plan';
 import type { Plan } from './pending-plan';
 import type { PendingBusiness } from './business-types';
 import { usePostalAddress } from './postal-address';
+import './business-setup.css';
 
 interface Catalog {
   defaultTemplateCode: string | null;
@@ -231,15 +232,18 @@ export default function BusinessSetup() {
       <Progress step={3} />
       <div className="gf-plans-heading">
         <div className="gf-kicker">SEU NEGÓCIO NO GRADEFY</div>
-        <h1>Agora vamos configurar seu negócio.</h1>
-        <p>Conte o essencial sobre seu estabelecimento.</p>
+        <h1>Configure seu estabelecimento</h1>
+        <p>Preencha os dados para criar sua empresa.</p>
       </div>
       <Card className="gf-business-choices">
         <Building2 size={24} />
         <div>
-          <strong>
-            {plan.name} · {niche.name} · {template.name}
-          </strong>
+          <strong>Suas escolhas</strong>
+          <span className="gf-business-choice-badges">
+            <span>{plan.name}</span>
+            <span>{niche.name}</span>
+            <span>{template.name}</span>
+          </span>
           <div className="gf-business-choice-links">
             <Link to="/app/onboarding/plan">Alterar plano</Link>
             <Link to="/app/onboarding/niche">Alterar segmento</Link>
@@ -251,163 +255,191 @@ export default function BusinessSetup() {
           <Feedback>{error}</Feedback>
           <fieldset disabled={busy} className="gf-business-fields">
             <legend className="gf-visually-hidden">Dados do estabelecimento</legend>
-            <Input
-              label="Nome do estabelecimento"
-              value={values.name}
-              onChange={(event) => update('name', event.target.value)}
-              required
-              minLength={2}
-              maxLength={100}
-              autoComplete="organization"
-              error={fieldErrors.name}
-            />
-            <Input
-              label="Nome público / slug"
-              value={values.slug}
-              onChange={(event) => update('slug', event.target.value.toLowerCase())}
-              required
-              minLength={3}
-              maxLength={60}
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              autoCapitalize="none"
-              spellCheck={false}
-              hint="Exemplo: minha-barbearia. Use letras, números e hífens."
-              error={fieldErrors.slug}
-            />
-            <div className="gf-field gf-business-wide">
-              <label htmlFor="business-description">Descrição</label>
-              <textarea
-                id="business-description"
-                maxLength={1000}
-                value={values.description}
-                onChange={(event) => update('description', event.target.value)}
-                aria-invalid={!!fieldErrors.description}
-                aria-describedby={fieldErrors.description ? 'description-error' : undefined}
-              />
-              {fieldErrors.description && (
-                <p id="description-error" className="gf-field-error">
-                  {fieldErrors.description}
-                </p>
-              )}
-            </div>
-            <Input
-              label="Telefone"
-              type="tel"
-              value={values.phone}
-              onChange={(event) => update('phone', event.target.value)}
-              required
-              maxLength={30}
-              autoComplete="tel"
-              hint="Inclua o DDD."
-              error={fieldErrors.phone}
-            />
-            <Input
-              label="WhatsApp"
-              type="tel"
-              value={values.whatsapp}
-              onChange={(event) => update('whatsapp', event.target.value)}
-              maxLength={30}
-              hint="Opcional. Inclua o DDD."
-              error={fieldErrors.whatsapp}
-            />
-            <Input
-              label="Instagram"
-              type="url"
-              value={values.instagram}
-              onChange={(event) => update('instagram', event.target.value)}
-              maxLength={200}
-              placeholder="https://instagram.com/seu_perfil"
-              error={fieldErrors.instagram}
-            />
-            <div className="gf-business-wide">
-              <h2>Endereço do estabelecimento</h2>
+            <section
+              className="gf-business-group gf-business-wide"
+              aria-labelledby="business-about-title"
+            >
+              <h2 id="business-about-title">Sobre o negócio</h2>
+              <div className="gf-business-group-fields">
+                <Input
+                  label="Nome do estabelecimento"
+                  value={values.name}
+                  onChange={(event) => update('name', event.target.value)}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="organization"
+                  error={fieldErrors.name}
+                />
+                <div className="gf-field gf-business-wide">
+                  <label htmlFor="business-description">Descrição</label>
+                  <textarea
+                    id="business-description"
+                    maxLength={1000}
+                    value={values.description}
+                    onChange={(event) => update('description', event.target.value)}
+                    aria-invalid={!!fieldErrors.description}
+                    aria-describedby={fieldErrors.description ? 'description-error' : undefined}
+                  />
+                  {fieldErrors.description && (
+                    <p id="description-error" className="gf-field-error">
+                      {fieldErrors.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </section>
+            <section
+              className="gf-business-group gf-business-wide"
+              aria-labelledby="business-site-title"
+            >
+              <h2 id="business-site-title">Endereço do site</h2>
+              <p>Use letras, números e hífens.</p>
               <Input
-                label="CEP"
-                value={values.postal_code}
-                onChange={(e) => update('postal_code', e.target.value)}
-                inputMode="numeric"
-                autoComplete="postal-code"
-                maxLength={9}
-                pattern="[0-9]{5}-?[0-9]{3}"
-                hint="Opcional. Ao completar oito números, buscamos seu endereço."
-                error={fieldErrors.postal_code}
-              />
-              {postal.message && (
-                <p role="status" aria-live="polite" className="gf-hint">
-                  {postal.message}
-                </p>
-              )}
-            </div>
-            <Input
-              label="Cidade"
-              value={values.city}
-              onChange={(event) => update('city', event.target.value)}
-              required
-              minLength={2}
-              maxLength={100}
-              autoComplete="address-level2"
-              error={fieldErrors.city}
-            />
-            <div className="gf-field">
-              <label htmlFor="business-region">Estado</label>
-              <select
-                id="business-region"
+                label="Nome público / slug"
+                value={values.slug}
+                onChange={(event) => update('slug', event.target.value.toLowerCase())}
                 required
-                value={values.region}
-                onChange={(event) => update('region', event.target.value)}
-                autoComplete="address-level1"
-                aria-invalid={!!fieldErrors.region}
-                aria-describedby={fieldErrors.region ? 'region-error' : undefined}
-              >
-                <option value="">Selecione seu estado</option>
-                {states.map((state) => (
-                  <option key={state} value={state}>
-                    {state}
-                  </option>
-                ))}
-              </select>
-              {fieldErrors.region && (
-                <p id="region-error" className="gf-field-error">
-                  {fieldErrors.region}
-                </p>
-              )}
-            </div>
-            <Input
-              label="Endereço (opcional)"
-              value={values.address}
-              onChange={(event) => update('address', event.target.value)}
-              maxLength={250}
-              autoComplete="street-address"
-              error={fieldErrors.address}
-              hint="Rua ou logradouro. Você pode corrigir o endereço manualmente."
-            />
-            <Input
-              label="Bairro"
-              value={values.neighborhood}
-              onChange={(e) => update('neighborhood', e.target.value)}
-              maxLength={100}
-              autoComplete="address-level3"
-              error={fieldErrors.neighborhood}
-            />
-            <Input
-              label="Número do imóvel"
-              value={values.address_number}
-              onChange={(e) => update('address_number', e.target.value)}
-              maxLength={20}
-              required={
-                !!values.postal_code || !!values.neighborhood || !!values.address_complement
-              }
-              hint="Informe s/n quando não houver número."
-              error={fieldErrors.address_number}
-            />
-            <Input
-              label="Complemento (opcional)"
-              value={values.address_complement}
-              onChange={(e) => update('address_complement', e.target.value)}
-              maxLength={100}
-              autoComplete="address-line2"
-              error={fieldErrors.address_complement}
-            />
+                minLength={3}
+                maxLength={60}
+                pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                autoCapitalize="none"
+                spellCheck={false}
+                hint="Exemplo: minha-barbearia."
+                error={fieldErrors.slug}
+              />
+            </section>
+            <section
+              className="gf-business-group gf-business-wide"
+              aria-labelledby="business-contact-title"
+            >
+              <h2 id="business-contact-title">Contatos</h2>
+              <div className="gf-business-group-fields">
+                <Input
+                  label="Telefone"
+                  type="tel"
+                  value={values.phone}
+                  onChange={(event) => update('phone', event.target.value)}
+                  required
+                  maxLength={30}
+                  autoComplete="tel"
+                  hint="Inclua o DDD."
+                  error={fieldErrors.phone}
+                />
+                <Input
+                  label="WhatsApp"
+                  type="tel"
+                  value={values.whatsapp}
+                  onChange={(event) => update('whatsapp', event.target.value)}
+                  maxLength={30}
+                  hint="Opcional. Inclua o DDD."
+                  error={fieldErrors.whatsapp}
+                />
+                <Input
+                  label="Instagram"
+                  type="url"
+                  value={values.instagram}
+                  onChange={(event) => update('instagram', event.target.value)}
+                  maxLength={200}
+                  placeholder="https://instagram.com/seu_perfil"
+                  error={fieldErrors.instagram}
+                />
+              </div>
+            </section>
+            <section
+              className="gf-business-group gf-business-wide"
+              aria-labelledby="business-location-title"
+            >
+              <h2 id="business-location-title">Localização</h2>
+              <div className="gf-business-group-fields">
+                <Input
+                  label="CEP"
+                  value={values.postal_code}
+                  onChange={(e) => update('postal_code', e.target.value)}
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  maxLength={9}
+                  pattern="[0-9]{5}-?[0-9]{3}"
+                  hint="Opcional. Ao completar oito números, buscamos seu endereço."
+                  error={fieldErrors.postal_code}
+                />
+                {postal.message && (
+                  <p role="status" aria-live="polite" className="gf-hint gf-business-wide">
+                    {postal.message}
+                  </p>
+                )}
+                <Input
+                  label="Cidade"
+                  value={values.city}
+                  onChange={(event) => update('city', event.target.value)}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="address-level2"
+                  error={fieldErrors.city}
+                />
+                <div className="gf-field">
+                  <label htmlFor="business-region">Estado</label>
+                  <select
+                    id="business-region"
+                    required
+                    value={values.region}
+                    onChange={(event) => update('region', event.target.value)}
+                    autoComplete="address-level1"
+                    aria-invalid={!!fieldErrors.region}
+                    aria-describedby={fieldErrors.region ? 'region-error' : undefined}
+                  >
+                    <option value="">Selecione seu estado</option>
+                    {states.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                  {fieldErrors.region && (
+                    <p id="region-error" className="gf-field-error">
+                      {fieldErrors.region}
+                    </p>
+                  )}
+                </div>
+                <Input
+                  label="Endereço (opcional)"
+                  value={values.address}
+                  onChange={(event) => update('address', event.target.value)}
+                  maxLength={250}
+                  autoComplete="street-address"
+                  error={fieldErrors.address}
+                  hint="Rua ou logradouro. Você pode corrigir o endereço manualmente."
+                />
+                <Input
+                  label="Bairro"
+                  value={values.neighborhood}
+                  onChange={(e) => update('neighborhood', e.target.value)}
+                  maxLength={100}
+                  autoComplete="address-level3"
+                  error={fieldErrors.neighborhood}
+                />
+                <Input
+                  label="Número do imóvel"
+                  value={values.address_number}
+                  onChange={(e) => update('address_number', e.target.value)}
+                  maxLength={20}
+                  required={
+                    !!values.postal_code || !!values.neighborhood || !!values.address_complement
+                  }
+                  hint="Informe s/n quando não houver número."
+                  error={fieldErrors.address_number}
+                />
+                <Input
+                  label="Complemento (opcional)"
+                  value={values.address_complement}
+                  onChange={(e) => update('address_complement', e.target.value)}
+                  maxLength={100}
+                  autoComplete="address-line2"
+                  error={fieldErrors.address_complement}
+                />
+              </div>
+            </section>
           </fieldset>
           <p className="gf-hint">
             Seu teste grátis ainda não começou. Criar a empresa não publica seu site nem gera

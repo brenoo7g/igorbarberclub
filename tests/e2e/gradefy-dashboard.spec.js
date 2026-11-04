@@ -51,10 +51,15 @@ test('desktop dashboard uses scoped data, real links, calendar and preserves mob
     target === snapshot.clock.today ? 4 : 1,
   );
   await desktop.getByLabel('Data da agenda').fill(snapshot.clock.today);
+  const displayedMonth = new Date(snapshot.clock.today + 'T12:00:00Z');
+  const monthName = (date) =>
+    new Intl.DateTimeFormat('pt-BR', { month: 'long', timeZone: 'UTC' }).format(date);
+  const nextMonth = new Date(displayedMonth);
+  nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
   await desktop.getByRole('button', { name: 'Próximo mês' }).click();
-  await expect(desktop.locator('.gf-desktop-calendar')).toContainText('novembro');
+  await expect(desktop.locator('.gf-desktop-calendar')).toContainText(monthName(nextMonth));
   await desktop.getByRole('button', { name: 'Mês anterior' }).click();
-  await expect(desktop.locator('.gf-desktop-calendar')).toContainText('outubro');
+  await expect(desktop.locator('.gf-desktop-calendar')).toContainText(monthName(displayedMonth));
 
   for (const width of [1024, 1280, 1366, 1440, 1920, 320, 390, 768]) {
     const height =

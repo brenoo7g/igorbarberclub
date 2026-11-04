@@ -68,7 +68,8 @@ export default function MiniSiteEditor({
 }: Props) {
   const [section, setSection] = useState<Section>('overview'),
     [confirmUnpublish, setConfirmUnpublish] = useState(false),
-    [discard, setDiscard] = useState(false);
+    [discard, setDiscard] = useState(false),
+    [linkMessage, setLinkMessage] = useState('');
   const dirty =
     JSON.stringify({ ...form, version: 0 }) !==
     JSON.stringify({ ...data.settings, name: data.company.name, version: 0 });
@@ -83,6 +84,25 @@ export default function MiniSiteEditor({
     return () => window.removeEventListener('beforeunload', guard);
   }, [dirty]);
   const preview = `/preview/site/${encodeURIComponent(companyId)}`;
+  const publicPath = `/${encodeURIComponent(data.company.slug)}`;
+  const publicUrl = new URL(publicPath, window.location.origin).href;
+  async function copyPublicLink() {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setLinkMessage('Link copiado.');
+    } catch {
+      setLinkMessage('Não foi possível copiar. Selecione o endereço acima.');
+    }
+  }
+  async function sharePublicLink() {
+    if (!navigator.share) return copyPublicLink();
+    try {
+      await navigator.share({ title: data.company.name, url: publicUrl });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setLinkMessage('Não foi possível compartilhar. Copie o link.');
+    }
+  }
   const ready = Boolean(
     form.name.trim() &&
     data.operations.services &&
@@ -242,15 +262,61 @@ export default function MiniSiteEditor({
               <Card className="gf-mini-overview">
                 <div className="gf-mini-section-title">
                   <div>
-                    <h2>Seu negócio, sua identidade</h2>
-                    <p>Configure, confira e publique quando estiver pronto.</p>
+                    <h2>{form.name}</h2>
+                    <p>{data.company.sitePublished ? 'Site publicado' : 'Site em rascunho'}</p>
                   </div>
                   <Eye size={22} />
                 </div>
+                <div className="gf-mini-site-address">
+                  <span>
+                    {data.company.sitePublished ? 'Endereço público' : 'Endereço após publicação'}
+                  </span>
+                  <code>{publicUrl}</code>
+                </div>
+                <div className="gf-mini-primary-actions">
+                  <Link className="gf-button gf-secondary" to={preview}>
+                    Visualizar meu site
+                  </Link>
+                  {data.company.sitePublished && (
+                    <a
+                      className="gf-button gf-secondary"
+                      href={publicPath}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Abrir site
+                    </a>
+                  )}
+                  <Button type="button" variant="secondary" onClick={copyPublicLink}>
+                    Copiar link
+                  </Button>
+                  {data.company.sitePublished && (
+                    <Button type="button" variant="secondary" onClick={sharePublicLink}>
+                      Compartilhar
+                    </Button>
+                  )}
+                  <Button type="button" onClick={() => setSection('identity')}>
+                    Editar site
+                  </Button>
+                  <Button type="submit" disabled={!dirty || busy}>
+                    Salvar agora
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setSection('publication')}
+                  >
+                    {data.company.sitePublished ? 'Retirar do ar' : 'Publicar site'}
+                  </Button>
+                </div>
+                <span className="gf-mini-link-feedback" role="status" aria-live="polite">
+                  {linkMessage}
+                </span>
                 <div className="gf-mini-overview-grid">
                   <div>
-                    <strong>{form.name}</strong>
-                    <p>{data.company.slug}</p>
+                    <strong>
+                      {data.company.sitePublished ? 'Ajuste seu site' : 'Confira antes de publicar'}
+                    </strong>
                     <ul>
                       <li>
                         <Check size={16} />
@@ -265,12 +331,6 @@ export default function MiniSiteEditor({
                         Agendamento integrado
                       </li>
                     </ul>
-                    <Button type="button" onClick={() => setSection('identity')}>
-                      Começar pela identidade <ArrowRight size={16} />
-                    </Button>
-                    <Link className="gf-mini-preview-link" to={preview}>
-                      Visualizar meu site
-                    </Link>
                   </div>
                   <div className="gf-mini-preview">
                     <iframe

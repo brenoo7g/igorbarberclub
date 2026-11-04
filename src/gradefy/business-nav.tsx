@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useState } from 'react';
 import {
   CalendarDays,
   LayoutDashboard,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import './business-management.css';
 import './business-design.css';
+import './mobile-navigation.css';
 import { GradefyLogo } from './components';
 import { BusinessCompanyContext } from './company-access';
 export const businessLinks = [
@@ -41,20 +42,14 @@ export function BusinessNav({
   const selectedCompany = useContext(BusinessCompanyContext);
   const company = selectedCompany?.id === companyId ? selectedCompany : null;
   const [moreOpen, setMoreOpen] = useState(false);
-  const mobileNav = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if (!mobile) return;
-    const nav = mobileNav.current;
-    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
-    const align = () => {
-      if (nav && active && nav.clientWidth)
-        nav.scrollLeft = active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2;
-    };
-    align();
-    window.addEventListener('resize', align);
-    return () => window.removeEventListener('resize', align);
-  }, [mobile, pathname]);
-  const mobileLinks = businessLinks.map((l) => (
+  const mobileItems = [
+    { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/app/agenda', label: 'Agenda', icon: CalendarDays },
+    { path: '/app/clientes', label: 'Clientes', icon: UsersRound },
+    { path: '/app/financeiro', label: 'Pagamentos', icon: Wallet },
+    { path: '/app/conta', label: 'Perfil', icon: UserRound },
+  ];
+  const mobileLinks = mobileItems.map((l) => (
     <Link
       key={l.path}
       to={l.path + '?empresa=' + encodeURIComponent(companyId)}
@@ -62,8 +57,8 @@ export function BusinessNav({
       className={pathname === l.path ? 'gf-nav-active' : ''}
       aria-label={l.label}
     >
-      <l.icon size={mobile ? 20 : 19} />
-      {l.short}
+      <l.icon size={22} aria-hidden="true" />
+      <span>{l.label}</span>
     </Link>
   ));
   const desktopItems = [
@@ -105,11 +100,7 @@ export function BusinessNav({
             ? 'Sem assinatura vigente'
             : 'Sem assinatura';
   return mobile ? (
-    <nav
-      ref={mobileNav}
-      className="gf-dashboard-mobile-nav gf-business-mobile"
-      aria-label="Navegação móvel"
-    >
+    <nav className="gf-mobile-navigation" aria-label="Navegação principal">
       {mobileLinks}
     </nav>
   ) : (

@@ -42,7 +42,7 @@ test('owner visits every management tab, preserves selected company and survives
     ['relatorios', 'Relatórios'],
     ['equipe', 'Equipe e permissões'],
     ['meu-site', 'Meu Site'],
-    ['configuracoes', 'Configurações operacionais'],
+    ['configuracoes', 'Configurações'],
     ['dashboard', 'Visão geral'],
   ]) {
     await page.goto('/app/' + path + '?empresa=' + cid);
@@ -82,7 +82,7 @@ test('temporary errors, access denial, and a burst of isolated 401s never clear 
     await expect(page).toHaveURL('/app/configuracoes?empresa=' + cid);
     expect(probes).toBeLessThanOrEqual(3);
     await page.unroute('**/api/admin/settings');
-    await page.getByRole('button', { name: 'Recarregar configurações', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar dados', exact: true }).click();
     await expect(page.getByLabel('Nome de exibição')).toBeVisible();
     page.removeAllListeners('request');
   }

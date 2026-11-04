@@ -203,8 +203,8 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
           <header className="gf-agenda-heading">
             <div>
               <div className="gf-kicker">FUNCIONAMENTO E RESERVAS</div>
-              <h1>Configurações operacionais</h1>
-              <p>Seu estabelecimento, suas regras.</p>
+              <h1>Configurações</h1>
+              <p>Funcionamento, reservas e dados do estabelecimento.</p>
             </div>
             <Settings2 size={28} />
           </header>
@@ -213,12 +213,12 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
         <Feedback>{error}</Feedback>
         <Feedback success>{notice}</Feedback>
         <Button variant="secondary" disabled={busy} onClick={() => setRevision((n) => n + 1)}>
-          Recarregar configurações
+          Atualizar dados
         </Button>
         {!value ? (
           error ? (
             <Card>
-              <p>Recarregue as configurações para tentar novamente.</p>
+              <p>Não foi possível carregar os dados. Tente atualizar.</p>
             </Card>
           ) : (
             <Loading label="Carregando configurações…" />
@@ -241,7 +241,7 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                 </small>
               </div>
               <Link to={'/app/meu-site' + companyPath}>
-                Editar apresentação pública <ArrowRight size={16} />
+                Abrir Meu Site <ArrowRight size={16} />
               </Link>
             </Card>
             <form className="gf-settings-desktop-grid" onSubmit={save}>
@@ -250,10 +250,7 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
               )}
               <Card className="gf-settings-business-card">
                 <h2>Informações do estabelecimento</h2>
-                <p>
-                  Nome e contatos usam os mesmos dados de Meu Site. Cores, fotos e publicação são
-                  preservadas.
-                </p>
+                <p>Nome e contatos também aparecem em Meu Site.</p>
                 <div className="gf-settings-grid">
                   <Input
                     label="Nome de exibição"
@@ -306,13 +303,10 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                   <UsersRound size={23} />
                   <div>
                     <h2>Equipe e permissões</h2>
-                    <p>Profissionais, vínculos e acesso à empresa.</p>
+                    <p>Profissionais e acessos.</p>
                   </div>
                 </div>
-                <p>
-                  {snapshot?.professionals.length || 0} profissional(is) cadastrado(s). Um gestor
-                  pode ter acesso sem realizar atendimentos.
-                </p>
+                <p>{snapshot?.professionals.length || 0} profissional(is) cadastrado(s).</p>
                 <div className="gf-settings-link-actions">
                   <Link to={'/app/profissionais' + companyPath}>
                     Gerenciar profissionais <ArrowRight size={16} />
@@ -327,8 +321,8 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
               <Card className="gf-settings-hours-card">
                 <h2>Horário de funcionamento</h2>
                 <p>
-                  Os horários da empresa limitam o expediente de cada profissional. Pausas, folgas e
-                  bloqueios individuais continuam valendo. Reservas existentes serão preservadas.
+                  O expediente da empresa limita as agendas individuais. Pausas e bloqueios dos
+                  profissionais continuam valendo; reservas existentes são preservadas.
                 </p>
                 <label className="gf-settings-toggle">
                   <input
@@ -493,11 +487,11 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                   <Scissors size={23} />
                   <div>
                     <h2>Serviços e preços</h2>
-                    <p>Catálogo, duração e profissionais habilitados.</p>
+                    <p>Catálogo e profissionais habilitados.</p>
                   </div>
                 </div>
                 <Link to={'/app/servicos' + companyPath}>
-                  Abrir catálogo de serviços <ArrowRight size={16} />
+                  Abrir Serviços <ArrowRight size={16} />
                 </Link>
               </Card>
               <Card className="gf-settings-booking-card">
@@ -540,12 +534,10 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                   <CreditCard size={23} />
                   <div>
                     <h2>Pagamentos e financeiro</h2>
-                    <p>Lançamentos manuais, despesas e histórico.</p>
+                    <p>Recebimentos manuais e despesas.</p>
                   </div>
                 </div>
-                <p>
-                  Registros financeiros do estabelecimento; não são cobranças da assinatura Gradefy.
-                </p>
+                <p>Os registros da empresa não incluem a assinatura Gradefy.</p>
                 <Link to={'/app/financeiro' + companyPath}>
                   Abrir Financeiro <ArrowRight size={16} />
                 </Link>
@@ -570,13 +562,10 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                   <Bell size={23} />
                   <div>
                     <h2>Notificações</h2>
-                    <p>Acompanhe envios e eventos reais do estabelecimento.</p>
+                    <p>Envios e eventos do estabelecimento.</p>
                   </div>
                 </div>
-                <p>
-                  O envio de e-mail depende da configuração do ambiente e do domínio. Consulte o
-                  estado atual no painel.
-                </p>
+                <p>Consulte o estado dos e-mails no painel.</p>
                 <Link to={'/app/dashboard' + companyPath + '#dashboard-email-notifications'}>
                   Ver notificações <ArrowRight size={16} />
                 </Link>
@@ -595,9 +584,7 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                 <p>
                   {value.online_booking_enabled
                     ? 'Reservas online ativadas.'
-                    : 'Reservas online pausadas.'}{' '}
-                  Seu site permanece publicado. A agenda administrativa e as reservas existentes
-                  continuam disponíveis.
+                    : 'Novas reservas pelo site pausadas. O site e as reservas existentes permanecem disponíveis.'}
                 </p>
                 <Link to={'/app/meu-site?empresa=' + encodeURIComponent(companyId)}>
                   Gerenciar publicação em Meu Site
@@ -608,7 +595,7 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                   <ShieldCheck size={23} />
                   <div>
                     <h2>Segurança da conta</h2>
-                    <p>Perfil, senha e sessões da sua conta Gradefy.</p>
+                    <p>Perfil, senha e sessões.</p>
                   </div>
                 </div>
                 <Link to="/app/conta">
@@ -616,7 +603,7 @@ function SettingsForm({ companyId, companies, choose }: ManagementProps) {
                 </Link>
               </Card>
               <div className="gf-settings-save">
-                {dirty && <p role="status">Alterações pendentes de salvamento.</p>}
+                {dirty && <p role="status">Alterações não salvas.</p>}
                 {dirty && (
                   <Button
                     type="button"

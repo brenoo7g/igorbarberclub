@@ -39,9 +39,10 @@ test('agenda real: day/week, filters, details, responsive presentation and compa
   await expect(page.locator('.gf-agenda-row')).toHaveCount(1);
   await page.getByLabel('Status', { exact: true }).selectOption('');
   await page.getByLabel('Profissional', { exact: true }).selectOption(cid + '-p2');
-  await expect(
-    page.getByRole('heading', { name: 'Nenhum atendimento neste período' }),
-  ).toBeVisible();
+  await expect(page.locator('.gf-agenda-row')).toHaveCount(0);
+  await expect(page.locator('.gf-agenda-summary-grid > div').first().locator('strong')).toHaveText(
+    '0',
+  );
   await page.getByLabel('Profissional', { exact: true }).selectOption('');
   await page.getByRole('button', { name: 'Semana', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Semana', exact: true })).toHaveAttribute(
@@ -181,7 +182,13 @@ test('completion updates dashboard without payments; session and load failures n
   await expect(page.getByRole('status')).toContainText('não foi registrado pagamento');
   await page.goto('/app/dashboard?empresa=' + cid);
   const completed = await (await page.request.get('/api/dashboard', { headers })).json();
-  expect(completed.metrics.completedAppointments).toBe(1);
+  const completedDetail = await (
+    await page.request.get('/api/admin/agenda/agenda-browser-past', { headers })
+  ).json();
+  expect(completedDetail.item.status).toBe('completed');
+  expect(completed.metrics.completedAppointments).toBe(
+    completedDetail.item.date.slice(0, 7) === completed.clock.today.slice(0, 7) ? 1 : 0,
+  );
   await expect(page.locator('.gf-desktop-metrics')).toContainText('R$ 0,00');
   await page.locator('.gf-desktop-next .gf-desktop-appointment').click();
   await expect(dialog(page)).toContainText('Cliente Retorno');

@@ -636,7 +636,11 @@ export async function assertFinance(t, db, second = db) {
         await req(root + '?from=' + dashboard.period.start + '&to=' + dashboard.period.end)
       ).data;
       assert.equal(overview.metrics.expectedCents, dashboard.metrics.expectedValueCents);
-      assert.equal(overview.metrics.completedCents, 4500);
+      const completedDate = addDays(today, -3);
+      assert.equal(
+        overview.metrics.completedCents,
+        completedDate >= dashboard.period.start && completedDate <= dashboard.period.end ? 4500 : 0,
+      );
       for (let i = 0; i < 31; i++)
         await req(root + '/expenses', {
           method: 'POST',

@@ -27,6 +27,7 @@ type BreakEvent = {
 type TimelineEvent = AppointmentEvent | BlockEvent | BreakEvent;
 type PositionedEvent = TimelineEvent & { lane: number; lanes: number };
 const pixelsPerMinute = 1.1;
+const mobilePixelsPerMinute = 2.3;
 const minimumVisibleMinutes = 40;
 
 function minutes(time: string) {
@@ -118,6 +119,11 @@ export function AgendaTimeline({
       })),
   ];
   const timeline = layoutAgendaEvents(events);
+  const mobileFrom = timeline.events.length
+    ? Math.max(0, Math.floor(Math.min(...timeline.events.map((event) => event.start)) / 60) * 60)
+    : timeline.from;
+  const mobileHeight = Math.max(230, (timeline.to - mobileFrom) * mobilePixelsPerMinute + 30);
+  const mobileTrackWidth = Math.max(0, ...timeline.events.map((item) => item.lanes)) * 130;
   const hours = Array.from(
     { length: Math.floor((timeline.to - timeline.from) / 60) + 1 },
     (_, index) => timeline.from + index * 60,
@@ -126,15 +132,23 @@ export function AgendaTimeline({
     <div className="gf-agenda-timeline-scroll">
       <div
         className="gf-agenda-timeline"
-        style={{ '--timeline-height': `${timeline.height}px` } as CSSProperties}
+        style={
+          {
+            '--timeline-height': `${timeline.height}px`,
+            '--mobile-timeline-height': `${mobileHeight}px`,
+            '--mobile-track-width': `${mobileTrackWidth}px`,
+          } as CSSProperties
+        }
       >
         <div className="gf-agenda-hour-guides" aria-hidden="true">
           {hours.map((hour) => (
             <span
               key={hour}
+              data-mobile-hidden={hour < mobileFrom ? 'true' : undefined}
               style={
                 {
                   '--event-top': `${(hour - timeline.from) * pixelsPerMinute + 10}px`,
+                  '--mobile-event-top': `${(hour - mobileFrom) * mobilePixelsPerMinute + 10}px`,
                 } as CSSProperties
               }
             >
@@ -147,6 +161,8 @@ export function AgendaTimeline({
             const style = {
               '--event-top': `${(event.start - timeline.from) * pixelsPerMinute + 10}px`,
               '--event-height': `${Math.max(44, (event.end - event.start) * pixelsPerMinute)}px`,
+              '--mobile-event-top': `${(event.start - mobileFrom) * mobilePixelsPerMinute + 10}px`,
+              '--mobile-event-height': `${Math.max(70, (event.end - event.start) * mobilePixelsPerMinute)}px`,
               '--event-left': `calc(${(event.lane / event.lanes) * 100}% + 3px)`,
               '--event-width': `calc(${100 / event.lanes}% - 6px)`,
             } as CSSProperties;

@@ -1,0 +1,62 @@
+.gf-mobile-business-header {
+  display: none;
+}
+@media (max-width: 800px) {
+  .gf-enterprise-layout:has(.gf-mobile-business-header) > .gf-header {
+    display: none;
+  }
+  .gf-app .gf-mobile-business-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 5px 0 14px;
+  }
+  .gf-mobile-business-header .gf-brand {
+    width: auto;
+    gap: 7px;
+  }
+  .gf-mobile-business-header .gf-brand img:first-child {
+    width: 31px;
+    height: 35px;
+    object-fit: contain;
+  }
+  .gf-mobile-business-header .gf-brand .gf-wordmark {
+    width: 118px;
+    height: auto;
+  }
+  .gf-mobile-business-header > div {
+    display: flex;
+    gap: 8px;
+  }
+  .gf-mobile-business-header > div a {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #28447d;
+    border-radius: 13px;
+    color: #b7c9ff;
+    background: linear-gradient(140deg, #12234b, #0a1732);
+    text-decoration: none;
+  }
+  .gf-mobile-business-header > div a:last-child span {
+    display: grid;
+    place-items: center;
+    width: 31px;
+    height: 31px;
+    border-radius: 10px;
+    background: linear-gradient(145deg, #5552c8, #252e72);
+    color: white;
+    font-weight: 700;
+  }
+  .gf-mobile-business-header a:focus-visible {
+    outline: 2px solid #42d7ff;
+    outline-offset: 2px;
+  }
+}
+@media (max-width: 319px) {
+  body:has(.gf-app) {
+    min-width: 0;
+  }
+}

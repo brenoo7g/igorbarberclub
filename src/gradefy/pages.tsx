@@ -15,6 +15,12 @@ import {
   UsersRound,
   LogOut,
   ExternalLink,
+  Bell,
+  ChevronRight,
+  Scissors,
+  Wallet,
+  Settings2,
+  ChartNoAxesCombined,
 } from 'lucide-react';
 import { useApp } from '../context';
 import { errorMessage } from '../lib';
@@ -23,7 +29,10 @@ import { Button, ButtonLink, Card, Feedback, Input, Loading } from './components
 import { validateAccount, validateEmail, validatePassword } from './forms';
 import type { AccountFields, AccountValues, FormErrors } from './forms';
 import { useCompanies } from './company-access';
+import { BusinessNav } from './business-nav';
 import { DetailTile, JourneyFrame } from './journey';
+import { GradefyLogo } from './components';
+import './account-mobile.css';
 
 function BrandScene() {
   return (
@@ -329,6 +338,12 @@ export function AccountReady() {
   const { companies, business, error: companyError, retry } = useCompanies();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const requestedCompany = new URLSearchParams(location.search).get('empresa');
+  const managementCompany = requestedCompany
+    ? companies?.find(
+        (company) => company.id === requestedCompany && ['owner', 'manager'].includes(company.role),
+      )
+    : companies?.find((company) => ['owner', 'manager'].includes(company.role));
   async function exit() {
     if (busy) return;
     setBusy(true);
@@ -345,6 +360,26 @@ export function AccountReady() {
   if (!user) return <Navigate to="/app/login" replace state={{ sessionRequired: true }} />;
   return (
     <JourneyFrame className="gf-account-journey">
+      <div className="gf-account-mobile-header">
+        <GradefyLogo />
+        <div>
+          {managementCompany && (
+            <Link
+              to={
+                '/app/dashboard?empresa=' +
+                encodeURIComponent(managementCompany.id) +
+                '#dashboard-email-notifications'
+              }
+              aria-label="Ver notificações"
+            >
+              <Bell size={20} aria-hidden="true" />
+            </Link>
+          )}
+          <span className="gf-account-mobile-avatar" aria-label={'Conta de ' + user.name}>
+            {user.name.trim().slice(0, 1).toLocaleUpperCase('pt-BR')}
+          </span>
+        </div>
+      </div>
       <header className="gf-journey-heading">
         <div className="gf-kicker">SUA CONTA GRADEFY</div>
         <h1>
@@ -361,7 +396,7 @@ export function AccountReady() {
         <Loading />
       ) : (
         companies && (
-          <div className="gf-journey-state">
+          <div className={'gf-journey-state' + (companies.length ? ' gf-account-has-company' : '')}>
             <span className="gf-journey-icon" aria-hidden="true">
               <Layers3 size={36} />
             </span>
@@ -414,6 +449,27 @@ export function AccountReady() {
               className="gf-account-company"
               aria-label={'Acesso a ' + company.name}
             >
+              <div className="gf-account-company-head">
+                <span aria-hidden="true">
+                  {company.name.trim().slice(0, 1).toLocaleUpperCase('pt-BR')}
+                </span>
+                <div>
+                  <small>Estabelecimento</small>
+                  <h2>{company.name}</h2>
+                  {management && company.plan_name && (
+                    <small className="gf-account-company-plan">Plano {company.plan_name}</small>
+                  )}
+                </div>
+                <strong>
+                  {management
+                    ? company.role === 'owner'
+                      ? 'Proprietário'
+                      : 'Gestor'
+                    : professional
+                      ? 'Profissional'
+                      : 'Acesso restrito'}
+                </strong>
+              </div>
               <div className="gf-detail-grid">
                 <DetailTile icon={<Store size={24} />} label="Estabelecimento">
                   {company.name}
@@ -456,6 +512,39 @@ export function AccountReady() {
       <Link className="gf-text-link" to="/app">
         Voltar ao início
       </Link>
+      {managementCompany && (
+        <>
+          <nav className="gf-account-other-areas" aria-label="Outras áreas da empresa">
+            <strong>Configurações e gestão</strong>
+            {(
+              [
+                [
+                  '/app/configuracoes',
+                  'Dados do estabelecimento',
+                  'Nome, contato e horários',
+                  Settings2,
+                ],
+                ['/app/equipe', 'Equipe e permissões', 'Acessos da sua equipe', UsersRound],
+                ['/app/profissionais', 'Profissionais', 'Atendimento e horários', UserRound],
+                ['/app/servicos', 'Serviços e preços', 'Seu catálogo', Scissors],
+                ['/app/financeiro', 'Pagamentos', 'Recebimentos e despesas', Wallet],
+                ['/app/relatorios', 'Relatórios', 'Desempenho do negócio', ChartNoAxesCombined],
+                ['/app/meu-site', 'Meu Mini Site', 'Seu site público', ExternalLink],
+              ] as const
+            ).map(([path, label, description, Icon]) => (
+              <Link key={path} to={path + '?empresa=' + encodeURIComponent(managementCompany.id)}>
+                <Icon size={19} aria-hidden="true" />
+                <span>
+                  <b>{label}</b>
+                  <small>{description}</small>
+                </span>
+                <ChevronRight size={17} aria-hidden="true" />
+              </Link>
+            ))}
+          </nav>
+          <BusinessNav companyId={managementCompany.id} mobile />
+        </>
+      )}
     </JourneyFrame>
   );
 }

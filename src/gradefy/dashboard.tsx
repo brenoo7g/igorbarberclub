@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight,
+  ArrowRight,
   Building2,
   CalendarDays,
+  ChartNoAxesCombined,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
@@ -14,7 +16,9 @@ import {
   Plus,
   RefreshCw,
   Settings2,
+  Scissors,
   UserRound,
+  UsersRound,
   Wallet,
   X,
 } from 'lucide-react';
@@ -28,6 +32,10 @@ import { businessLinks, BusinessNav } from './business-nav';
 import './dashboard.css';
 import { EmailNotifications } from './email-notifications';
 import { DesktopDashboard } from './dashboard-desktop';
+import { MobileBusinessHeader } from './mobile-business-header';
+import { ReportChart } from './reports-charts';
+import type { ReportState } from './reports-types';
+import './dashboard-mobile.css';
 
 const briefDate = (date: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -36,6 +44,18 @@ const briefDate = (date: string) =>
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(date + 'T12:00:00Z'));
+const compactLocalDate = (iso: string, timezone: string) => {
+  const formatted = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: timezone,
+  }).format(new Date(iso));
+  return formatted.replace(
+    /^([a-zá-ú]+)\./i,
+    (_, day: string) => day.charAt(0).toUpperCase() + day.slice(1),
+  );
+};
 const pending = [
   {
     key: 'settings',
@@ -73,6 +93,9 @@ function DashboardContent({
   const [data, setData] = useState<DashboardState | null>(null),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(true);
+  const [reportState, setReport] = useState<ReportState | null>(null);
+  const [reportError, setReportError] = useState('');
+  const report = reportState?.company.id === companyId ? reportState : null;
   const [date, setDate] = useState(''),
     [period, setPeriod] = useState('month'),
     [professional, setProfessional] = useState(''),
@@ -116,6 +139,24 @@ function DashboardContent({
       window.removeEventListener('gradefy-agenda-changed', refresh);
     };
   }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    setReportError('');
+    api<ReportState>('/admin/reports?area=overview&period=month', {
+      signal: controller.signal,
+      headers: { 'X-Gradefy-Company-Id': companyId },
+    })
+      .then((next) => {
+        if (!controller.signal.aborted) setReport(next);
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          setReport(null);
+          setReportError(errorMessage(cause));
+        }
+      });
+    return () => controller.abort();
+  }, [api, companyId, revision]);
   const editor = '/app/meu-site?empresa=' + encodeURIComponent(companyId);
   function agenda() {
     navigate('/app/agenda?empresa=' + encodeURIComponent(companyId));
@@ -140,6 +181,11 @@ function DashboardContent({
                   : plan.planName
                     ? 'Plano sem assinatura vigente'
                     : 'Sem assinatura vinculada';
+  const mobileSubscriptionText = !plan
+    ? 'Sem assinatura vinculada'
+    : plan.valid && plan.subscriptionStatus === 'trialing'
+      ? `Teste: ${plan.trialDaysRemaining} ${plan.trialDaysRemaining === 1 ? 'dia' : 'dias'}`
+      : subscriptionText;
   const panel = pending.find((p) => p.key === info);
   return (
     <div className="gf-dashboard">
@@ -185,7 +231,8 @@ function DashboardContent({
         </div>
       </aside>
       <div className="gf-dashboard-main" aria-busy={busy}>
-        <div className="gf-dashboard-top">
+        <MobileBusinessHeader companyId={companyId} />
+        <div className={'gf-dashboard-top' + (companies.length > 1 ? ' has-company-switcher' : '')}>
           <div className="gf-dashboard-business">
             {data?.company.logo && failedLogo !== data.company.logo ? (
               <img
@@ -203,6 +250,17 @@ function DashboardContent({
               <strong>
                 {data?.company.name || companies.find((c) => c.id === companyId)?.name}
               </strong>
+              {data && (
+                <span
+                  className="gf-mobile-business-plan"
+                  aria-label={`Plano e assinatura: ${plan?.planName ? `Plano ${plan.planName}, ` : ''}${subscriptionText}`}
+                >
+                  {plan?.planName && <span>Plano {plan.planName}</span>}
+                  <span className={plan?.valid ? 'is-valid' : 'is-restricted'}>
+                    {mobileSubscriptionText}
+                  </span>
+                </span>
+              )}
             </div>
           </div>
           <Link className="gf-dashboard-account" to="/app/conta" aria-label="Acessar minha conta">
@@ -219,10 +277,10 @@ function DashboardContent({
               <ChevronRight size={15} />
             </span>
           </Link>
+          {companies.length > 1 && (
+            <CompanySelector companies={companies} value={companyId} choose={choose} />
+          )}
         </div>
-        {companies.length > 1 && (
-          <CompanySelector companies={companies} value={companyId} choose={choose} />
-        )}
         <Feedback>{error}</Feedback>
         {!data ? (
           <Card>
@@ -247,21 +305,32 @@ function DashboardContent({
                 <h1>
                   {data.clock.greeting}, {user?.name.split(' ')[0]}!
                 </h1>
-                <p>Veja como está sua agenda hoje.</p>
+                <p className="gf-dashboard-welcome-description">Veja como está sua agenda hoje.</p>
                 <time dateTime={data.clock.now}>
-                  {new Intl.DateTimeFormat('pt-BR', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                    timeZone: data.company.timezone,
-                  }).format(new Date(data.clock.now))}
+                  <span className="gf-date-full">
+                    {new Intl.DateTimeFormat('pt-BR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      timeZone: data.company.timezone,
+                    }).format(new Date(data.clock.now))}
+                  </span>
+                  <span className="gf-date-compact">
+                    {compactLocalDate(data.clock.now, data.company.timezone)}
+                  </span>
                 </time>
                 <span className="gf-dashboard-timezone">{data.company.timezone}</span>
                 <p className="gf-dashboard-subscription-note">
                   <CreditCard size={14} />
-                  Assinatura: {plan?.planName ? `Plano ${plan.planName} · ` : ''}
-                  {subscriptionText}
+                  <span className="gf-subscription-full">
+                    Assinatura: {plan?.planName ? `Plano ${plan.planName} · ` : ''}
+                    {subscriptionText}
+                  </span>
+                  <span className="gf-subscription-compact">
+                    {plan?.planName ? `Plano ${plan.planName} · ` : ''}
+                    {mobileSubscriptionText}
+                  </span>
                 </p>
               </div>
               <Button
@@ -287,14 +356,39 @@ function DashboardContent({
                 {panel.key === 'settings' && <ButtonLink to={editor}>Personalizar site</ButtonLink>}
               </Card>
             )}
-            <EmailNotifications companyId={companyId} />
+            {data.nextAppointment && (
+              <Link
+                className="gf-mobile-next-appointment"
+                to={
+                  '/app/agenda?empresa=' +
+                  encodeURIComponent(companyId) +
+                  '&atendimento=' +
+                  encodeURIComponent(data.nextAppointment.id)
+                }
+              >
+                <CalendarDays size={21} aria-hidden="true" />
+                <span>
+                  <strong>Próximo atendimento</strong>
+                  <small>
+                    {data.nextAppointment.time} · {data.nextAppointment.clientName}
+                  </small>
+                </span>
+                <ArrowRight size={18} aria-hidden="true" />
+              </Link>
+            )}
             <div className="gf-dashboard-period">
               <div>
                 <h2>Seu negócio em números</h2>
-                <p>
+                <p className="gf-period-full">
                   {briefDate(data.period.start)} a {briefDate(data.period.end)} · indicadores de
                   toda a empresa
                 </p>
+                <details className="gf-period-compact">
+                  <summary>Sobre os indicadores</summary>
+                  <p>
+                    {briefDate(data.period.start)} a {briefDate(data.period.end)} · toda a empresa
+                  </p>
+                </details>
               </div>
               <div className="gf-field">
                 <label htmlFor="dashboard-period">Período dos indicadores</label>
@@ -313,38 +407,23 @@ function DashboardContent({
             <section className="gf-dashboard-kpis" aria-label="Indicadores empresariais">
               <Metric
                 icon={CalendarDays}
-                label="Agendamentos de hoje"
+                label="Agendamentos ativos hoje"
                 value={String(data.metrics.todayAppointments)}
                 detail="Confirmados e concluídos"
                 accent
               />
               <Metric
-                icon={Clock3}
-                label="Próximo atendimento"
-                value={data.nextAppointment?.time || '—'}
-                detail={
-                  data.nextAppointment
-                    ? `${data.nextAppointment.clientName} · ${briefDate(data.nextAppointment.date)}`
-                    : 'Nenhum atendimento futuro confirmado'
+                icon={Wallet}
+                label="Recebimentos do mês"
+                value={report?.metrics ? money(report.metrics.receivedCents) : '—'}
+                detail={reportError ? 'Consulta indisponível' : 'Registros manuais líquidos'}
+                mobileDetail={
+                  reportError
+                    ? 'Consulta indisponível'
+                    : 'Recebimentos manuais líquidos no mês; não inclui pagamentos online.'
                 }
-              >
-                {data.nextAppointment && (
-                  <p>
-                    <Link
-                      to={
-                        '/app/agenda?empresa=' +
-                        encodeURIComponent(companyId) +
-                        '&atendimento=' +
-                        encodeURIComponent(data.nextAppointment.id)
-                      }
-                    >
-                      {data.nextAppointment.services.join(' + ')}
-                      <br />
-                      {data.nextAppointment.professionalName}
-                    </Link>
-                  </p>
-                )}
-              </Metric>
+                cyan
+              />
               <Metric
                 icon={CheckCheck}
                 label="Atendimentos concluídos"
@@ -356,9 +435,9 @@ function DashboardContent({
                 label="Valor previsto"
                 value={money(data.metrics.expectedValueCents)}
                 detail="Confirmados e concluídos no período"
-                cyan
+                mobileDetail="Valor dos agendamentos confirmados e concluídos no período; não indica pagamento recebido."
               >
-                <p>Não indica pagamento recebido.</p>
+                <p className="gf-metric-desktop-note">Não indica pagamento recebido.</p>
               </Metric>
             </section>
             <div className="gf-dashboard-columns">
@@ -380,7 +459,9 @@ function DashboardContent({
                         {data.agenda.total === 1 ? 'agendamento' : 'agendamentos'}
                       </p>
                     </div>
-                    <CalendarDays size={22} />
+                    <Link to={'/app/agenda?empresa=' + encodeURIComponent(companyId)}>
+                      Ver todos <ArrowRight size={15} aria-hidden="true" />
+                    </Link>
                   </div>
                   <div className="gf-agenda-filters">
                     <div className="gf-field">
@@ -459,6 +540,18 @@ function DashboardContent({
                             <i />
                             {statusLabels[a.status]}
                           </span>
+                          <Link
+                            className="gf-mobile-appointment-link"
+                            to={
+                              '/app/agenda?empresa=' +
+                              encodeURIComponent(companyId) +
+                              '&atendimento=' +
+                              encodeURIComponent(a.id)
+                            }
+                            aria-label={'Ver atendimento de ' + a.clientName + ' às ' + a.time}
+                          >
+                            Ver detalhes <ArrowRight size={14} aria-hidden="true" />
+                          </Link>
                         </article>
                       ))}
                     </div>
@@ -556,6 +649,101 @@ function DashboardContent({
                 </Card>
               </div>
             </div>
+            <section
+              className="gf-mobile-dashboard-extras"
+              aria-label="Resumo financeiro e operacional"
+            >
+              <Card className="gf-mobile-revenue">
+                <div className="gf-mobile-card-heading">
+                  <h2>
+                    <ChartNoAxesCombined size={19} aria-hidden="true" /> Recebimentos registrados
+                  </h2>
+                  <Link to={'/app/financeiro?empresa=' + encodeURIComponent(companyId)}>
+                    Ver mais <ArrowRight size={15} />
+                  </Link>
+                </div>
+                {report?.metrics ? (
+                  <>
+                    <strong>{money(report.metrics.receivedCents)}</strong>
+                    <p>Este mês · registros manuais líquidos de reversões</p>
+                    <ReportChart
+                      title="Recebimentos por dia"
+                      rows={report.financialSeries || []}
+                      series={[{ key: 'receivedCents', label: 'Recebimentos', color: '#00d4ff' }]}
+                      monetary
+                    />
+                  </>
+                ) : reportError ? (
+                  <p role="alert">Não foi possível carregar os recebimentos: {reportError}</p>
+                ) : (
+                  <Loading label="Carregando recebimentos…" />
+                )}
+              </Card>
+              <div className="gf-mobile-extra-grid">
+                <Card>
+                  <h2>
+                    <Wallet size={18} /> Resumo financeiro
+                  </h2>
+                  {report?.metrics ? (
+                    <dl>
+                      <div>
+                        <dt>Despesas pagas</dt>
+                        <dd>{money(report.metrics.paidExpensesCents)}</dd>
+                      </div>
+                      <div>
+                        <dt>Saldo registrado</dt>
+                        <dd>{money(report.metrics.balanceCents)}</dd>
+                      </div>
+                    </dl>
+                  ) : (
+                    <p>{reportError ? 'Resumo indisponível.' : 'Carregando resumo…'}</p>
+                  )}
+                  <small>Registros manuais; sem pagamentos online.</small>
+                </Card>
+                <Card>
+                  <h2>
+                    <Scissors size={18} /> Serviços mais realizados
+                  </h2>
+                  {report?.services?.items.some((item) => item.quantity > 0) ? (
+                    <ol>
+                      {report.services.items
+                        .filter((item) => item.quantity > 0)
+                        .sort((a, b) => b.quantity - a.quantity)
+                        .slice(0, 3)
+                        .map((item) => (
+                          <li key={item.id}>
+                            <span>{item.name}</span>
+                            <strong>{item.quantity}</strong>
+                          </li>
+                        ))}
+                    </ol>
+                  ) : (
+                    <p>
+                      {reportError
+                        ? 'Serviços indisponíveis.'
+                        : 'Nenhum serviço concluído neste mês.'}
+                    </p>
+                  )}
+                </Card>
+              </div>
+              <Card className="gf-mobile-team">
+                <div className="gf-mobile-card-heading">
+                  <h2>
+                    <UsersRound size={18} /> Profissionais ativos
+                  </h2>
+                  <Link to={'/app/profissionais?empresa=' + encodeURIComponent(companyId)}>
+                    Ver equipe <ArrowRight size={15} />
+                  </Link>
+                </div>
+                <p>
+                  {data.professionals.filter((item) => item.active === 1).length} cadastrados
+                  ativos. Consulte as agendas para disponibilidade.
+                </p>
+              </Card>
+              <div id="dashboard-email-notifications" className="gf-mobile-notifications">
+                <EmailNotifications companyId={companyId} preview />
+              </div>
+            </section>
             <section className="gf-dashboard-quick" aria-labelledby="quick-title">
               <h2 id="quick-title">Ações rápidas</h2>
               <div>
@@ -629,6 +817,7 @@ function Metric({
   label,
   value,
   detail,
+  mobileDetail,
   children,
   accent = false,
   cyan = false,
@@ -637,6 +826,7 @@ function Metric({
   label: string;
   value: string;
   detail: string;
+  mobileDetail?: string;
   children?: React.ReactNode;
   accent?: boolean;
   cyan?: boolean;
@@ -656,7 +846,11 @@ function Metric({
         <h3>{label}</h3>
       </div>
       <strong>{value}</strong>
-      <small>{detail}</small>
+      <small className="gf-metric-desktop-detail">{detail}</small>
+      <details className="gf-metric-mobile-detail">
+        <summary aria-label={`Detalhes de ${label}`}>Detalhes</summary>
+        <p>{mobileDetail || detail}</p>
+      </details>
       {children}
     </Card>
   );

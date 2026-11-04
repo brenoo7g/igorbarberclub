@@ -1,0 +1,253 @@
+/* The existing API, pagination and dialogs remain the source of truth. */
+.gf-client-mobile-actions {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .gf-business-clients .gf-dashboard-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 11px clamp(12px, 4vw, 24px) 30px;
+    background: radial-gradient(ellipse 90% 320px at 80% 0, #16205e75, transparent 80%), #061127;
+  }
+  .gf-business-clients .gf-management-topbar,
+  .gf-business-clients .gf-clients-mobile-heading .gf-kicker,
+  .gf-business-clients .gf-client-table-wrap {
+    display: none;
+  }
+  .gf-business-clients .gf-clients-mobile-heading {
+    order: 1;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 1px 0 12px;
+    text-align: left;
+  }
+  .gf-business-clients .gf-clients-mobile-heading h1 {
+    margin: 0 0 3px;
+    font: 700 clamp(24px, 6vw, 28px)/1.2 var(--gf-font-heading);
+  }
+  .gf-business-clients .gf-clients-mobile-heading p {
+    margin: 0;
+    color: #b7c9ed;
+    font-size: 12px;
+  }
+  .gf-business-clients .gf-clients-mobile-heading .gf-button {
+    flex: none;
+    width: auto;
+    min-height: 44px;
+    padding: 9px 11px;
+    font-size: 12px;
+    background: linear-gradient(115deg, #8939ef, #4b45ec);
+  }
+  .gf-business-clients .gf-dashboard-main > .gf-field {
+    order: 2;
+    margin: 0 0 10px;
+  }
+  .gf-business-clients .gf-client-workspace,
+  .gf-business-clients .gf-client-main-panel {
+    display: contents;
+  }
+  .gf-business-clients .gf-business-search {
+    order: 3;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 7px;
+    margin: 0 0 13px;
+    padding: 5px;
+    border: 1px solid #29467a;
+    border-radius: 15px;
+    background: linear-gradient(135deg, #0d2145, #081832);
+  }
+  .gf-business-clients .gf-business-search .gf-field {
+    margin: 0;
+    grid-column: auto;
+    flex-basis: auto;
+  }
+  .gf-business-clients .gf-business-search .gf-field label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .gf-business-clients .gf-business-search .gf-button {
+    width: 44px;
+    min-height: 44px;
+    padding: 8px;
+  }
+  .gf-business-clients .gf-client-kpis {
+    order: 4;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin: 0 0 17px;
+  }
+  .gf-business-clients .gf-client-kpis .gf-card {
+    display: grid;
+    align-content: start;
+    gap: 5px;
+    min-width: 0;
+    min-height: 112px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #294479;
+    border-radius: 16px;
+    background:
+      radial-gradient(circle at 0 0, #5138bc42, transparent 65%),
+      linear-gradient(140deg, #0d2044, #07162e);
+    box-shadow:
+      inset 0 1px #ffffff15,
+      0 9px 22px #00091e55;
+  }
+  .gf-business-clients .gf-client-kpis .gf-card:nth-child(2) {
+    background:
+      radial-gradient(circle at 0 0, #a62f8d3d, transparent 65%),
+      linear-gradient(140deg, #102043, #07162e);
+  }
+  .gf-business-clients .gf-client-kpis .gf-card:nth-child(3) {
+    background:
+      radial-gradient(circle at 0 0, #087bc144, transparent 65%),
+      linear-gradient(140deg, #0b2347, #07162e);
+  }
+  .gf-business-clients .gf-client-kpis svg {
+    width: 30px;
+    height: 30px;
+    padding: 6px;
+    border-radius: 9px;
+    color: #d9c4ff;
+    background: #6c35db73;
+  }
+  .gf-business-clients .gf-client-kpis span {
+    color: #bac9e8;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+  .gf-business-clients .gf-client-kpis strong {
+    color: #fff;
+    font: 700 24px/1.1 var(--gf-font-heading);
+  }
+  .gf-business-clients .gf-client-result-count {
+    order: 5;
+    display: block;
+    margin: 0 0 8px;
+    color: #b8c9ed;
+    font-size: 13px;
+  }
+  .gf-business-clients .gf-business-grid {
+    order: 6;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 9px;
+    margin: 0;
+  }
+  .gf-business-clients .gf-client-mobile-card {
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid #294474;
+    border-radius: 15px;
+    background: linear-gradient(125deg, #0d2144, #08172f);
+  }
+  .gf-client-mobile-identity {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 0;
+  }
+  .gf-client-mobile-avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 43px;
+    height: 43px;
+    border: 1px solid #8058f3;
+    border-radius: 13px;
+    color: #fff;
+    background: linear-gradient(135deg, #6549e7, #176bc8);
+    font-weight: 700;
+  }
+  .gf-client-mobile-identity > div {
+    min-width: 0;
+  }
+  .gf-client-mobile-identity h2 {
+    margin: 0 0 2px;
+    color: #fff;
+    font: 600 15px/1.3 var(--gf-font-heading);
+    overflow-wrap: anywhere;
+  }
+  .gf-client-mobile-card a {
+    color: #b9cdef;
+    font-size: 13px;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .gf-client-mobile-email {
+    padding-left: 54px;
+  }
+  .gf-client-mobile-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #2b416a;
+  }
+  .gf-client-mobile-foot small {
+    color: #9fb4dc;
+    font-size: 12px;
+  }
+  .gf-client-mobile-foot .gf-button {
+    width: auto;
+    min-height: 44px;
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+  .gf-business-clients .gf-business-pagination {
+    order: 7;
+  }
+  .gf-client-mobile-empty {
+    order: 6;
+    padding: 24px;
+    text-align: center;
+  }
+  .gf-client-mobile-empty svg {
+    color: #a27bff;
+  }
+  .gf-client-mobile-actions {
+    order: 8;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin: 8px 0 18px;
+  }
+  .gf-client-mobile-actions h2 {
+    grid-column: 1 / -1;
+    margin: 0;
+    font: 600 17px var(--gf-font-heading);
+  }
+  .gf-client-mobile-actions .gf-button,
+  .gf-client-mobile-actions a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 58px;
+    padding: 8px;
+    border: 1px solid #31538b;
+    border-radius: 13px;
+    color: #e6edff;
+    background: linear-gradient(135deg, #112650, #0b1b38);
+    font-size: 12px;
+    text-decoration: none;
+    text-align: center;
+  }
+  .gf-business-clients :focus-visible {
+    outline: 2px solid #43d6fa;
+    outline-offset: 2px;
+  }
+}

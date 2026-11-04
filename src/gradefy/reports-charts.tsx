@@ -93,7 +93,7 @@ export function ReportChart({
           ))}
         </svg>
       ) : (
-        <p>Nenhuma movimentação para este gráfico no período selecionado.</p>
+        <p>Nenhuma movimentação neste período.</p>
       )}
       <p className="gf-hint">
         Eixo horizontal: datas do período. Eixo vertical:{' '}

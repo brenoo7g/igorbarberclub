@@ -1,0 +1,253 @@
+.gf-account-mobile-header,
+.gf-account-company-head {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .gf-account-journey {
+    padding: 11px clamp(12px, 4vw, 24px) 30px;
+    background: radial-gradient(ellipse 90% 330px at 75% 0, #18216287, transparent 80%), #061127;
+  }
+  .gf-account-journey .gf-journey-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 620px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .gf-account-journey .gf-journey-brand,
+  .gf-account-journey .gf-journey-divider,
+  .gf-account-journey .gf-journey-footer,
+  .gf-account-journey .gf-account-has-company {
+    display: none;
+  }
+  .gf-account-mobile-header {
+    order: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 5px 0 8px;
+  }
+  .gf-account-mobile-header .gf-brand {
+    width: auto;
+    gap: 7px;
+  }
+  .gf-account-mobile-header .gf-brand img:first-child {
+    width: 31px;
+    height: 35px;
+    object-fit: contain;
+  }
+  .gf-account-mobile-header .gf-brand .gf-wordmark {
+    width: 118px;
+    height: auto;
+  }
+  .gf-account-mobile-header > div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gf-account-mobile-header > div a,
+  .gf-account-mobile-avatar {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid #31508d;
+    border-radius: 13px;
+    color: #d3e2ff;
+    background: linear-gradient(140deg, #12234b, #0a1732);
+    text-decoration: none;
+  }
+  .gf-account-mobile-avatar {
+    background: linear-gradient(140deg, #4242b2, #182e65);
+    font-weight: 700;
+  }
+  .gf-account-journey .gf-journey-heading {
+    order: 1;
+    gap: 3px;
+    padding: 2px 0 5px;
+    text-align: left;
+  }
+  .gf-account-journey .gf-journey-heading .gf-kicker {
+    display: none;
+  }
+  .gf-account-journey .gf-journey-heading h1 {
+    margin: 0;
+    font: 700 clamp(24px, 6vw, 28px)/1.18 var(--gf-font-heading);
+  }
+  .gf-account-journey .gf-account-email {
+    color: #b8c8ea;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .gf-account-journey .gf-journey-card > .gf-feedback,
+  .gf-account-journey .gf-journey-card > .gf-loading,
+  .gf-account-journey .gf-journey-card > .gf-journey-state {
+    order: 2;
+  }
+  .gf-account-journey .gf-journey-card > .gf-button {
+    order: 3;
+  }
+  .gf-account-journey .gf-account-companies {
+    order: 4;
+    gap: 10px;
+  }
+  .gf-account-journey .gf-account-company {
+    gap: 12px;
+    padding: 15px;
+    border: 1px solid #304c84;
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 100% 0, #46309169, transparent 62%),
+      linear-gradient(140deg, #0e2144, #08172f);
+    box-shadow:
+      inset 0 1px #ffffff16,
+      0 14px 28px #00091b5c;
+  }
+  .gf-account-company-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .gf-account-company-head > span {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 52px;
+    height: 52px;
+    border: 1px solid #7658ea;
+    border-radius: 14px;
+    color: #fff;
+    background: linear-gradient(135deg, #6b48df, #1768c0);
+    font: 700 24px var(--gf-font-heading);
+  }
+  .gf-account-company-head > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .gf-account-company-head small {
+    color: #a8bde5;
+    font-size: 12px;
+  }
+  .gf-account-company-head h2 {
+    margin: 2px 0 0;
+    color: white;
+    font: 600 17px/1.25 var(--gf-font-heading);
+    overflow-wrap: anywhere;
+  }
+  .gf-account-company-plan {
+    display: block;
+    margin-top: 3px;
+    color: #c6a7ff !important;
+  }
+  .gf-account-company-head > strong {
+    flex: none;
+    max-width: 100px;
+    padding: 6px 8px;
+    border: 1px solid #1e957e;
+    border-radius: 20px;
+    color: #5eebbc;
+    background: #08685b42;
+    font-size: 11px;
+    text-align: center;
+  }
+  .gf-account-company .gf-detail-grid {
+    display: none;
+  }
+  .gf-account-company .gf-detail-tile {
+    min-width: 0;
+    padding: 9px;
+    border: 1px solid #2b477c;
+    border-radius: 12px;
+    background: #0a1b38;
+  }
+  .gf-account-company .gf-detail-label {
+    font-size: 12px;
+  }
+  .gf-account-company .gf-detail-tile strong {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .gf-account-company .gf-journey-actions {
+    gap: 8px;
+  }
+  .gf-account-company .gf-journey-actions .gf-button,
+  .gf-account-company .gf-journey-actions a {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .gf-account-journey .gf-account-other-areas {
+    order: 5;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 5px 0 0;
+  }
+  .gf-account-journey .gf-account-other-areas > strong {
+    margin: 0 0 2px;
+    font: 600 18px var(--gf-font-heading);
+  }
+  .gf-account-journey .gf-account-other-areas a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 60px;
+    padding: 10px;
+    border: 1px solid #2e4b80;
+    border-radius: 13px;
+    color: #eaf1ff;
+    background: linear-gradient(125deg, #0e2144, #08172f);
+    text-align: left;
+  }
+  .gf-account-other-areas a > svg:first-child {
+    flex: none;
+    width: 35px;
+    height: 35px;
+    padding: 8px;
+    border-radius: 10px;
+    color: #c39dff;
+    background: linear-gradient(135deg, #5232b9, #202c74);
+  }
+  .gf-account-other-areas a > span {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
+  }
+  .gf-account-other-areas a b {
+    font-size: 13px;
+  }
+  .gf-account-other-areas a small {
+    color: #afc1e3;
+    font-size: 12px;
+  }
+  .gf-account-journey .gf-journey-card > .gf-journey-actions {
+    order: 6;
+    gap: 8px;
+  }
+  .gf-account-journey .gf-journey-card > .gf-journey-actions .gf-button,
+  .gf-account-journey .gf-journey-card > .gf-journey-actions a {
+    min-height: 48px;
+    font-size: 13px;
+  }
+  .gf-account-journey .gf-journey-card > .gf-journey-actions .gf-button:last-child {
+    border-color: #b83168;
+    color: #ff84ae;
+    background: #5a1b3845;
+  }
+  .gf-account-journey .gf-journey-card > .gf-text-link {
+    order: 7;
+    margin: 3px auto 8px;
+    font-size: 12px;
+  }
+  .gf-account-journey :focus-visible {
+    outline: 2px solid #43d6fa;
+    outline-offset: 2px;
+  }
+}

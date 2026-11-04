@@ -55,12 +55,10 @@ test('owner manages real invitation cards, renewal, cancellation and responsive 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    const nav = page.getByRole('navigation', { name: 'Navegação móvel' });
     if (width < 1100) {
-      await nav
-        .getByRole('link', { name: 'Equipe e acessos', exact: true })
-        .scrollIntoViewIfNeeded();
-      await expect(nav.getByRole('link', { name: 'Equipe e acessos', exact: true })).toBeVisible();
+      const nav = page.getByRole('navigation', { name: 'Navegação principal' });
+      await expect(nav.getByRole('link', { name: 'Perfil', exact: true })).toBeInViewport();
+      await expect(nav.locator('a')).toHaveCount(5);
     }
     await page.screenshot({ path: `test-results/team-${width}.png`, fullPage: true });
   }

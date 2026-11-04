@@ -26,7 +26,7 @@ const typeName: Record<FinancialEntry['type'], string> = {
   'expense-reversal': 'Correção de despesa',
 };
 
-function movement(entry: FinancialEntry) {
+export function financeMovement(entry: FinancialEntry) {
   if (entry.type === 'payment') return { text: '+' + money(entry.amount_cents), kind: 'positive' };
   if (entry.type === 'payment-reversal')
     return { text: '−' + money(Math.abs(entry.amount_cents)), kind: 'negative' };
@@ -172,7 +172,7 @@ export function FinanceDesktop({
                   </thead>
                   <tbody>
                     {data.items.map((entry) => {
-                      const amount = movement(entry);
+                      const amount = financeMovement(entry);
                       return (
                         <tr key={entry.type + entry.id}>
                           <td>{financialDate(entry.date)}</td>
