@@ -22,12 +22,23 @@ const metadata = ({ id, title, category, version }, company) => ({
   image: `${company.id === getLegacyCompanyId() ? '/api' : `/api/public/${encodeURIComponent(company.slug)}`}/portfolio/${encodeURIComponent(id)}/image?v=${version}`,
 });
 
-async function normalizeImage(value) {
+async function normalizeImage(value, imageProcessor) {
   const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
   if (!match) fail(400, 'Escolha uma foto JPG, PNG ou WebP.');
   const buffer = Buffer.from(match[2], 'base64');
   if (buffer.length > 1024 * 1024) fail(413, 'A foto é muito grande. Escolha outra imagem.');
   try {
+    if (imageProcessor) {
+      const result = await imageProcessor.normalize(buffer, `image/${match[1]}`, {
+        maxBytes: 1024 * 1024,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        maxPixels: 16000000,
+        fit: 'inside',
+        quality: 80,
+      });
+      return result.buffer.toString('base64');
+    }
     const { default: sharp } = await import('sharp');
     const source = sharp(buffer, { limitInputPixels: 16000000, failOn: 'warning' });
     const info = await source.metadata();
@@ -47,7 +58,7 @@ export function installPortfolioRoutes(
   app,
   db,
   companyId,
-  { authenticated, admin, authLimiter, storage = null },
+  { authenticated, admin, authLimiter, storage = null, imageProcessor },
 ) {
   requireCompanyId(companyId);
   app.get('/portfolio', async (req, res) => {
@@ -69,7 +80,7 @@ export function installPortfolioRoutes(
   });
   app.post('/admin/portfolio', authenticated, admin, authLimiter, async (req, res) => {
     const data = details.extend({ image: imageSchema }).strict().parse(req.body);
-    const image = await normalizeImage(data.image);
+    const image = await normalizeImage(data.image, imageProcessor);
     const row = { id: randomUUID(), title: data.title, category: data.category, version: 1 };
     await db.transaction(async (tx) => {
       await lockResource(tx, companyId, 'site-editor', 'settings');
@@ -99,7 +110,7 @@ export function installPortfolioRoutes(
       .extend({ image: imageSchema.optional(), version: z.number().int().positive() })
       .strict()
       .parse(req.body);
-    const image = data.image ? await normalizeImage(data.image) : null;
+    const image = data.image ? await normalizeImage(data.image, imageProcessor) : null;
     const result = await db.transaction(async (tx) => {
       await lockResource(tx, companyId, 'site-editor', 'settings');
       const row = await tx.get(

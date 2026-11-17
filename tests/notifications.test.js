@@ -1,4 +1,4 @@
-import { authorizeMockEmail } from './helpers/email-fixtures.js';
+import { authorizeMockEmail, emailActionUrl } from './helpers/email-fixtures.js';
 import { getLegacyCompanyId } from '../server/company-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -132,7 +132,7 @@ test('email templates distinguish events, format free services and support old q
   const confirmed = appointmentEmail(
     payload,
     'confirmed',
-    'https://igorbarberclub.vercel.app/minha-conta',
+    emailActionUrl('/minha-conta'),
     getLegacyCompanyId(),
   );
   assert.match(confirmed.text, /R\$\s0,00/);
@@ -141,25 +141,31 @@ test('email templates distinguish events, format free services and support old q
   const cancelled = appointmentEmail(
     payload,
     'cancelled',
-    'https://example.com/minha-conta',
+    emailActionUrl('/minha-conta'),
     getLegacyCompanyId(),
   );
   assert.match(cancelled.subject, /cancelado/);
   assert.doesNotMatch(cancelled.text, /realizado com sucesso|Pagamento na barbearia/);
   assert.match(
-    appointmentEmail(
-      payload,
-      'rescheduled',
-      'https://example.com/minha-conta',
-      getLegacyCompanyId(),
-    ).text,
+    appointmentEmail(payload, 'rescheduled', emailActionUrl('/minha-conta'), getLegacyCompanyId())
+      .text,
     /remarcado com sucesso/,
   );
   const legacy = appointmentEmail(
     { name: 'Cliente', services: 'Corte', date: '2026-10-01', time: '10:00' },
     'confirmed',
-    'https://example.com/minha-conta',
+    emailActionUrl('/minha-conta'),
     getLegacyCompanyId(),
   );
   assert.doesNotMatch(legacy.text, /undefined|NaN|Profissional:|Valor total:/);
+  assert.throws(
+    () =>
+      appointmentEmail(
+        payload,
+        'confirmed',
+        'https://attacker.example.test/minha-conta',
+        getLegacyCompanyId(),
+      ),
+    /Destino de e-mail inválido/,
+  );
 });

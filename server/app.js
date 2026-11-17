@@ -45,6 +45,7 @@ import { rateLimit } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { randomUUID, randomBytes } from 'node:crypto';
+import { isIP } from 'node:net';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
@@ -153,6 +154,8 @@ export function createApp(
     testGuestAccess = false,
     invitationEmail,
     postalLookup,
+    imageProcessor,
+    workerRuntime = false,
   } = {},
 ) {
   if (
@@ -169,7 +172,8 @@ export function createApp(
   const allowedOrigins = new Set([new URL(process.env.APP_URL || 'http://localhost:5173').origin]);
   if (process.env.VERCEL && process.env.VERCEL_URL)
     allowedOrigins.add(`https://${process.env.VERCEL_URL}`);
-  const secureCookies = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+  const secureCookies =
+    workerRuntime || process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
   const open = Number(process.env.OPEN_HOUR || 9),
     close = Number(process.env.CLOSE_HOUR || 19);
   if (
@@ -181,6 +185,14 @@ export function createApp(
   )
     throw new Error('Horário de funcionamento inválido.');
   app.disable('x-powered-by');
+  if (workerRuntime)
+    app.use((req, _res, next) => {
+      // The Workers Node HTTP bridge has no socket address. Cloudflare sets this
+      // header at its edge; an absent/invalid value shares one conservative bucket.
+      const edgeIp = req.get('CF-Connecting-IP');
+      Object.defineProperty(req, 'ip', { value: isIP(edgeIp || '') ? edgeIp : '0.0.0.0' });
+      next();
+    });
   // Vercel overwrites forwarding headers at its trusted edge.
   if (process.env.VERCEL) app.set('trust proxy', 1);
   app.use(
@@ -268,7 +280,7 @@ export function createApp(
     skipSuccessfulRequests: true,
     message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
   });
-  installProfileRoutes(app, db, { authenticated, login, authLimiter });
+  installProfileRoutes(app, db, { authenticated, login, authLimiter, imageProcessor });
   installPasswordRecovery(app, db, { secret, secureCookies });
   const installCompanyTeam = installTeamRoutes(app, db, {
     authenticated,
@@ -284,7 +296,7 @@ export function createApp(
   installOnboardingCatalog(app, db, authenticated);
   installCompanyOnboarding(app, db, authenticated, postalLookup);
   installOperationalOnboarding(app, db, authenticated);
-  installCompanySite(app, db, { authenticated, storage: siteStorage });
+  installCompanySite(app, db, { authenticated, storage: siteStorage, imageProcessor });
   installDashboard(app, db, authenticated);
   app.post('/api/onboarding/plan-selection', authenticated, async (req, res) => {
     const { planCode } = z
@@ -318,8 +330,16 @@ export function createApp(
     res.json({ ok: true });
   });
   const dummyHash = bcrypt.hashSync(randomBytes(24).toString('hex'), 12);
-  const clientAuth = createClientAuth(db, { secret, secureCookies, authLimiter, dummyHash });
-  app.get('/api/health', (_req, res) => res.json({ ok: true, database: db.dialect }));
+  const clientAuth = createClientAuth(db, {
+    secret,
+    secureCookies,
+    authLimiter,
+    dummyHash,
+    imageProcessor,
+  });
+  app.get('/api/health', (_req, res) =>
+    res.json(workerRuntime ? { ok: true } : { ok: true, database: db.dialect }),
+  );
   app.get('/api/config', (_req, res) =>
     res.json({
       demo: demoMode,
@@ -455,6 +475,7 @@ export function createApp(
       admin,
       authLimiter,
       storage: siteStorage,
+      imageProcessor,
     });
     installSiteAssetRoutes(app, db, companyId, siteStorage);
     installScheduleRoutes(app, db, companyId, {

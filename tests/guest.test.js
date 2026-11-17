@@ -1,4 +1,4 @@
-import { authorizeMockEmail } from './helpers/email-fixtures.js';
+import { authorizeMockEmail, emailActionUrl } from './helpers/email-fixtures.js';
 import { getLegacyCompanyId } from '../server/company-context.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -224,13 +224,11 @@ test('guest bookings validate data, share schedule locks, send confirmation and 
   assert.equal(snapshot.guest, true);
   assert.equal(snapshot.email, 'cliente@example.com');
   assert.match(
-    appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato', getLegacyCompanyId())
-      .text,
+    appointmentEmail(snapshot, 'confirmed', emailActionUrl('/#contato'), getLegacyCompanyId()).text,
     /entre em contato com o estabelecimento/,
   );
   assert.doesNotMatch(
-    appointmentEmail(snapshot, 'confirmed', 'https://example.com/#contato', getLegacyCompanyId())
-      .text,
+    appointmentEmail(snapshot, 'confirmed', emailActionUrl('/#contato'), getLegacyCompanyId()).text,
     /entre na sua conta/,
   );
 

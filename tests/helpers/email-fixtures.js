@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+export const emailActionUrl = (path) =>
+  new URL(path, process.env.APP_URL || 'http://localhost:5173').href;
 // Explicit test-fixture enrollment only. Production never backfills queue activations.
 // Existing suites mock fetch themselves. This helper never contacts a provider.
 export async function authorizeMockEmail(t, db, { enrollExisting = false, companyId } = {}) {

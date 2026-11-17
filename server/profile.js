@@ -49,13 +49,24 @@ const profileSchema = z
   })
   .strict();
 
-async function normalizeAvatar(value) {
+async function normalizeAvatar(value, imageProcessor) {
   if (value === null) return null;
   const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
   if (!match) fail(400, 'Escolha uma foto JPG, PNG ou WebP válida.');
   const buffer = Buffer.from(match[2], 'base64');
   if (buffer.length > 512 * 1024) fail(413, 'A foto enviada é muito grande. Escolha outra foto.');
   try {
+    if (imageProcessor) {
+      const result = await imageProcessor.normalize(buffer, `image/${match[1]}`, {
+        maxBytes: 512 * 1024,
+        maxWidth: 256,
+        maxHeight: 256,
+        maxPixels: 16000000,
+        fit: 'cover',
+        quality: 80,
+      });
+      return `data:image/webp;base64,${result.buffer.toString('base64')}`;
+    }
     const { default: sharp } = await import('sharp');
     const image = sharp(buffer, { limitInputPixels: 16000000, failOn: 'warning' });
     const metadata = await image.metadata();
@@ -83,6 +94,7 @@ export function installProfileRoutes(
     prefix = '/api/auth',
     present = publicUser,
     clientCompanyId,
+    imageProcessor,
   },
 ) {
   async function lockedUser(tx, req) {
@@ -97,7 +109,9 @@ export function installProfileRoutes(
   app.patch(`${prefix}/profile`, authenticated, authLimiter, async (req, res) => {
     const data = profileSchema.parse(req.body);
     const avatar =
-      data.avatar === req.user.avatar ? data.avatar : await normalizeAvatar(data.avatar);
+      data.avatar === req.user.avatar
+        ? data.avatar
+        : await normalizeAvatar(data.avatar, imageProcessor);
     let user;
     let changedEmail = false;
     try {

@@ -181,7 +181,7 @@ export async function siteEditorSnapshot(db, cid, storage) {
     },
   };
 }
-export function installCompanySite(app, db, { authenticated, storage }) {
+export function installCompanySite(app, db, { authenticated, storage, imageProcessor }) {
   app.use('/api/company-site', authenticated, async (req, _res, next) => {
     req.companyContext = await resolveCompanyContext(
       db,
@@ -330,7 +330,7 @@ export function installCompanySite(app, db, { authenticated, storage }) {
     async (req, res) => {
       const purpose = z.enum(['logo', 'banner', 'gallery']).parse(req.params.purpose);
       const expected = z.coerce.number().int().nonnegative().parse(req.get('X-Site-Version'));
-      const image = await normalizeSiteImage(req.body, req.get('Content-Type'));
+      const image = await normalizeSiteImage(req.body, req.get('Content-Type'), imageProcessor);
       if (!storage)
         domainError(
           503,

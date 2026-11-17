@@ -1,0 +1,41 @@
+{
+  "name": "gradefyapp-private",
+  "main": "./worker/index.js",
+  "compatibility_date": "2026-11-05",
+  "workers_dev": false,
+  "preview_urls": false,
+  // After an authorized cache-disabled Hyperdrive is created, bind its real ID:
+  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<real-config-id>" }],
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "images": {
+    "binding": "IMAGES",
+  },
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "74120471",
+      "simple": { "limit": 20, "period": 60 },
+    },
+    {
+      "name": "BOOKING_RATE_LIMITER",
+      "namespace_id": "74120472",
+      "simple": { "limit": 30, "period": 60 },
+    },
+  ],
+  "alias": {
+    "sharp": "./worker/unsupported-sharp.js",
+  },
+  "vars": {
+    "APP_URL": "https://app.gradefyapp.com.br",
+    "EMAIL_DELIVERY_MODE": "disabled",
+    "SITE_STORAGE_PROVIDER": "supabase",
+  },
+}

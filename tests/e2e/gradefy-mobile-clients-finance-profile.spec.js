@@ -11,7 +11,9 @@ async function login(page, email = 'business-browser-owner@example.com') {
   await page.getByLabel('E-mail', { exact: true }).fill(email);
   await page.getByLabel('Senha', { exact: true }).fill('ClienteDemo2026!');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page).toHaveURL('/app/dashboard');
+  await expect(page).toHaveURL(
+    email === 'cliente@example.com' ? '/app/onboarding/plan' : '/app/dashboard',
+  );
 }
 
 async function responsive(page, name) {

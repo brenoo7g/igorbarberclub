@@ -106,7 +106,7 @@ export function createSiteStorage(env = process.env, request = fetch) {
   };
 }
 
-export async function normalizeSiteImage(buffer, contentType) {
+export async function normalizeSiteImage(buffer, contentType, imageProcessor) {
   if (!Buffer.isBuffer(buffer) || !buffer.length)
     domainError(400, 'INVALID_IMAGE', 'Escolha uma imagem JPG, PNG ou WebP.');
   if (buffer.length > MAX_SITE_IMAGE_BYTES)
@@ -127,6 +127,15 @@ export async function normalizeSiteImage(buffer, contentType) {
       'INVALID_IMAGE',
       'Não foi possível ler a imagem. Use uma foto estática válida.',
     );
+  if (imageProcessor)
+    return imageProcessor.normalize(buffer, contentType, {
+      maxBytes: MAX_SITE_IMAGE_BYTES,
+      maxWidth: 2000,
+      maxHeight: 2000,
+      maxPixels: 16000000,
+      fit: 'inside',
+      quality: 82,
+    });
   try {
     const { default: sharp } = await import('sharp');
     const source = sharp(buffer, { limitInputPixels: 16000000, failOn: 'warning' });

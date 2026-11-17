@@ -112,10 +112,56 @@ try {
   }
   console.log(`Testing ${report.binaryVersion} on 127.0.0.1:${port}; new disposable cluster.`);
   let output = '';
-  exitCode = await new Promise((done, reject) => {
+  if (process.argv.includes('--worker-smoke-only')) exitCode = 0;
+  else
+    exitCode = await new Promise((done, reject) => {
+      const child = spawn(
+        process.execPath,
+        ['--test', '--test-reporter=spec', 'tests/postgres/foundation.test.js'],
+        {
+          cwd: root,
+          windowsHide: true,
+          env: {
+            ...env,
+            NODE_ENV: 'test',
+            DEMO_MODE: 'false',
+            DATABASE_URL: '',
+            POSTGRES_URL: '',
+            DOTENV_CONFIG_PATH: join(work, 'no-environment-file'),
+            GRADEFY_PG_TEST_URL: url,
+            GRADEFY_PG_TEST_TOKEN: token,
+            GRADEFY_PG_TEST_CLUSTER: cluster,
+            GRADEFY_PG_TEST_RUN_ID: runId,
+          },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+      for (const stream of [child.stdout, child.stderr])
+        stream.on('data', (data) => {
+          const text = data
+            .toString()
+            .replaceAll(password, '[redacted]')
+            .replaceAll(token, '[redacted]');
+          output += text;
+          process.stdout.write(text);
+        });
+      child.once('error', reject);
+      child.once('exit', (code) => done(code ?? 1));
+    });
+  if (!process.argv.includes('--worker-smoke-only')) {
+    await writeFile(join(reportDir, 'output.txt'), output);
+    report.testExitCode = exitCode;
+  }
+  if (
+    exitCode === 0 &&
+    (process.argv.includes('--worker-smoke') || process.argv.includes('--worker-smoke-only'))
+  ) {
     const child = spawn(
       process.execPath,
-      ['--test', '--test-reporter=spec', 'tests/postgres/foundation.test.js'],
+      [
+        'tests/workers/postgres-runtime.mjs',
+        ...(process.argv.includes('--cpu-profile') ? ['--cpu-profile'] : []),
+      ],
       {
         cwd: root,
         windowsHide: true,
@@ -134,20 +180,23 @@ try {
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
+    let smokeOutput = '';
     for (const stream of [child.stdout, child.stderr])
       stream.on('data', (data) => {
-        const text = data
+        const line = data
           .toString()
           .replaceAll(password, '[redacted]')
           .replaceAll(token, '[redacted]');
-        output += text;
-        process.stdout.write(text);
+        smokeOutput += line;
+        process.stdout.write(line);
       });
-    child.once('error', reject);
-    child.once('exit', (code) => done(code ?? 1));
-  });
-  await writeFile(join(reportDir, 'output.txt'), output);
-  report.testExitCode = exitCode;
+    report.workerSmokeExitCode = await new Promise((done, reject) => {
+      child.once('error', reject);
+      child.once('exit', (code) => done(code ?? 1));
+    });
+    await writeFile(join(reportDir, 'worker-smoke-output.txt'), smokeOutput);
+    if (report.workerSmokeExitCode !== 0) exitCode = report.workerSmokeExitCode;
+  }
 } catch (error) {
   console.error(error.message);
   report.error = 'Validation infrastructure failed; see terminal output.';

@@ -10,7 +10,10 @@ import { bootstrapIgorCompany } from './company-bootstrap.js';
 export async function createDatabase(
   url = process.env.DATABASE_URL,
   path = process.env.SQLITE_PATH || './data/barber.db',
+  { initialize = true } = {},
 ) {
+  if (!initialize && !url)
+    throw new Error('O runtime sem migrations exige um banco PostgreSQL configurado.');
   let db;
   if (url) {
     const { default: pg } = await import('pg');
@@ -113,6 +116,7 @@ export async function createDatabase(
       close: () => enqueue(() => sqlite.close()),
     };
   }
+  if (!initialize) return db;
   let stage = 'database-schema-file';
   try {
     const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8');

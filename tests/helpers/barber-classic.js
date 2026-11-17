@@ -7,6 +7,7 @@ import { migrations, readMigration, runMigrations } from '../../server/migration
 import { reconstructBeforeBarberClassic, siteColumns } from './barber-classic-migration.js';
 import { addDays, dateInBrazil, weekday } from '../../server/domain.js';
 import { appointmentEmail } from '../../server/notifications.js';
+import { emailActionUrl } from './email-fixtures.js';
 
 export async function installBarberClassicFixture(db) {
   const image = (await db.get('SELECT image FROM portfolio LIMIT 1'))?.image || 'fixture';
@@ -238,12 +239,7 @@ export async function assertBarberClassic(t, db) {
       );
       const payload = JSON.parse(event.payload);
       assert.equal(payload.brand.name, 'Barbearia Imperial');
-      const email = appointmentEmail(
-        payload,
-        'confirmed',
-        `https://example.test/${c}/minha-conta`,
-        c,
-      );
+      const email = appointmentEmail(payload, 'confirmed', emailActionUrl(`/${c}/minha-conta`), c);
       assert.match(email.text, /Barbearia Imperial/);
       assert.doesNotMatch(email.text, /Igor/);
       assert.equal(

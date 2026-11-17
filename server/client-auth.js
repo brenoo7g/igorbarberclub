@@ -9,7 +9,10 @@ import { installPasswordRecovery } from './password-recovery.js';
 
 // Same credentials, hashing, signing secret and version revocation. A different
 // cookie AND audience require an explicit customer login, without replacing /app.
-export function createClientAuth(db, { secret, secureCookies, authLimiter, dummyHash }) {
+export function createClientAuth(
+  db,
+  { secret, secureCookies, authLimiter, dummyHash, imageProcessor },
+) {
   const cookie = secureCookies ? '__Host-gradefy-client' : 'gradefy-client';
   const options = { httpOnly: true, secure: secureCookies, sameSite: 'lax', path: '/' };
   const present = (user) => (user ? { ...publicUser(user), role: 'client' } : null);
@@ -126,6 +129,7 @@ export function createClientAuth(db, { secret, secureCookies, authLimiter, dummy
       prefix: '',
       present,
       clientCompanyId: companyId,
+      imageProcessor,
     });
     installPasswordRecovery(client, db, {
       secret,

@@ -19,7 +19,7 @@ export function emailTemplate({
   action,
   footer = 'Se precisar de ajuda, entre em contato com o estabelecimento.',
 }) {
-  const origin = new URL(process.env.APP_URL || action?.url || 'http://localhost:5173');
+  const origin = new URL(process.env.APP_URL || 'http://localhost:5173');
   if (action) {
     const destination = new URL(action.url);
     if (

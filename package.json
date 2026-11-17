@@ -16,6 +16,7 @@
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "test:e2e:dev": "playwright test --config playwright.dev.config.js",
+    "test:workers:images": "node tests/workers/image-runtime.mjs",
     "check": "npm run build && npm test",
     "format": "prettier --write api src server tests docs README.md *.json *.ts *.js index.html",
     "format:check": "prettier --check api src server tests docs README.md *.json *.ts *.js index.html"
@@ -47,6 +48,8 @@
     "concurrently": "^9.2.1",
     "prettier": "^3.9.6",
     "typescript": "~5.9.3",
-    "vite": "^7.2.2"
+    "vite": "^7.2.2",
+    "wrangler": "^4.158.0",
+    "ws": "^8.21.0"
   }
 }
